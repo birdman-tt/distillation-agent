@@ -172,6 +172,20 @@ const getVersionByPersona = (personaId: string) =>
     .filter((item) => item.personaId === personaId)
     .sort((a, b) => a.versionNumber - b.versionNumber);
 
+const buildUniqueShareSlug = (base: string, personaId: string, versionNumber: number) => {
+  const personaSuffix = personaId.slice(0, 8).toLowerCase();
+  const candidateBase = `${base}-${personaSuffix}-v${versionNumber}`;
+  let candidate = candidateBase;
+  let counter = 1;
+
+  while ([...shares.values()].some((item) => item.shareSlug === candidate)) {
+    counter += 1;
+    candidate = `${candidateBase}-${counter}`;
+  }
+
+  return candidate;
+};
+
 const createSourceDocument = (source: SourceRecord, normalizedText: string, url: string | null) => {
   const documentId = randomUUID();
   const createdAt = nowIso();
@@ -483,6 +497,15 @@ export const listPersonaSources = (personaId: string) =>
     .filter((item) => item.personaId === personaId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
+export const listApprovedSourceEvidence = (personaId: string) =>
+  listPersonaSources(personaId)
+    .filter((item) => item.reviewStatus === "APPROVED")
+    .map((item) => ({
+      sourceId: item.id,
+      title: item.sourceTitle,
+      snippet: item.sourceSummary ?? "已审核资料摘要",
+    }));
+
 export const listPendingSourceReviews = () =>
   [...sources.values()]
     .filter((item) => item.reviewStatus === "PENDING_REVIEW")
@@ -655,7 +678,7 @@ const ensurePrimaryShare = (version: PersonaVersionRecord) => {
 
   const persona = getDynamicPersona(version.personaId);
   const slugBase = slugify(persona?.displayName ?? "persona");
-  const shareSlug = `${slugBase}-v${version.versionNumber}`;
+  const shareSlug = buildUniqueShareSlug(slugBase, version.personaId, version.versionNumber);
   const share: ShareLinkRecord = {
     id: randomUUID(),
     personaVersionId: version.id,
@@ -871,14 +894,23 @@ export const resolveChatTarget = (input: {
   }
 };
 
-export const createDynamicReply = (versionId: string, content: string) => {
+type ChatClassification = {
+  category: "HIGH_RISK" | "SUPPORTED_TOPIC" | "STYLE_INFERENCE" | "OUT_OF_SCOPE";
+  matchedKeyword: string | null;
+  shouldEscalateToModelJudge: boolean;
+};
+
+export const createDynamicReply = (versionId: string, content: string, classification?: ChatClassification) => {
   const version = getDynamicVersion(versionId);
   if (!version) {
     return null;
   }
 
-  const normalized = content.trim().toLowerCase();
-  if (/(投资|医疗|法律|诊断|处方|荐股|移民)/.test(normalized)) {
+  const approvedSources = listPersonaSources(version.personaId).filter((item) => item.reviewStatus === "APPROVED");
+  const firstSource = approvedSources[0];
+  const mode = classification?.category ?? "SUPPORTED_TOPIC";
+
+  if (mode === "HIGH_RISK") {
     return {
       answer: "这个问题已经落到高风险现实决策范围，我不能把蒸馏对象的风格化回答包装成可靠建议。",
       basis: [],
@@ -892,8 +924,6 @@ export const createDynamicReply = (versionId: string, content: string) => {
     };
   }
 
-  const approvedSources = listPersonaSources(version.personaId).filter((item) => item.reviewStatus === "APPROVED");
-  const firstSource = approvedSources[0];
   const basis = firstSource
     ? [
         {
@@ -903,16 +933,31 @@ export const createDynamicReply = (versionId: string, content: string) => {
       ]
     : [];
 
-  const inferred = basis.length === 0;
+  if (basis.length === 0) {
+    return {
+      answer: "当前版本还没有足够的已审核资料，我不能稳定地给出这类回答。",
+      basis: [],
+      basisSummary: {
+        mode: "UNSUPPORTED" as const,
+        summary: "当前没有足够的已审核资料直接支撑该回答。",
+      },
+      inferenceLevel: "insufficient_evidence" as const,
+      conflictDetected: false,
+      refusalReason: "insufficient_evidence" as const,
+    };
+  }
+
+  const inferred = mode === "STYLE_INFERENCE";
+  const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");
   return {
     answer: inferred
-      ? `当前版本资料有限，我只能基于 ${version.previewIntro ?? "现有画像"} 做有限推演：这个问题更适合继续补充资料后再回答。`
-      : `${version.previewIntro ?? "当前蒸馏对象"}。如果只依据现有资料，我会先从 ${version.distillFocus[0] ?? "主要观点"} 角度回应这个问题。`,
+      ? `基于 ${normalizedIntro} 和现有资料，我只能给出风格化推演：这个问题更适合继续补充资料后再收紧答案。`
+      : `${normalizedIntro}。如果只依据现有资料，我会先从 ${version.distillFocus[0] ?? "主要观点"} 角度回应这个问题。`,
     basis,
     basisSummary: {
-      mode: inferred ? ("UNSUPPORTED" as const) : ("SUPPORTED" as const),
+      mode: inferred ? ("INFERRED" as const) : ("SUPPORTED" as const),
       summary: inferred
-        ? "当前没有足够的已审核资料直接支撑该回答。"
+        ? `当前回答以 ${firstSource?.sourceTitle ?? "已审核资料"} 和人物画像做近邻推演，不等于直接引文。`
         : `主要依据 ${firstSource?.sourceTitle ?? "已审核资料"} 的摘要与当前版本画像。`,
     },
     inferenceLevel: inferred ? ("inferred" as const) : ("grounded" as const),

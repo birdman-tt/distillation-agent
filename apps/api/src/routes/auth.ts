@@ -8,9 +8,22 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 
 import { refreshSession, verifySmsIdentity, verifyWechatIdentity } from "../store/auth-store.js";
+import { enforceWindowRateLimit } from "../utils/rate-limit.js";
 
 export const authRoute: FastifyPluginAsync = async (app) => {
-  app.post("/v1/auth/web/sms/request", async (request) => {
+  app.post("/v1/auth/web/sms/request", async (request, reply) => {
+    const limit = enforceWindowRateLimit({
+      key: `sms:${request.ip || "unknown"}`,
+      limit: 5,
+      windowMs: 10 * 60_000,
+    });
+    if (!limit.allowed) {
+      return reply.code(429).send({
+        message: "Too many SMS requests, please retry later.",
+        retryAfterMs: limit.retryAfterMs,
+      });
+    }
+
     const input = requestSmsCodeSchema.parse(request.body);
     return {
       ok: true,

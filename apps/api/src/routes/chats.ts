@@ -8,9 +8,16 @@ import {
 } from "@hall-of-fame/contracts";
 import type { FastifyPluginAsync } from "fastify";
 
-import { createSeedReply, resolvePersonaSeed } from "../seed/official-personae.js";
+import { resolvePersonaSeed } from "../seed/official-personae.js";
 import { getChatSession, saveChatSession } from "../store/chat-store.js";
-import { createDynamicReply, resolveChatTarget } from "../store/persona-store.js";
+import {
+  getPersonaDetail,
+  getPersonaVersion,
+  listApprovedSourceEvidence,
+  resolveChatTarget,
+} from "../store/persona-store.js";
+import { enforceWindowRateLimit } from "../utils/rate-limit.js";
+import { runChatWorkflow } from "../workflows/chat/index.js";
 
 export const chatsRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/chats", async (request, reply) => {
@@ -49,6 +56,18 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.post<{ Params: { chatId: string } }>("/v1/chats/:chatId/messages", async (request, reply) => {
+    const limit = enforceWindowRateLimit({
+      key: `chat:${request.ip || "unknown"}`,
+      limit: 30,
+      windowMs: 60_000,
+    });
+    if (!limit.allowed) {
+      return reply.code(429).send({
+        message: "Too many chat messages, please retry later.",
+        retryAfterMs: limit.retryAfterMs,
+      });
+    }
+
     const session = getChatSession(request.params.chatId);
 
     if (!session) {
@@ -77,10 +96,26 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       createdAt: new Date().toISOString(),
     };
 
-    const rawReply =
-      officialSeed !== null
-        ? createSeedReply(officialSeed, input.content)
-        : createDynamicReply(session.targetPersonaVersionId, input.content);
+    const dynamicVersion = getPersonaVersion(session.targetPersonaVersionId);
+    const dynamicPersona = session.targetPersonaId ? getPersonaDetail(session.targetPersonaId)?.persona ?? null : null;
+    const rawReply = await runChatWorkflow({
+      content: input.content,
+      seed: officialSeed,
+      dynamicContext:
+        officialSeed === null && dynamicVersion
+          ? {
+              personaVersionId: dynamicVersion.id,
+              displayName: dynamicPersona?.displayName ?? "User Persona",
+              previewIntro: dynamicVersion.previewIntro,
+              focusKeywords: [
+                ...((dynamicVersion.profileJson.topicStrengths as string[] | undefined) ?? []),
+                ...dynamicVersion.recommendedQuestions,
+                ...dynamicVersion.sampleAnswers,
+              ],
+              evidence: listApprovedSourceEvidence(dynamicVersion.personaId),
+            }
+          : undefined,
+    });
 
     if (!rawReply) {
       return reply.code(404).send({

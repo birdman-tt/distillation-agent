@@ -23,3 +23,8 @@ export const refusalReasonSchema = z.enum([
   "out_of_scope",
 ]);
 export type RefusalReason = z.infer<typeof refusalReasonSchema>;
+
+export const HIGH_RISK_QUESTION_PATTERN =
+  /(投资|股票|买入|卖出|仓位|止损|医疗|法律|诊断|处方|荐股|移民|合同|税务)/i;
+
+export const isHighRiskQuestion = (content: string) => HIGH_RISK_QUESTION_PATTERN.test(content);

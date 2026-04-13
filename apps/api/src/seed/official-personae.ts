@@ -1,3 +1,4 @@
+import { isHighRiskQuestion } from "@hall-of-fame/domain";
 import type { ChatTargetType } from "@hall-of-fame/domain";
 
 type SeedReply = {
@@ -413,7 +414,7 @@ export const resolvePersonaSeed = (input: {
 export const createSeedReply = (seed: OfficialPersonaSeed, content: string) => {
   const normalized = content.trim().toLowerCase();
 
-  if (/(投资|医疗|法律|诊断|处方|荐股|移民)/.test(normalized)) {
+  if (isHighRiskQuestion(normalized)) {
     return {
       answer: "这个问题已经落到高风险现实决策范围，我不能把风格化蒸馏回答包装成可靠建议。",
       basis: [],

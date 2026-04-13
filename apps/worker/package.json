@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hall-of-fame/contracts": "workspace:*",
+    "@hall-of-fame/deepseek-client": "workspace:*",
     "@hall-of-fame/domain": "workspace:*",
     "@hall-of-fame/prompt-kit": "workspace:*"
   }

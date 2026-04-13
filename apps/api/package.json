@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@hall-of-fame/contracts": "workspace:*",
+    "@hall-of-fame/deepseek-client": "workspace:*",
     "@hall-of-fame/domain": "workspace:*",
+    "@hall-of-fame/prompt-kit": "workspace:*",
     "fastify": "^5.4.0",
     "zod": "^4.0.0"
   }

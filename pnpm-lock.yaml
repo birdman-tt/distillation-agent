@@ -23,9 +23,15 @@ importers:
       '@hall-of-fame/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@hall-of-fame/deepseek-client':
+        specifier: workspace:*
+        version: link:../../packages/deepseek-client
       '@hall-of-fame/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@hall-of-fame/prompt-kit':
+        specifier: workspace:*
+        version: link:../../packages/prompt-kit
       fastify:
         specifier: ^5.4.0
         version: 5.8.4
@@ -33,13 +39,27 @@ importers:
         specifier: ^4.0.0
         version: 4.3.6
 
-  apps/client: {}
+  apps/client:
+    dependencies:
+      '@hall-of-fame/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      react:
+        specifier: ^19.2.0
+        version: 19.2.5
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.14
 
   apps/worker:
     dependencies:
       '@hall-of-fame/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@hall-of-fame/deepseek-client':
+        specifier: workspace:*
+        version: link:../../packages/deepseek-client
       '@hall-of-fame/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -62,6 +82,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.6
 
+  packages/deepseek-client: {}
+
   packages/domain:
     dependencies:
       zod:
@@ -70,6 +92,9 @@ importers:
 
   packages/prompt-kit:
     dependencies:
+      '@hall-of-fame/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^4.0.0
         version: 4.3.6
@@ -258,6 +283,9 @@ packages:
   '@types/node@24.12.2':
     resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
 
+  '@types/react@19.2.14':
+    resolution: {integrity: sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==}
+
   abstract-logging@2.0.1:
     resolution: {integrity: sha512-2BjRTZxTPvheOvGbBslFSYOUkr+SjPtOnrLP33f+VIWLzezQpZcqVg7ja3L4dBXmzzgwT+a029jRx5PCi3JuiA==}
 
@@ -282,6 +310,9 @@ packages:
   cookie@1.1.1:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
+
+  csstype@3.2.3:
+    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
@@ -360,6 +391,10 @@ packages:
 
   quick-format-unescaped@4.0.4:
     resolution: {integrity: sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg==}
+
+  react@19.2.5:
+    resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
+    engines: {node: '>=0.10.0'}
 
   real-require@0.2.0:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
@@ -542,6 +577,10 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/react@19.2.14':
+    dependencies:
+      csstype: 3.2.3
+
   abstract-logging@2.0.1: {}
 
   ajv-formats@3.0.1(ajv@8.18.0):
@@ -563,6 +602,8 @@ snapshots:
       fastq: 1.20.1
 
   cookie@1.1.1: {}
+
+  csstype@3.2.3: {}
 
   dequal@2.0.3: {}
 
@@ -690,6 +731,8 @@ snapshots:
   process-warning@5.0.0: {}
 
   quick-format-unescaped@4.0.4: {}
+
+  react@19.2.5: {}
 
   real-require@0.2.0: {}
 
