@@ -1,5 +1,6 @@
 import {
   authSessionResponseSchema,
+  issueAnonymousSessionSchema,
   refreshSessionSchema,
   requestSmsCodeSchema,
   verifySmsCodeSchema,
@@ -7,10 +8,40 @@ import {
 } from "@hall-of-fame/contracts";
 import type { FastifyPluginAsync } from "fastify";
 
-import { refreshSession, verifySmsIdentity, verifyWechatIdentity } from "../store/auth-store.js";
+import {
+  issueAnonymousSession,
+  issueReviewerSession,
+  refreshSession,
+  verifySmsIdentity,
+  verifyWechatIdentity,
+} from "../store/auth-store.js";
+import { transferPersonaOwnership } from "../store/persona-store.js";
 import { enforceWindowRateLimit } from "../utils/rate-limit.js";
 
 export const authRoute: FastifyPluginAsync = async (app) => {
+  app.post("/v1/auth/anonymous", async (request) => {
+    const input = issueAnonymousSessionSchema.parse(request.body ?? {});
+    const session = issueAnonymousSession(input.deviceId);
+    return authSessionResponseSchema.parse({
+      userId: session.userId,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      role: session.role,
+      sessionKind: session.sessionKind,
+    });
+  });
+
+  app.post("/v1/auth/dev/reviewer", async () => {
+    const session = issueReviewerSession();
+    return authSessionResponseSchema.parse({
+      userId: session.userId,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      role: session.role,
+      sessionKind: session.sessionKind,
+    });
+  });
+
   app.post("/v1/auth/web/sms/request", async (request, reply) => {
     const limit = enforceWindowRateLimit({
       key: `sms:${request.ip || "unknown"}`,
@@ -33,21 +64,35 @@ export const authRoute: FastifyPluginAsync = async (app) => {
 
   app.post("/v1/auth/web/sms/verify", async (request) => {
     const input = verifySmsCodeSchema.parse(request.body);
-    const session = verifySmsIdentity(input.phoneNumber);
+    const { session, mergedFromUserId } = verifySmsIdentity(input.phoneNumber, {
+      mergeFromAccessToken: request.headers.authorization?.toString().replace(/^Bearer\s+/i, ""),
+    });
+    if (mergedFromUserId) {
+      transferPersonaOwnership(mergedFromUserId, session.userId);
+    }
     return authSessionResponseSchema.parse({
       userId: session.userId,
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      role: session.role,
+      sessionKind: session.sessionKind,
     });
   });
 
   app.post("/v1/auth/wechat-miniapp/login", async (request) => {
     const input = wechatMiniappLoginSchema.parse(request.body);
-    const session = verifyWechatIdentity(input.code);
+    const { session, mergedFromUserId } = verifyWechatIdentity(input.code, {
+      mergeFromAccessToken: request.headers.authorization?.toString().replace(/^Bearer\s+/i, ""),
+    });
+    if (mergedFromUserId) {
+      transferPersonaOwnership(mergedFromUserId, session.userId);
+    }
     return authSessionResponseSchema.parse({
       userId: session.userId,
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      role: session.role,
+      sessionKind: session.sessionKind,
     });
   });
 
@@ -62,6 +107,8 @@ export const authRoute: FastifyPluginAsync = async (app) => {
       userId: session.userId,
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      role: session.role,
+      sessionKind: session.sessionKind,
     });
   });
 };

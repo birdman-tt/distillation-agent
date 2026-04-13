@@ -1,97 +1,165 @@
 import { randomUUID } from "node:crypto";
 
+export type ActorRole = "ANONYMOUS" | "USER" | "REVIEWER";
+export type SessionKind = "ANONYMOUS" | "AUTHENTICATED";
+
 type UserRecord = {
   id: string;
   displayName: string | null;
   createdAt: string;
 };
 
-type SessionRecord = {
+export type SessionRecord = {
   id: string;
   userId: string;
   accessToken: string;
   refreshToken: string;
+  role: ActorRole;
+  sessionKind: SessionKind;
   createdAt: string;
 };
 
-const demoUserId = "ad5bf85c-07fd-49ff-979c-49b85f8ab53e";
+const reviewerUserId = "8261f391-f661-4d95-8bff-88d78cff8f0c";
+const reviewerIdentityKey = "dev-reviewer";
 
 const users = new Map<string, UserRecord>([
   [
-    demoUserId,
+    reviewerUserId,
     {
-      id: demoUserId,
-      displayName: "Demo Builder",
+      id: reviewerUserId,
+      displayName: "Local Reviewer",
       createdAt: new Date().toISOString(),
     },
   ],
 ]);
 
-const sessions = new Map<string, SessionRecord>();
-const identities = new Map<string, string>();
+const sessionsById = new Map<string, SessionRecord>();
+const sessionsByAccessToken = new Map<string, SessionRecord>();
+const sessionsByRefreshToken = new Map<string, SessionRecord>();
+const identities = new Map<string, string>([[`reviewer:${reviewerIdentityKey}`, reviewerUserId]]);
 
-const createSession = (userId: string) => {
+const nowIso = () => new Date().toISOString();
+
+const createUser = (displayName: string | null) => {
+  const user: UserRecord = {
+    id: randomUUID(),
+    displayName,
+    createdAt: nowIso(),
+  };
+  users.set(user.id, user);
+  return user;
+};
+
+const createSession = (input: { userId: string; role: ActorRole; sessionKind: SessionKind }) => {
   const session: SessionRecord = {
     id: randomUUID(),
-    userId,
+    userId: input.userId,
     accessToken: `access_${randomUUID()}`,
     refreshToken: `refresh_${randomUUID()}`,
-    createdAt: new Date().toISOString(),
+    role: input.role,
+    sessionKind: input.sessionKind,
+    createdAt: nowIso(),
   };
 
-  sessions.set(session.refreshToken, session);
+  sessionsById.set(session.id, session);
+  sessionsByAccessToken.set(session.accessToken, session);
+  sessionsByRefreshToken.set(session.refreshToken, session);
   return session;
 };
 
-export const getDemoUserId = () => demoUserId;
-
-export const resolveActorUserId = (headerValue: string | undefined) => {
-  if (headerValue && users.has(headerValue)) {
-    return headerValue;
+const parseBearerToken = (authorizationHeader: string | undefined) => {
+  if (!authorizationHeader) {
+    return null;
   }
 
-  return demoUserId;
+  const [scheme, token] = authorizationHeader.trim().split(/\s+/, 2);
+  if (scheme?.toLowerCase() !== "bearer" || !token) {
+    return null;
+  }
+
+  return token;
 };
 
-export const verifySmsIdentity = (phoneNumber: string) => {
-  const key = `sms:${phoneNumber}`;
-  let userId = identities.get(key);
-
-  if (!userId) {
-    userId = randomUUID();
-    identities.set(key, userId);
-    users.set(userId, {
-      id: userId,
-      displayName: phoneNumber,
-      createdAt: new Date().toISOString(),
-    });
+const readIdentityUser = (key: string, displayName: string | null) => {
+  const existingUserId = identities.get(key);
+  if (existingUserId) {
+    return existingUserId;
   }
 
-  return createSession(userId);
+  const user = createUser(displayName);
+  identities.set(key, user.id);
+  return user.id;
 };
 
-export const verifyWechatIdentity = (code: string) => {
-  const key = `wechat:${code}`;
-  let userId = identities.get(key);
-
-  if (!userId) {
-    userId = randomUUID();
-    identities.set(key, userId);
-    users.set(userId, {
-      id: userId,
-      displayName: "WeChat User",
-      createdAt: new Date().toISOString(),
-    });
+const deriveMergeUserId = (accessToken: string | undefined) => {
+  const session = accessToken ? sessionsByAccessToken.get(accessToken) ?? null : null;
+  if (!session || session.sessionKind !== "ANONYMOUS") {
+    return null;
   }
 
-  return createSession(userId);
+  return session.userId;
+};
+
+export const issueAnonymousSession = (deviceId?: string) => {
+  const identityKey = deviceId ? `anonymous:${deviceId}` : `anonymous:${randomUUID()}`;
+  const userId = readIdentityUser(identityKey, "Guest Builder");
+  return createSession({
+    userId,
+    role: "ANONYMOUS",
+    sessionKind: "ANONYMOUS",
+  });
+};
+
+export const issueReviewerSession = () => {
+  return createSession({
+    userId: reviewerUserId,
+    role: "REVIEWER",
+    sessionKind: "AUTHENTICATED",
+  });
+};
+
+export const verifySmsIdentity = (phoneNumber: string, input?: { mergeFromAccessToken?: string | undefined }) => {
+  const userId = readIdentityUser(`sms:${phoneNumber}`, phoneNumber);
+  return {
+    session: createSession({
+      userId,
+      role: "USER",
+      sessionKind: "AUTHENTICATED",
+    }),
+    mergedFromUserId: deriveMergeUserId(input?.mergeFromAccessToken),
+  };
+};
+
+export const verifyWechatIdentity = (code: string, input?: { mergeFromAccessToken?: string | undefined }) => {
+  const userId = readIdentityUser(`wechat:${code}`, "WeChat User");
+  return {
+    session: createSession({
+      userId,
+      role: "USER",
+      sessionKind: "AUTHENTICATED",
+    }),
+    mergedFromUserId: deriveMergeUserId(input?.mergeFromAccessToken),
+  };
 };
 
 export const refreshSession = (refreshToken: string) => {
-  const existing = sessions.get(refreshToken);
+  const existing = sessionsByRefreshToken.get(refreshToken);
   if (!existing) {
     return null;
   }
 
-  return createSession(existing.userId);
+  return createSession({
+    userId: existing.userId,
+    role: existing.role,
+    sessionKind: existing.sessionKind,
+  });
 };
+
+export const getSessionByAccessToken = (accessToken: string | undefined) =>
+  accessToken ? sessionsByAccessToken.get(accessToken) ?? null : null;
+
+export const getOptionalSessionFromAuthorizationHeader = (authorizationHeader: string | undefined) =>
+  getSessionByAccessToken(parseBearerToken(authorizationHeader) ?? undefined);
+
+export const isReviewerSession = (session: SessionRecord | null | undefined): session is SessionRecord =>
+  Boolean(session && session.role === "REVIEWER");

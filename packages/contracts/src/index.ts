@@ -6,3 +6,4 @@ export * from "./persona-versions.js";
 export * from "./reviews.js";
 export * from "./shares.js";
 export * from "./sources.js";
+export * from "./worker.js";

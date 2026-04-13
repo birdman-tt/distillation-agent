@@ -11,11 +11,13 @@ import type { FastifyPluginAsync } from "fastify";
 import { resolvePersonaSeed } from "../seed/official-personae.js";
 import { getChatSession, saveChatSession } from "../store/chat-store.js";
 import {
+  canAccessPersonaVersion,
   getPersonaDetail,
   getPersonaVersion,
   listApprovedSourceEvidence,
   resolveChatTarget,
 } from "../store/persona-store.js";
+import { getActorSession } from "../utils/actor-session.js";
 import { enforceWindowRateLimit } from "../utils/rate-limit.js";
 import { runChatWorkflow } from "../workflows/chat/index.js";
 
@@ -27,6 +29,16 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     if (!resolved) {
       return reply.code(404).send({
         message: "Chat target not found",
+      });
+    }
+
+    const actor = getActorSession(request);
+    if (
+      input.targetType === "draft_version_preview" &&
+      !canAccessPersonaVersion(resolved.personaVersionId, actor?.userId ?? null, actor?.role ?? null)
+    ) {
+      return reply.code(403).send({
+        message: "You do not have access to this preview version",
       });
     }
 

@@ -18,6 +18,8 @@ export const pendingSourceReviewItemSchema = z.object({
   personaId: z.string().uuid(),
   displayName: z.string(),
   sourceTitle: z.string().nullable(),
+  sourceSummary: z.string().nullable(),
+  sourceKind: z.enum(["PRIMARY", "SECONDARY", "SUMMARY"]),
   reviewStatus: z.enum(["PENDING_REVIEW", "APPROVED", "REJECTED"]),
   createdAt: z.string(),
 });
@@ -28,6 +30,11 @@ export const pendingVersionReviewItemSchema = z.object({
   displayName: z.string(),
   versionNumber: z.number().int().positive(),
   status: z.enum(["DRAFT", "CANDIDATE", "PENDING_PUBLISH_REVIEW", "PUBLISHED", "SUPERSEDED", "REJECTED"]),
+  previewIntro: z.string().nullable(),
+  coverageScore: z.number().int().min(0).max(100).nullable(),
+  groundingScore: z.number().int().min(0).max(100).nullable(),
+  styleScore: z.number().int().min(0).max(100).nullable(),
+  riskScore: z.number().int().min(0).max(100).nullable(),
   submittedForPublishAt: z.string().nullable(),
 });
 

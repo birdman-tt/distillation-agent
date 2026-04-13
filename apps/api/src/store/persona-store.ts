@@ -172,6 +172,18 @@ const getVersionByPersona = (personaId: string) =>
     .filter((item) => item.personaId === personaId)
     .sort((a, b) => a.versionNumber - b.versionNumber);
 
+const deleteSourceDocuments = (sourceId: string) => {
+  const documentIds = [...sourceDocuments.values()].filter((item) => item.sourceId === sourceId).map((item) => item.id);
+  for (const documentId of documentIds) {
+    sourceDocuments.delete(documentId);
+    for (const [spanId, span] of evidenceSpans.entries()) {
+      if (span.documentId === documentId) {
+        evidenceSpans.delete(spanId);
+      }
+    }
+  }
+};
+
 const buildUniqueShareSlug = (base: string, personaId: string, versionNumber: number) => {
   const personaSuffix = personaId.slice(0, 8).toLowerCase();
   const candidateBase = `${base}-${personaSuffix}-v${versionNumber}`;
@@ -410,6 +422,73 @@ export const getPersonaVersion = (versionId: string) => {
   return getDynamicVersion(versionId);
 };
 
+export const canManagePersona = (personaId: string, actorUserId: string, actorRole: "ANONYMOUS" | "USER" | "REVIEWER") => {
+  if (actorRole === "REVIEWER") {
+    return true;
+  }
+
+  const persona = getDynamicPersona(personaId);
+  return Boolean(persona && persona.creatorUserId === actorUserId);
+};
+
+export const canAccessPersonaVersion = (
+  versionId: string,
+  actorUserId: string | null,
+  actorRole: "ANONYMOUS" | "USER" | "REVIEWER" | null,
+) => {
+  const officialSeed = findPersonaSeedByVersionId(versionId);
+  if (officialSeed) {
+    return true;
+  }
+
+  const version = getDynamicVersion(versionId);
+  if (!version) {
+    return false;
+  }
+
+  if (version.status === "PUBLISHED") {
+    return true;
+  }
+
+  if (actorRole === "REVIEWER") {
+    return true;
+  }
+
+  const persona = getDynamicPersona(version.personaId);
+  return Boolean(actorUserId && persona?.creatorUserId === actorUserId);
+};
+
+export const transferPersonaOwnership = (fromUserId: string, toUserId: string) => {
+  if (fromUserId === toUserId) {
+    return;
+  }
+
+  for (const persona of dynamicPersonae.values()) {
+    if (persona.creatorUserId === fromUserId) {
+      persona.creatorUserId = toUserId;
+      persona.updatedAt = nowIso();
+    }
+  }
+
+  for (const version of dynamicVersions.values()) {
+    if (version.createdByUserId === fromUserId) {
+      version.createdByUserId = toUserId;
+    }
+  }
+
+  for (const source of sources.values()) {
+    if (source.submittedByUserId === fromUserId) {
+      source.submittedByUserId = toUserId;
+    }
+  }
+
+  for (const item of feedbackItems) {
+    if (item.createdByUserId === fromUserId) {
+      item.createdByUserId = toUserId;
+    }
+  }
+};
+
 export const createTextSource = (personaId: string, input: {
   content: string;
   title?: string;
@@ -484,11 +563,32 @@ export const createUrlSource = (personaId: string, input: {
   };
 
   sources.set(source.id, source);
-  createSourceDocument(
-    source,
-    `Fetched placeholder content from ${normalizedUrl}. Worker content extraction is not wired yet in this prototype.`,
-    normalizedUrl,
-  );
+  return source;
+};
+
+export const persistUrlSourceIngestResult = (sourceId: string, input: {
+  normalizedUrl: string;
+  normalizedUrlHash: string;
+  snapshot: {
+    title: string;
+    author: string | null;
+    normalizedText: string;
+  };
+}) => {
+  const source = sources.get(sourceId);
+  if (!source) {
+    return null;
+  }
+
+  source.normalizedUrl = input.normalizedUrl;
+  source.normalizedUrlHash = input.normalizedUrlHash;
+  source.sourceUrl = input.normalizedUrl;
+  source.sourceTitle = input.snapshot.title;
+  source.sourceAuthor = input.snapshot.author;
+  source.sourceSummary = input.snapshot.normalizedText.slice(0, 160);
+
+  deleteSourceDocuments(sourceId);
+  createSourceDocument(source, input.snapshot.normalizedText.trim(), input.normalizedUrl);
   return source;
 };
 
@@ -514,6 +614,8 @@ export const listPendingSourceReviews = () =>
       personaId: item.personaId,
       displayName: getPersonaName(item.personaId),
       sourceTitle: item.sourceTitle,
+      sourceSummary: item.sourceSummary,
+      sourceKind: item.sourceKind,
       reviewStatus: item.reviewStatus,
       createdAt: item.createdAt,
     }));
@@ -554,7 +656,7 @@ const buildDistilledQuestions = (displayName: string, focus: string[]) => {
   ];
 };
 
-export const distillPersona = (personaId: string, actorUserId: string) => {
+export const prepareDistillInput = (personaId: string) => {
   const persona = getDynamicPersona(personaId);
   if (!persona) {
     return null;
@@ -563,16 +665,6 @@ export const distillPersona = (personaId: string, actorUserId: string) => {
   const approvedSources = listPersonaSources(personaId).filter((item) => item.reviewStatus === "APPROVED");
   if (approvedSources.length === 0) {
     throw new Error("At least one approved source is required before distill");
-  }
-
-  const latestVersionNumber = getVersionByPersona(personaId).at(-1)?.versionNumber ?? 0;
-  const previousDraftId = persona.currentDraftVersionId;
-  if (previousDraftId) {
-    const previousDraft = getDynamicVersion(previousDraftId);
-    if (previousDraft && previousDraft.status === "DRAFT") {
-      previousDraft.status = "SUPERSEDED";
-      previousDraft.supersededAt = nowIso();
-    }
   }
 
   const sourceKindCounts = approvedSources.reduce(
@@ -586,28 +678,73 @@ export const distillPersona = (personaId: string, actorUserId: string) => {
   );
 
   const focus = getDynamicVersion(persona.currentDraftVersionId ?? "")?.distillFocus ?? ["观点"];
-  const previewIntro = `基于 ${approvedSources.length} 份已审核资料蒸馏出的 ${persona.displayName} 对象，当前更偏 ${focus.join("、")}。`;
+  return {
+    displayName: persona.displayName,
+    distillFocus: focus,
+    approvedSources: approvedSources.map((source) => ({
+      sourceId: source.id,
+      sourceKind: source.sourceKind,
+      title: source.sourceTitle,
+      summary: source.sourceSummary ?? "已审核资料摘要",
+    })),
+    stats: {
+      approvedSources: approvedSources.length,
+      primaryOrSecondarySources: sourceKindCounts.primaryOrSecondary,
+    },
+  };
+};
+
+export const persistDistilledVersion = (personaId: string, actorUserId: string, output: {
+  profile: Record<string, unknown>;
+  preview: {
+    previewIntro: string;
+    recommendedQuestions: string[];
+    sampleAnswers: string[];
+  };
+  scores: {
+    coverageScore: number;
+    groundingScore: number;
+    styleScore: number;
+    riskScore: number;
+  };
+}) => {
+  const persona = getDynamicPersona(personaId);
+  if (!persona) {
+    return null;
+  }
+
+  const distillInput = prepareDistillInput(personaId);
+  if (!distillInput) {
+    return null;
+  }
+
+  const latestVersionNumber = getVersionByPersona(personaId).at(-1)?.versionNumber ?? 0;
+  const previousDraftId = persona.currentDraftVersionId;
+  if (previousDraftId) {
+    const previousDraft = getDynamicVersion(previousDraftId);
+    if (previousDraft && previousDraft.status === "DRAFT") {
+      previousDraft.status = "SUPERSEDED";
+      previousDraft.supersededAt = nowIso();
+    }
+  }
+
   const version: PersonaVersionRecord = {
     id: randomUUID(),
     personaId,
     versionNumber: latestVersionNumber + 1,
     status: "CANDIDATE",
-    profileJson: {
-      summary: previewIntro,
-      topicStrengths: focus,
-      sourceCount: approvedSources.length,
-    },
-    distillFocus: focus,
-    previewIntro,
-    recommendedQuestions: buildDistilledQuestions(persona.displayName, focus),
-    sampleAnswers: [
-      `${persona.displayName} 会先从 ${focus[0] ?? "观点"} 的角度界定问题，再给出倾向。`,
-      `这个对象当前的回答风格更偏向 ${focus.join("、")} 的蒸馏结果。`,
-    ],
-    coverageScore: Math.min(100, 40 + approvedSources.length * 10),
-    groundingScore: Math.min(100, 50 + approvedSources.length * 8),
-    styleScore: Math.min(100, 55 + focus.length * 8),
-    riskScore: approvedSources.some((item) => item.sourceKind === "SUMMARY") ? 25 : 20,
+    profileJson: output.profile,
+    distillFocus: distillInput.distillFocus,
+    previewIntro: output.preview.previewIntro,
+    recommendedQuestions:
+      output.preview.recommendedQuestions.length > 0
+        ? output.preview.recommendedQuestions
+        : buildDistilledQuestions(persona.displayName, distillInput.distillFocus),
+    sampleAnswers: output.preview.sampleAnswers,
+    coverageScore: output.scores.coverageScore,
+    groundingScore: output.scores.groundingScore,
+    styleScore: output.scores.styleScore,
+    riskScore: output.scores.riskScore,
     createdByUserId: actorUserId,
     submittedForPublishAt: null,
     publishedAt: null,
@@ -622,10 +759,7 @@ export const distillPersona = (personaId: string, actorUserId: string) => {
 
   return {
     version,
-    stats: {
-      approvedSources: approvedSources.length,
-      primaryOrSecondarySources: sourceKindCounts.primaryOrSecondary,
-    },
+    stats: distillInput.stats,
   };
 };
 
@@ -649,6 +783,11 @@ export const listPendingPublishReviews = () =>
       displayName: getPersonaName(item.personaId),
       versionNumber: item.versionNumber,
       status: item.status,
+      previewIntro: item.previewIntro,
+      coverageScore: item.coverageScore,
+      groundingScore: item.groundingScore,
+      styleScore: item.styleScore,
+      riskScore: item.riskScore,
       submittedForPublishAt: item.submittedForPublishAt,
     }));
 

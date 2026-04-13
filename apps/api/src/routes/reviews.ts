@@ -7,23 +7,31 @@ import {
 } from "@hall-of-fame/contracts";
 import type { FastifyPluginAsync } from "fastify";
 
-import { resolveActorUserId } from "../store/auth-store.js";
 import {
   listPendingPublishReviews,
   listPendingSourceReviews,
   reviewPublishRequest,
   reviewSource,
 } from "../store/persona-store.js";
+import { requireReviewerSession } from "../utils/actor-session.js";
 
 export const reviewsRoute: FastifyPluginAsync = async (app) => {
-  app.get("/v1/reviews/sources", async (request) => {
+  app.get("/v1/reviews/sources", async (request, reply) => {
+    if (!requireReviewerSession(request, reply)) {
+      return reply;
+    }
+
     const status = (request.query as { status?: string }).status;
     const items = status && status !== "PENDING_REVIEW" ? [] : listPendingSourceReviews();
     return listPendingSourceReviewsResponseSchema.parse({ items });
   });
 
   app.post<{ Params: { sourceId: string } }>("/v1/reviews/sources/:sourceId/approve", async (request, reply) => {
-    const actorUserId = resolveActorUserId(request.headers["x-user-id"]?.toString());
+    const actor = requireReviewerSession(request, reply);
+    if (!actor) {
+      return reply;
+    }
+
     const input = reviewSourceSchema.parse({
       sourceId: request.params.sourceId,
       decision: "APPROVED",
@@ -31,7 +39,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
     });
 
     const source = reviewSource(input.sourceId, {
-      reviewerUserId: actorUserId,
+      reviewerUserId: actor.userId,
       decision: input.decision,
       reason: input.reason,
     });
@@ -44,7 +52,11 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.post<{ Params: { sourceId: string } }>("/v1/reviews/sources/:sourceId/reject", async (request, reply) => {
-    const actorUserId = resolveActorUserId(request.headers["x-user-id"]?.toString());
+    const actor = requireReviewerSession(request, reply);
+    if (!actor) {
+      return reply;
+    }
+
     const input = reviewSourceSchema.parse({
       sourceId: request.params.sourceId,
       decision: "REJECTED",
@@ -52,7 +64,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
     });
 
     const source = reviewSource(input.sourceId, {
-      reviewerUserId: actorUserId,
+      reviewerUserId: actor.userId,
       decision: input.decision,
       reason: input.reason,
     });
@@ -64,7 +76,11 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
     return source;
   });
 
-  app.get("/v1/reviews/persona-versions", async (request) => {
+  app.get("/v1/reviews/persona-versions", async (request, reply) => {
+    if (!requireReviewerSession(request, reply)) {
+      return reply;
+    }
+
     const status = (request.query as { status?: string }).status;
     const items = status && status !== "PENDING_PUBLISH_REVIEW" ? [] : listPendingPublishReviews();
     return listPendingVersionReviewsResponseSchema.parse({ items });
@@ -73,7 +89,11 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
   app.post<{ Params: { personaVersionId: string } }>(
     "/v1/reviews/persona-versions/:personaVersionId/approve-publish",
     async (request, reply) => {
-      const actorUserId = resolveActorUserId(request.headers["x-user-id"]?.toString());
+      const actor = requireReviewerSession(request, reply);
+      if (!actor) {
+        return reply;
+      }
+
       const input = reviewPersonaVersionPublishSchema.parse({
         personaVersionId: request.params.personaVersionId,
         decision: "APPROVED",
@@ -82,7 +102,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const result = reviewPublishRequest(input.personaVersionId, {
-          reviewerUserId: actorUserId,
+          reviewerUserId: actor.userId,
           decision: input.decision,
           reason: input.reason,
         });
@@ -106,7 +126,11 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
   app.post<{ Params: { personaVersionId: string } }>(
     "/v1/reviews/persona-versions/:personaVersionId/reject-publish",
     async (request, reply) => {
-      const actorUserId = resolveActorUserId(request.headers["x-user-id"]?.toString());
+      const actor = requireReviewerSession(request, reply);
+      if (!actor) {
+        return reply;
+      }
+
       const input = reviewPersonaVersionPublishSchema.parse({
         personaVersionId: request.params.personaVersionId,
         decision: "REJECTED",
@@ -114,7 +138,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
       });
 
       const result = reviewPublishRequest(input.personaVersionId, {
-        reviewerUserId: actorUserId,
+        reviewerUserId: actor.userId,
         decision: input.decision,
         reason: input.reason,
       });
