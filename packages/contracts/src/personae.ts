@@ -23,3 +23,27 @@ export const personaSummarySchema = z.object({
   status: personaStatusSchema,
   featuredRank: z.number().int().nullable(),
 });
+
+export const featuredPersonaSchema = personaSummarySchema.extend({
+  currentPublishedVersionId: z.string().uuid(),
+  previewIntro: z.string().nullable(),
+  recommendedQuestions: z.array(z.string()),
+});
+
+export const featuredPersonaeResponseSchema = z.object({
+  items: z.array(featuredPersonaSchema),
+});
+
+export const personaDetailResponseSchema = z.object({
+  persona: personaSummarySchema.extend({
+    currentPublishedVersionId: z.string().uuid(),
+  }),
+  version: z.object({
+    id: z.string().uuid(),
+    versionNumber: z.number().int().positive(),
+    previewIntro: z.string().nullable(),
+    recommendedQuestions: z.array(z.string()),
+    sampleAnswers: z.array(z.string()),
+    profileJson: z.record(z.string(), z.unknown()),
+  }),
+});

@@ -1,4 +1,4 @@
-import { inferenceLevelSchema, refusalReasonSchema } from "@hall-of-fame/domain";
+import { chatTargetTypeSchema, inferenceLevelSchema, refusalReasonSchema } from "@hall-of-fame/domain";
 import { z } from "zod";
 
 export const createChatSchema = z.discriminatedUnion("targetType", [
@@ -35,4 +35,25 @@ export const chatReplySchema = z.object({
   inferenceLevel: inferenceLevelSchema,
   conflictDetected: z.boolean(),
   refusalReason: refusalReasonSchema,
+});
+
+export const chatMessageSchema = z.object({
+  id: z.string().uuid(),
+  role: z.enum(["SYSTEM", "USER", "ASSISTANT"]),
+  content: z.string(),
+  basis: chatReplySchema.shape.basis.nullable(),
+  basisSummary: chatReplySchema.shape.basisSummary.nullable(),
+  inferenceLevel: inferenceLevelSchema.nullable(),
+  conflictDetected: z.boolean().nullable(),
+  refusalReason: refusalReasonSchema.nullable(),
+  createdAt: z.string(),
+});
+
+export const chatSessionSchema = z.object({
+  id: z.string().uuid(),
+  targetType: chatTargetTypeSchema,
+  targetPersonaId: z.string().uuid().nullable(),
+  targetPersonaVersionId: z.string().uuid(),
+  shareSlug: z.string().nullable(),
+  messages: z.array(chatMessageSchema),
 });
