@@ -35,6 +35,9 @@ importers:
       '@hall-of-fame/prompt-kit':
         specifier: workspace:*
         version: link:../../packages/prompt-kit
+      '@hall-of-fame/runtime-env':
+        specifier: workspace:*
+        version: link:../../packages/runtime-env
       fastify:
         specifier: ^5.4.0
         version: 5.8.4
@@ -47,6 +50,9 @@ importers:
       '@hall-of-fame/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@hall-of-fame/runtime-env':
+        specifier: workspace:*
+        version: link:../../packages/runtime-env
       fastify:
         specifier: ^5.4.0
         version: 5.8.4
@@ -72,6 +78,9 @@ importers:
       '@hall-of-fame/prompt-kit':
         specifier: workspace:*
         version: link:../../packages/prompt-kit
+      '@hall-of-fame/runtime-env':
+        specifier: workspace:*
+        version: link:../../packages/runtime-env
       fastify:
         specifier: ^5.4.0
         version: 5.8.4
@@ -107,6 +116,12 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.3.6
+
+  packages/runtime-env:
+    dependencies:
+      dotenv:
+        specifier: ^16.5.0
+        version: 16.6.1
 
   packages/ui-tokens: {}
 
@@ -329,6 +344,10 @@ packages:
   dequal@2.0.3:
     resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
     engines: {node: '>=6'}
+
+  dotenv@16.6.1:
+    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+    engines: {node: '>=12'}
 
   esbuild@0.27.7:
     resolution: {integrity: sha512-IxpibTjyVnmrIQo5aqNpCgoACA/dTKLTlhMHihVHhdkxKyPO1uBBthumT0rdHmcsk9uMonIWS0m4FljWzILh3w==}
@@ -626,6 +645,8 @@ snapshots:
   csstype@3.2.3: {}
 
   dequal@2.0.3: {}
+
+  dotenv@16.6.1: {}
 
   esbuild@0.27.7:
     optionalDependencies:

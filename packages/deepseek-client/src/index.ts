@@ -69,5 +69,13 @@ export const requestStructuredJson = async <T>(input: {
     throw new Error("DeepSeek returned an empty JSON response");
   }
 
-  return input.schema.parse(JSON.parse(content));
+  const parsedJson = JSON.parse(content);
+  try {
+    return input.schema.parse(parsedJson);
+  } catch (error) {
+    const preview = content.slice(0, 600);
+    throw new Error(
+      `DeepSeek returned invalid structured JSON: ${error instanceof Error ? error.message : "unknown schema error"}; raw=${preview}`,
+    );
+  }
 };

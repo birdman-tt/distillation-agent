@@ -119,6 +119,9 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
               personaVersionId: dynamicVersion.id,
               displayName: dynamicPersona?.displayName ?? "User Persona",
               previewIntro: dynamicVersion.previewIntro,
+              profileSummary:
+                typeof dynamicVersion.profileJson.summary === "string" ? dynamicVersion.profileJson.summary : null,
+              styleExamples: dynamicVersion.sampleAnswers,
               focusKeywords: [
                 ...((dynamicVersion.profileJson.topicStrengths as string[] | undefined) ?? []),
                 ...dynamicVersion.recommendedQuestions,

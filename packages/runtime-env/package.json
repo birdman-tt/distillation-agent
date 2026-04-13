@@ -1,5 +1,5 @@
 {
-  "name": "@hall-of-fame/prompt-kit",
+  "name": "@hall-of-fame/runtime-env",
   "private": true,
   "type": "module",
   "types": "./src/index.ts",
@@ -13,7 +13,6 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@hall-of-fame/domain": "workspace:*",
-    "zod": "^4.0.0"
+    "dotenv": "^16.5.0"
   }
 }
