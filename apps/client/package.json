@@ -6,11 +6,13 @@
     "dev:h5": "tsx src/dev-h5.ts",
     "dev:weapp": "tsx src/dev-weapp.ts",
     "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hall-of-fame/api-client": "workspace:*",
+    "fastify": "^5.4.0",
     "react": "^19.2.0"
   },
   "devDependencies": {
