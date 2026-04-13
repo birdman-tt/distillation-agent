@@ -11,6 +11,7 @@ test("H5 server exposes create and review entry pages", async () => {
       url: "/create",
     });
     assert.equal(createPage.statusCode, 200);
+    assert.match(createPage.headers["content-type"] ?? "", /text\/html/);
     assert.match(createPage.body, /创建对象/);
     assert.match(createPage.body, /提交发布审核/);
 
@@ -19,6 +20,7 @@ test("H5 server exposes create and review entry pages", async () => {
       url: "/review",
     });
     assert.equal(reviewPage.statusCode, 200);
+    assert.match(reviewPage.headers["content-type"] ?? "", /text\/html/);
     assert.match(reviewPage.body, /审核台/);
     assert.match(reviewPage.body, /发布审核/);
   } finally {

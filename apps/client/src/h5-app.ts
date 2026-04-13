@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 
 const apiBaseUrl = () => process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
 
@@ -834,6 +834,8 @@ const renderReviewPage = () =>
     `,
   });
 
+const sendHtml = (reply: FastifyReply, html: string) => reply.type("text/html; charset=utf-8").send(html);
+
 export const buildH5Server = () => {
   const app = Fastify({ logger: true });
 
@@ -842,14 +844,18 @@ export const buildH5Server = () => {
     service: "hall-of-fame-h5",
   }));
 
-  app.get("/", async () => renderFeaturedList());
-  app.get<{ Params: { personaId: string } }>("/persona/:personaId", async (request) => renderPersonaPage(request.params.personaId));
-  app.get<{ Params: { shareSlug: string } }>("/share/:shareSlug", async (request) => renderSharePage(request.params.shareSlug));
-  app.get("/create", async () => renderCreatePage());
-  app.get<{ Params: { personaVersionId: string } }>("/preview/:personaVersionId", async (request) =>
-    renderPreviewPage(request.params.personaVersionId),
+  app.get("/", async (_request, reply) => sendHtml(reply, await renderFeaturedList()));
+  app.get<{ Params: { personaId: string } }>("/persona/:personaId", async (request, reply) =>
+    sendHtml(reply, await renderPersonaPage(request.params.personaId)),
   );
-  app.get("/review", async () => renderReviewPage());
+  app.get<{ Params: { shareSlug: string } }>("/share/:shareSlug", async (request, reply) =>
+    sendHtml(reply, await renderSharePage(request.params.shareSlug)),
+  );
+  app.get("/create", async (_request, reply) => sendHtml(reply, renderCreatePage()));
+  app.get<{ Params: { personaVersionId: string } }>("/preview/:personaVersionId", async (request, reply) =>
+    sendHtml(reply, await renderPreviewPage(request.params.personaVersionId)),
+  );
+  app.get("/review", async (_request, reply) => sendHtml(reply, renderReviewPage()));
 
   return app;
 };
