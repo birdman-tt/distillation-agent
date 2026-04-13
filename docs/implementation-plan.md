@@ -116,10 +116,11 @@
 - Create: `packages/domain/src/share.ts`
 
 - [ ] 定义 `users`、`auth_identities`、`sessions`
-- [ ] 定义 `personae`、`persona_versions`、`persona_sources`、`persona_chunks`
+- [ ] 定义 `personae`、`persona_versions`、`persona_sources`、`source_documents`、`evidence_spans`、`persona_chunks`
 - [ ] 定义 `share_links`、`chats`、`chat_messages`、`persona_feedback`
 - [ ] 补全来源审核状态、对象状态、版本状态、推演/拒答枚举
 - [ ] 定义 `current_draft_version_id` 和 `current_published_version_id` 语义
+- [ ] 为 `personae` 补齐 `origin_type`、`creator_user_id`、`listing_status`、`featured_rank`
 - [ ] 为 `persona_chunks` 补全文本检索和 metadata filter 所需字段
 - [ ] 将 API request/response 形状统一写进 `packages/contracts`
 
@@ -199,7 +200,7 @@
 
 - [ ] 实现 `share_links` 表及创建逻辑，并强绑定 `persona_version_id`
 - [ ] 为已发布对象版本生成唯一 `share_slug`
-- [ ] 明确 publish 与 create-share 的事务边界
+- [ ] 明确 publish 成功后自动生成 primary share，并保证 create-share 幂等返回
 - [ ] 定义 H5 分享落地页 route
 - [ ] 约定微信内打开的跳转策略
 - [ ] 前端分享 adapter 统一消费版本级分享元数据
@@ -239,7 +240,7 @@
 
 - [ ] 提供待审核资料列表和查询接口
 - [ ] 提供 `APPROVED` / `REJECTED` 状态流转接口，并记录操作人、时间、原因
-- [ ] 提供用户公开对象的发布审核入口
+- [ ] 提供基于 `personaVersionId` 的发布审核入口，不再按裸 `personaId` 审核
 - [ ] 支持官方对象人工上架和用户公开对象抽检
 - [ ] 明确审核员权限边界和最小审计字段
 
@@ -317,6 +318,7 @@
 - [ ] 为 URL 抓取增加协议、私网、重定向、响应大小、超时、内容类型边界
 - [ ] 为规范化 URL 生成去重键和抓取失败记录
 - [ ] worker 拉取网页正文并写入 `PENDING_REVIEW`
+- [ ] 把清洗后的 document snapshot 和 evidence spans 写入独立结构，供后续版本重建
 - [ ] 只允许 `APPROVED` 资料进入蒸馏
 
 ### Task 8: 蒸馏 workflow 流水线 `[P1]`
@@ -393,6 +395,7 @@
 - Modify: `apps/client/src/features/chat/*`
 
 - [ ] 按问题类型做检索、判定和 prompt 组装
+- [ ] chat 创建时显式声明 `published_persona` / `draft_version_preview` / `share_link` 目标模式
 - [ ] 采用 `rule-first` 分类，规则不确定时再用轻量模型补判
 - [ ] 使用 `deepseek-chat` 以单轮一次生成方式返回结构化输出
 - [ ] 应用 `grounded / inferred / insufficient_evidence` 判定
@@ -437,7 +440,7 @@
 - [ ] 创建页收集对象名、类型、资料、蒸馏重点
 - [ ] 预览页展示候选版本的人设、推荐问题、示例回答
 - [ ] 支持“仅自己使用 / 公开分享”
-- [ ] 公开发布前校验资料状态、质量分和发布审核条件
+- [ ] 公开发布前校验硬阈值：`approved_sources >= 5`、`primary_or_secondary_sources >= 2`、`coverage >= 70`、`grounding >= 80`、`style >= 60`、`risk <= 30`
 - [ ] 发布后更新 `current_published_version_id` 并生成版本级分享身份
 
 ### Task 11: 质量反馈、观测与开发保护网 `[P2]`
@@ -621,14 +624,13 @@ pnpm dev:client:weapp
 
 ### 5.6 版本与分享绑定规则
 
-这些也不能留到实现时再拍脑袋。
+这些在开工前已经锁定：
 
-至少要先想清楚：
-
-- `current_draft_version_id` 和 `current_published_version_id` 怎么维护
-- 发布时是“沿用旧 share”还是“为新版本生成新 share”
-- 预览聊天默认命中 draft 版本，公开聊天默认命中 published 版本
-- 旧分享如何保证不因重新蒸馏而失真
+- `current_draft_version_id` 指向最近的 draft/candidate version
+- `current_published_version_id` 指向当前公开版本
+- 发布成功后为新版本生成新的 primary share，不复用旧版本 share
+- 预览聊天默认命中 draft version，公开聊天默认命中 published version
+- 旧分享永远继续指向旧版本，不因重新蒸馏而漂移
 
 ## 6. 推荐里程碑
 

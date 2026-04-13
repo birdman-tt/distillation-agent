@@ -374,11 +374,11 @@ GET    /v1/personae/featured
 GET    /v1/personae/:personaId
 POST   /v1/personae
 PATCH  /v1/personae/:personaId
-POST   /v1/personae/:personaId/publish
 GET    /v1/personae/:personaId/status
 GET    /v1/personae/:personaId/versions
 
 GET    /v1/persona-versions/:personaVersionId
+POST   /v1/persona-versions/:personaVersionId/submit-publish-review
 POST   /v1/persona-versions/:personaVersionId/shares
 
 POST   /v1/personae/:personaId/sources/text
@@ -395,9 +395,9 @@ GET    /v1/shares/:shareSlug
 GET    /v1/reviews/sources?status=PENDING_REVIEW
 POST   /v1/reviews/sources/:sourceId/approve
 POST   /v1/reviews/sources/:sourceId/reject
-GET    /v1/reviews/personae?status=PENDING_PUBLISH_REVIEW
-POST   /v1/reviews/personae/:personaId/approve-publish
-POST   /v1/reviews/personae/:personaId/reject-publish
+GET    /v1/reviews/persona-versions?status=PENDING_PUBLISH_REVIEW
+POST   /v1/reviews/persona-versions/:personaVersionId/approve-publish
+POST   /v1/reviews/persona-versions/:personaVersionId/reject-publish
 ```
 
 ### 5.5 会话模型与版本模型
@@ -412,6 +412,8 @@ POST   /v1/reviews/personae/:personaId/reject-publish
 - `personae`
 - `persona_versions`
 - `persona_sources`
+- `source_documents`
+- `evidence_spans`
 - `persona_chunks`
 - `chats`
 - `chat_messages`
@@ -448,6 +450,15 @@ POST   /v1/reviews/personae/:personaId/reject-publish
 - 所有公开分享必须绑定 `current_published_version_id`
 - 编辑资料不会覆盖旧版本，而是生成新的 draft/candidate version
 - 对话默认命中公开版本；预览对话显式命中 draft version
+
+`personae` 还应补充以下字段，避免“官方对象”和“用户对象”只停留在产品文案层：
+
+- `origin_type = OFFICIAL | USER`
+- `creator_user_id nullable`
+- `listing_status = PRIVATE | UNLISTED | FEATURED | REMOVED`
+- `featured_rank nullable`
+
+V1 的官方人物馆读取规则应直接依赖这些字段，而不是依赖手工约定。
 
 ## 6. “蒸馏人物信息”技术方案
 
@@ -606,6 +617,12 @@ V1 至少需要这些安全和幂等边界：
 
 - `persona_chunks`
 
+补充约束：
+
+- `persona_chunks` 是检索单元，不是证据真相本身
+- 检索链路必须保留 `source_documents -> evidence_spans -> persona_chunks` 的引用关系
+- `persona_version` 必须能回溯到当时采用的 document/span 快照集合
+
 #### 步骤 3：人物结构化提取
 
 从资料里提取出稳定画像，不直接拿原文拼 prompt。
@@ -658,6 +675,20 @@ V1 至少需要这些安全和幂等边界：
 - 风格过弱
 - 风险过高
 
+V1 先锁定保守阈值：
+
+- `approved_sources >= 5`
+- `primary_or_secondary_sources >= 2`
+- `coverage_score >= 70`
+- `grounding_score >= 80`
+- `style_score >= 60`
+- `risk_score <= 30`
+
+补充规则：
+
+- 审核员可以人工拒绝发布
+- 审核员不能绕过硬阈值强制发布
+
 #### 步骤 6：生成候选版本
 
 蒸馏成功后先生成一个不可变候选版本：
@@ -680,7 +711,10 @@ V1 至少需要这些安全和幂等边界：
 
 推荐对话链路：
 
-1. 用户发问
+1. 创建 chat 时显式声明目标模式
+   - `published_persona`
+   - `draft_version_preview`
+   - `share_link`
 2. 判断问题类型
    - 人物观点
    - 人生建议
@@ -957,6 +991,17 @@ V1 的记忆不要做得太重。
 
 - 官方对象人工上架
 - 用户公开对象人工抽检
+
+V1 不引入内部运营 agent 模式。
+
+允许运营工具具备：
+
+- 审核列表
+- 审核提示
+- 日志检索
+- eval 回放
+
+但不允许 agent 拥有发布、审核或分享真相。
 
 ## 9. 推荐开发顺序
 

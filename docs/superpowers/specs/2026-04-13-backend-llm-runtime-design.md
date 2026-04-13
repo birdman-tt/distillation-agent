@@ -29,6 +29,7 @@ Confirmed decisions from discussion:
 - Review gate: manual review stays in business backend, not in Mastra agent state
 - Chat mode: single-pass generation, not multi-pass rewrite
 - Classification mode: `rule-first`, with model fallback only when needed
+- V1 ops mode: no lightweight internal operator agent
 
 ## 2. Final Recommendation
 
@@ -277,12 +278,19 @@ Confirmed chat mode:
 
 Recommended steps:
 
-1. `loadPersonaVersion`
-2. `classifyQuestion`
-3. `retrieveEvidence`
-4. `judgeInferenceLevel`
-5. `generateAnswer`
-6. `validateAndPersist`
+1. `resolveChatTarget`
+2. `loadPersonaVersion`
+3. `classifyQuestion`
+4. `retrieveEvidence`
+5. `judgeInferenceLevel`
+6. `generateAnswer`
+7. `validateAndPersist`
+
+Locked target modes:
+
+- `published_persona`
+- `draft_version_preview`
+- `share_link`
 
 Required output contract:
 
@@ -348,10 +356,12 @@ This decision implies the future code layout should likely look like:
 
 ## 11. Open Questions
 
-These are still undecided and should be answered before implementation planning:
+No remaining contract blockers remain in this scope.
 
-- what exact quality score thresholds block publishing
-- whether internal operator tools need a lightweight agent mode in V1
+The only later-stage tuning items are:
+
+- whether retrieval needs lightweight rerank after the first local-search baseline ships
+- whether V2 should add internal agent tooling for non-production ops workflows
 
 ## 12. Final Decision Snapshot
 
@@ -366,5 +376,7 @@ For V1:
 - use `single-pass chat generation`
 - use `rule-first` classification
 - use local retrieval in V1 instead of hosted embeddings
+- use explicit chat target modes
+- use hard publish thresholds in V1
 - keep review, publish, share, and version truth in our own backend
-- allow `agent` only for non-production auxiliary tasks
+- allow `agent` only for non-production auxiliary tasks after V1
