@@ -95,9 +95,15 @@ packages/
   contracts/            # zod schemas、DTO、接口约束
   domain/               # 纯业务模型、状态机、对象类型定义
   api-client/           # 给 h5/weapp 共用的请求客户端
-  prompt-kit/           # 蒸馏与对话用 prompt 模板和输出 schema
+  prompt-kit/           # 蒸馏与对话用 prompt 模板、输出 schema、workflow step contracts
   ui-tokens/            # 设计 token、常量、文案枚举
 ```
+
+补充约束：
+
+- `Mastra` 以内嵌 runtime 的方式接入 `apps/api` 和 `apps/worker`
+- V1 不单独起一个新的 AI 产品控制面
+- 主生产链路使用 `workflow-first`，不使用 `agent-first`
 
 ### 3.2 与当前仓库的关系
 
@@ -320,6 +326,7 @@ V1 不建议继续使用 SQLite 作为主存储。
 
 - `worker` 独立进程
 - `Redis + BullMQ` 或等价队列
+- `Mastra workflow` 作为蒸馏和评测的内部运行时
 
 承担以下任务：
 
@@ -331,15 +338,23 @@ V1 不建议继续使用 SQLite 作为主存储。
 - 审核或质量打分
 - 生成分享卡素材
 
+补充约束：
+
+- `distill` 主链路使用显式 workflow，不使用自由 agent loop
+- `chat` 主链路也使用显式 workflow，但运行在 `api` 服务内，避免额外网络跳转
+- 审核、发布、分享和状态机仍由业务后端持有真相
+
 ### 5.4 API 设计原则
 
-业务接口统一走 `/v1` 前缀，分成 5 组：
+业务接口统一走 `/v1` 前缀，分成 7 组：
 
 - `auth`
 - `personae`
+- `persona-versions`
 - `sources`
 - `chats`
 - `shares`
+- `reviews`
 
 建议的核心接口：
 
@@ -355,6 +370,10 @@ POST   /v1/personae
 PATCH  /v1/personae/:personaId
 POST   /v1/personae/:personaId/publish
 GET    /v1/personae/:personaId/status
+GET    /v1/personae/:personaId/versions
+
+GET    /v1/persona-versions/:personaVersionId
+POST   /v1/persona-versions/:personaVersionId/shares
 
 POST   /v1/personae/:personaId/sources/text
 POST   /v1/personae/:personaId/sources/url
@@ -366,10 +385,16 @@ POST   /v1/chats/:chatId/messages
 GET    /v1/chats/:chatId
 
 GET    /v1/shares/:shareSlug
-POST   /v1/shares/:personaId
+
+GET    /v1/reviews/sources?status=PENDING_REVIEW
+POST   /v1/reviews/sources/:sourceId/approve
+POST   /v1/reviews/sources/:sourceId/reject
+GET    /v1/reviews/personae?status=PENDING_PUBLISH_REVIEW
+POST   /v1/reviews/personae/:personaId/approve-publish
+POST   /v1/reviews/personae/:personaId/reject-publish
 ```
 
-### 5.5 会话模型
+### 5.5 会话模型与版本模型
 
 后端统一维护自己的用户和会话，不让平台身份直接渗透到业务层。
 
@@ -404,6 +429,19 @@ POST   /v1/shares/:personaId
 - `canonical_url`
 - `miniapp_path`
 - `is_active`
+
+版本模型还需要额外明确两件事：
+
+1. `personae` 是对象容器
+2. `persona_versions` 是真正参与发布、分享、聊天的不可变快照
+
+建议补充以下规则：
+
+- `personae.current_draft_version_id`
+- `personae.current_published_version_id`
+- 所有公开分享必须绑定 `current_published_version_id`
+- 编辑资料不会覆盖旧版本，而是生成新的 draft/candidate version
+- 对话默认命中公开版本；预览对话显式命中 draft version
 
 ## 6. “蒸馏人物信息”技术方案
 
@@ -441,7 +479,23 @@ V1 只支持两种来源：
 - 来源级别
 - 可信度分
 
-### 6.2.1 证据模型
+### 6.2.1 URL 导入安全边界
+
+URL 导入是用户可控输入，不能只把它当成“抓网页正文”。
+
+V1 至少需要这些安全和幂等边界：
+
+- 仅允许 `http` / `https`
+- DNS 解析后阻断私网、回环、本地链路和保留地址段
+- 跟随重定向时每一跳都重新校验协议和目标地址
+- 限制响应大小、抓取时长和重试次数
+- 限制允许的内容类型，默认只接收可提纯为正文的网页文本
+- 为规范化 URL 生成去重键，避免重复抓同一来源
+- 为每次抓取保留请求结果和失败原因，便于审计和重试
+
+这些规则应在写入 `persona_sources` 前执行，不要把风险 URL 直接丢进后续流水线。
+
+### 6.2.2 证据模型
 
 虽然前端不要求逐条展示出处，但后端必须保留“可追溯证据模型”。
 
@@ -489,7 +543,7 @@ V1 只支持两种来源：
 - 人工审核
 - 版本重建
 
-### 6.2.2 资料审核状态机
+### 6.2.3 资料审核状态机
 
 你已经确定官方对象允许“半自动抓公开网页后再人工筛选”，这意味着资料本身必须进入审核状态机，而不是抓完直接进入蒸馏。
 
@@ -507,6 +561,15 @@ V1 只支持两种来源：
 - 脏数据污染人物画像
 - 重复转载材料影响权重
 - 低质量内容进入对话检索链路
+
+这里要补一句：审核不只是状态字段，还必须有最小操作面。
+
+至少需要：
+
+- 待审核资料列表
+- approve / reject API
+- 审核意见和操作人记录
+- 用户公开对象的发布审核入口
 
 ### 6.3 资料处理流水线
 
@@ -589,15 +652,21 @@ V1 只支持两种来源：
 - 风格过弱
 - 风险过高
 
-#### 步骤 6：发布版本
+#### 步骤 6：生成候选版本
 
-蒸馏成功后生成一个不可变版本：
+蒸馏成功后先生成一个不可变候选版本：
 
 - `persona_version`
 - 绑定画像 JSON
 - 绑定资料快照
 - 绑定示例问题
 - 绑定默认开场白
+
+注意：
+
+- 这一步生成的是 `candidate version`，不是直接公开发布
+- 公开发布是后续业务动作，需要通过资料和风控校验
+- `share_slug` 只能在明确的 published version 上生成
 
 ### 6.4 对话时怎么使用这些蒸馏结果
 
@@ -626,6 +695,10 @@ V1 只支持两种来源：
       "snippet": "相关资料片段"
     }
   ],
+  "basisSummary": {
+    "mode": "SUPPORTED",
+    "summary": "主要依据该人物关于秩序和统一的公开表述"
+  },
   "inferenceLevel": "grounded",
   "conflictDetected": false,
   "refusalReason": null
@@ -640,13 +713,15 @@ V1 只支持两种来源：
 
 其中：
 
-- `basis` 是后端内部证据列表，用于 grounding、审核和调试，不要求前端逐条展示来源
+- `basis` 是后端内部证据列表，用于 grounding、审核和调试
+- `basisSummary` 是给前端展示的依据摘要层，不要求逐条展开原始引用，但必须告诉用户这段回答依据了什么
 - `conflictDetected` 表示当前问题命中了相互冲突的资料
 - `refusalReason` 在拒答时返回原因枚举
 
-前端只需要明确展示：
+前端至少需要明确展示：
 
 - 这句话有依据
+- 依据大致来自哪些观点/资料方向
 - 这句话是基于风格的推演
 - 这题资料不足，不能硬装成“这个人一定会这么说”
 
@@ -746,16 +821,37 @@ V1 最合理的路线是：
 
 ## 7. 聊天生成策略
 
-### 7.1 模型层
+### 7.1 运行时编排
+
+V1 推荐将 LLM 主链路固定为：
+
+- `Mastra workflow` 编排蒸馏和评测
+- `Mastra workflow` 编排 chat runtime
+- 主生产路径不启用开放式 agent loop
+
+原因：
+
+- 便于追踪 step 级输入输出
+- 便于把业务真相和 LLM 执行分层
+- 便于回放失败案例和做 prompt evaluation
+- 更容易限制成本和时延
+
+### 7.2 模型层
 
 聊天模型和蒸馏模型可以是同一个供应商，但职责不同：
 
 - 蒸馏阶段：偏抽取、归纳、结构化
 - 对话阶段：偏风格表达、受控生成
+- embedding 阶段：偏向量化和召回稳定性
 
 不要直接让一个 prompt 同时完成“提取画像 + 聊天回答”。
 
-### 7.2 Prompt 结构
+推荐采用：
+
+- 单一供应商
+- 三种能力拆分：`distillModel`、`embeddingModel`、`chatModel`
+
+### 7.3 Prompt 结构
 
 推荐固定为 4 段：
 
@@ -771,11 +867,12 @@ V1 最合理的路线是：
 4. 输出 schema
    - answer
    - basis
+   - basisSummary
    - inferenceLevel
    - conflictDetected
    - refusalReason
 
-### 7.2.1 Prompt 硬约束
+### 7.3.1 Prompt 硬约束
 
 Prompt 里必须加入以下硬规则，不能只靠产品文案约束：
 
@@ -784,8 +881,9 @@ Prompt 里必须加入以下硬规则，不能只靠产品文案约束：
 - 当判定为 `insufficient_evidence` 时，必须拒答，不能继续角色扮演式补全
 - 当 `conflictDetected = true` 且影响主结论时，优先拒答
 - 不允许为了“更像这个人”而覆盖检索结果或边界规则
+- V1 聊天只允许单轮一次生成，不引入隐藏 rewrite pass
 
-### 7.3 对话记忆
+### 7.4 对话记忆
 
 V1 的记忆不要做得太重。
 
@@ -807,15 +905,24 @@ V1 的记忆不要做得太重。
 
 - 创建对象时的来源声明
 - URL 来源记录
+- 资料审核操作面
 - 对象状态机
   - `draft`
   - `processing`
   - `ready`
   - `published`
   - `rejected`
+- 版本状态机
+  - `draft`
+  - `ready_for_review`
+  - `approved`
+  - `published`
+  - `superseded`
 - 敏感对象拦截
 - 资料不足拦截
 - 分享前版本冻结
+- `personae.current_draft_version_id`
+- `personae.current_published_version_id`
 
 至少要留一个人工兜底口：
 
@@ -831,19 +938,26 @@ V1 的记忆不要做得太重。
 1. 后端基础设施
    - 用户、对象、版本、来源、聊天、分享表
    - 统一 contracts
-2. 官方人物馆闭环
+   - 版本状态机和审核状态机
+2. 官方人物馆 + 最小对话闭环
    - featured 列表
    - 对象详情
-   - 聊天
-3. 用户创建闭环
+   - 最小聊天
+   - 版本化分享落地页
+3. 审核能力与资料输入闭环
+   - 审核列表
+   - approve / reject API
    - 文本/URL 输入
-   - distill job
+   - URL 安全边界
+4. 蒸馏 workflow 与预览闭环
+   - distill workflow
+   - candidate version
    - 预览页
-4. 发布与分享闭环
-   - persona_version
+5. 发布与增强对话闭环
+   - publish review
    - share slug
-   - 分享卡
-5. 双端适配
+   - grounded / inferred / insufficient_evidence
+6. 双端适配
    - h5 登录
    - weapp 登录
    - 分享 adapter
@@ -855,6 +969,7 @@ V1 的记忆不要做得太重。
 - 前端：`Taro + React + TypeScript`
 - 双端：`H5 + 微信小程序`
 - 后端：`Fastify + TypeScript + zod`
+- LLM runtime：`Mastra workflow-first`
 - 数据库：`PostgreSQL + pgvector`
 - 异步：`worker + queue`
 - 存储：`对象存储`

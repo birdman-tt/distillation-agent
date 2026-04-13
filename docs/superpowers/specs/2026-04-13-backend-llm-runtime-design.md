@@ -191,6 +191,8 @@ These tasks are open-ended and human-reviewed, so agent flexibility is useful th
 - `chat_messages`
 - `share_links`
 - `persona_feedback`
+- `current_draft_version_id`
+- `current_published_version_id`
 - review status and publish status transitions
 - token lifecycle
 - rate limiting
@@ -275,6 +277,7 @@ Required output contract:
 
 - `answer`
 - `basis`
+- `basisSummary`
 - `inferenceLevel`
 - `conflictDetected`
 - `refusalReason`

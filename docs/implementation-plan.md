@@ -4,7 +4,7 @@
 
 **Goal:** Build the V1 Hall of Fame product as a public persona distillation platform with a shared backend, dual frontend targets (`H5` and `WeChat Mini Program`), and a controlled distillation/chat pipeline.
 
-**Architecture:** The product uses a single Fastify API, a separate async worker for ingestion/distillation, and one Taro React client compiled to both H5 and WeChat Mini Program. Persona distillation is implemented as `source ingestion -> review -> structured profile extraction -> retrieval index -> constrained chat generation`, not fine-tuning.
+**Architecture:** The product uses a single Fastify API, a separate async worker for ingestion/distillation, and one Taro React client compiled to both H5 and WeChat Mini Program. `Mastra` is embedded as the internal LLM workflow runtime for distillation and controlled chat orchestration, while business truth remains in Fastify/PostgreSQL. Persona distillation is implemented as `source ingestion -> review -> structured profile extraction -> retrieval index -> constrained chat generation`, not fine-tuning.
 
 **Tech Stack:** Taro, React, TypeScript, Fastify, Zod, PostgreSQL, pgvector, Redis/BullMQ, object storage, OpenAI-compatible model provider, WeChat Mini Program DevTools
 
@@ -19,16 +19,17 @@
 - 本地开发环境和基础设施
 - monorepo 脚手架与 workspace 命名
 - 数据库 schema、基础 domain model、shared contracts
-- 官方人物馆只读闭环
-- 分享身份模型
+- 官方人物馆与最小对话闭环
+- 分享身份模型与版本落地页
+- 审核能力基础
 
 ### P1：第一阶段上线闭环
 
 - 用户登录与会话
 - 创建对象流程
-- 资料导入与审核
-- 蒸馏 worker 流水线
-- 对话链路与拒答/冲突规则
+- 资料导入与 URL 安全边界
+- 蒸馏 workflow 流水线
+- 对话链路、依据摘要与拒答/冲突规则
 
 ### P2：第二阶段增强
 
@@ -106,27 +107,31 @@
 - Create: `apps/api/src/db/schema.sql` or `apps/api/src/db/migrations/*`
 - Create: `packages/contracts/src/auth.ts`
 - Create: `packages/contracts/src/personae.ts`
+- Create: `packages/contracts/src/persona-versions.ts`
 - Create: `packages/contracts/src/chats.ts`
 - Create: `packages/contracts/src/shares.ts`
 - Create: `packages/domain/src/persona.ts`
+- Create: `packages/domain/src/version.ts`
 - Create: `packages/domain/src/source.ts`
 - Create: `packages/domain/src/share.ts`
 
 - [ ] 定义 `users`、`auth_identities`、`sessions`
 - [ ] 定义 `personae`、`persona_versions`、`persona_sources`、`persona_chunks`
 - [ ] 定义 `share_links`、`chats`、`chat_messages`、`persona_feedback`
-- [ ] 补全来源审核状态、对象状态、推演/拒答枚举
+- [ ] 补全来源审核状态、对象状态、版本状态、推演/拒答枚举
+- [ ] 定义 `current_draft_version_id` 和 `current_published_version_id` 语义
 - [ ] 将 API request/response 形状统一写进 `packages/contracts`
 
-### Task 3: 官方人物馆只读闭环 `[P0]`
+### Task 3: 官方人物馆与最小对话闭环 `[P0]`
 
-**目的：** 最先跑通“用户进入 -> 看对象 -> 聊几句”的产品基本体验。
+**目的：** 最先跑通“用户进入 -> 看对象 -> 聊一轮”的产品基本体验，避免 Milestone 1 只有静态浏览没有聊天。
 
 **预计产出：**
 
 - featured 列表接口
 - 对象详情接口
-- 客户端首页和对象页
+- 最小 chat session 和单轮回复链路
+- 客户端首页、对象页和聊天入口
 
 **建议责任人：**
 
@@ -144,24 +149,29 @@
 **Files:**
 - Create: `apps/api/src/routes/personae/featured.ts`
 - Create: `apps/api/src/routes/personae/detail.ts`
+- Create: `apps/api/src/routes/chats/*`
 - Create: `apps/client/src/pages/index/index.tsx`
 - Create: `apps/client/src/pages/persona/index.tsx`
 - Create: `apps/client/src/features/hall/*`
+- Create: `apps/client/src/features/chat/*`
 - Create: `packages/api-client/src/personae.ts`
+- Create: `packages/api-client/src/chats.ts`
 
 - [ ] 提供官方对象精选列表接口
-- [ ] 提供对象详情接口，返回简介、推荐问题、对象版本信息
-- [ ] 在客户端完成首页人物馆和对象详情页
-- [ ] 补“未登录可试玩”的前端访问控制
-- [ ] 用静态官方对象种子数据跑通首轮体验
+- [ ] 提供对象详情接口，返回简介、推荐问题、当前发布版本信息
+- [ ] 实现最小 chat session 创建和单轮消息回复
+- [ ] 在客户端完成首页人物馆、对象详情页和聊天入口
+- [ ] 补“未登录可试玩官方对象”的访问控制
+- [ ] 用静态官方对象和静态已审核版本种子数据跑通首轮体验
 
-### Task 4: 统一分享身份与落地页 `[P0]`
+### Task 4: 统一分享身份与版本落地页 `[P0]`
 
-**目的：** 分享是主闭环，必须在早期就作为基础设施打通。
+**目的：** 分享是主闭环，必须在早期就作为基础设施打通，而且必须绑定不可变版本。
 
 **预计产出：**
 
 - `share_slug`
+- `persona_version_id`
 - `canonical_url`
 - `miniapp_path`
 - H5 分享落地页
@@ -181,17 +191,58 @@
 
 **Files:**
 - Create: `apps/api/src/routes/shares/*`
+- Create: `apps/api/src/routes/persona-versions/*`
 - Create: `apps/client/src/pages/share/index.tsx`
 - Create: `apps/client/src/features/share/*`
-- Create: `packages/contracts/src/share.ts`
+- Create: `packages/contracts/src/shares.ts`
 
-- [ ] 实现 `share_links` 表及创建逻辑
-- [ ] 为对象版本生成唯一 `share_slug`
+- [ ] 实现 `share_links` 表及创建逻辑，并强绑定 `persona_version_id`
+- [ ] 为已发布对象版本生成唯一 `share_slug`
+- [ ] 明确 publish 与 create-share 的事务边界
 - [ ] 定义 H5 分享落地页 route
 - [ ] 约定微信内打开的跳转策略
-- [ ] 前端分享 adapter 统一消费分享元数据
+- [ ] 前端分享 adapter 统一消费版本级分享元数据
 
-### Task 5: 登录与会话 `[P1]`
+### Task 5: 审核能力与运营工具 `[P0]`
+
+**目的：** 让“半自动抓取 + 人工审核”真正可执行，而不只是状态字段停在文档里。
+
+**预计产出：**
+
+- 资料审核 API
+- 发布审核 API
+- 审核记录与操作日志
+- 最小运营审核页面
+
+**建议责任人：**
+
+- 后端 1 人
+- 前端/运营工具 1 人
+
+**依赖：**
+
+- Task 2
+
+**可并行性：**
+
+- 中
+
+**Files:**
+- Create: `apps/api/src/routes/reviews/*`
+- Create: `apps/api/src/services/reviews/*`
+- Create: `apps/client/src/pages/review/index.tsx`
+- Create: `apps/client/src/features/review/*`
+- Create: `packages/contracts/src/reviews.ts`
+- Modify: `packages/domain/src/source.ts`
+- Modify: `packages/domain/src/persona.ts`
+
+- [ ] 提供待审核资料列表和查询接口
+- [ ] 提供 `APPROVED` / `REJECTED` 状态流转接口，并记录操作人、时间、原因
+- [ ] 提供用户公开对象的发布审核入口
+- [ ] 支持官方对象人工上架和用户公开对象抽检
+- [ ] 明确审核员权限边界和最小审计字段
+
+### Task 6: 登录与会话 `[P1]`
 
 **目的：** 只在必要场景要求登录，并且保持 H5/小程序统一后端 token 体系。
 
@@ -228,15 +279,16 @@
 - [ ] 统一 access/refresh token 生命周期
 - [ ] 客户端在“创建/收藏/发布”动作前触发登录门禁
 
-### Task 6: 资料导入与审核 `[P1]`
+### Task 7: 资料导入与 URL 安全边界 `[P1]`
 
-**目的：** 用户创建对象的输入链路先跑通，但不能让抓取来的脏数据直接污染蒸馏。
+**目的：** 用户创建对象的输入链路先跑通，但不能让抓取来的脏数据或风险 URL 直接污染蒸馏。
 
 **预计产出：**
 
 - 文本导入
 - URL 导入
-- 资料审核状态机
+- URL 抓取安全边界
+- 资料进入 `PENDING_REVIEW`
 
 **建议责任人：**
 
@@ -246,6 +298,7 @@
 
 - Task 2
 - Task 5
+- Task 6
 
 **可并行性：**
 
@@ -256,24 +309,26 @@
 - Create: `apps/worker/src/jobs/source-ingest/*`
 - Create: `apps/client/src/pages/create/index.tsx`
 - Create: `apps/client/src/features/creation/*`
-- Create: `packages/domain/src/source.ts`
+- Modify: `packages/domain/src/source.ts`
 
 - [ ] 实现文本资料录入接口
 - [ ] 实现 URL 提交接口
+- [ ] 为 URL 抓取增加协议、私网、重定向、响应大小、超时、内容类型边界
+- [ ] 为规范化 URL 生成去重键和抓取失败记录
 - [ ] worker 拉取网页正文并写入 `PENDING_REVIEW`
-- [ ] 定义 `APPROVED` / `REJECTED` 状态流转
 - [ ] 只允许 `APPROVED` 资料进入蒸馏
 
-### Task 7: 蒸馏 worker 流水线 `[P1]`
+### Task 8: 蒸馏 workflow 流水线 `[P1]`
 
-**目的：** 跑通“资料 -> 人物画像 -> 版本”的真正核心链路。
+**目的：** 跑通“资料 -> 人物画像 -> 候选版本”的真正核心链路，并对齐 `Mastra workflow-first` 决策。
 
 **预计产出：**
 
 - 资料清洗
 - 切块和 embedding
 - `persona_profile.json`
-- 版本化产物
+- 预览问答
+- 候选 `persona_version`
 
 **建议责任人：**
 
@@ -282,41 +337,7 @@
 **依赖：**
 
 - Task 2
-- Task 6
-
-**可并行性：**
-
-- 中
-
-**Files:**
-- Create: `apps/worker/src/jobs/distill/*`
-- Create: `packages/prompt-kit/src/distill/*`
-- Create: `packages/domain/src/persona-profile.ts`
-- Create: `apps/api/src/routes/personae/distill.ts`
-
-- [ ] 清洗资料并抽取元数据
-- [ ] 为批准资料生成 embeddings 和 chunk 索引
-- [ ] 提取结构化人物画像
-- [ ] 生成推荐问题、示例回答、一句话人设
-- [ ] 固化为 `persona_version`
-
-### Task 8: 对话 runtime 与推演/拒答规则 `[P1]`
-
-**目的：** 保证产品能聊，但不为了“像”而无限瞎编。
-
-**预计产出：**
-
-- chat runtime
-- `grounded / inferred / insufficient_evidence`
-- `conflictDetected`
-- `refusalReason`
-
-**建议责任人：**
-
-- AI/后端工程
-
-**依赖：**
-
+- Task 5
 - Task 7
 
 **可并行性：**
@@ -324,19 +345,60 @@
 - 中
 
 **Files:**
-- Create: `apps/api/src/routes/chats/*`
+- Create: `apps/worker/src/workflows/distill/*`
+- Create: `apps/worker/src/jobs/distill/*`
+- Create: `packages/prompt-kit/src/distill/*`
+- Create: `packages/domain/src/persona-profile.ts`
+- Modify: `apps/api/src/routes/personae/distill.ts`
+
+- [ ] 用 workflow 方式加载 `APPROVED` 资料并执行清洗、去重和切块
+- [ ] 为批准资料生成 embeddings 和 chunk 索引
+- [ ] 提取结构化人物画像
+- [ ] 生成推荐问题、示例回答、一句话人设
+- [ ] 计算最小质量分并写入候选 `persona_version`
+
+### Task 9: 受控对话 runtime 与依据展示 `[P1]`
+
+**目的：** 保证产品能聊，但不为了“像”而无限瞎编，同时把前端需要的“依据层”补出来。
+
+**预计产出：**
+
+- workflow 化 chat runtime
+- `grounded / inferred / insufficient_evidence`
+- `conflictDetected`
+- `refusalReason`
+- `basisSummary`
+
+**建议责任人：**
+
+- AI/后端工程
+- 前端 1 人
+
+**依赖：**
+
+- Task 3
+- Task 8
+
+**可并行性：**
+
+- 中
+
+**Files:**
+- Modify: `apps/api/src/routes/chats/*`
+- Create: `apps/api/src/workflows/chat/*`
 - Create: `apps/api/src/services/chat/*`
 - Create: `packages/prompt-kit/src/chat/*`
-- Create: `packages/contracts/src/chat.ts`
-- Create: `apps/client/src/features/chat/*`
+- Modify: `packages/contracts/src/chats.ts`
+- Modify: `apps/client/src/features/chat/*`
 
-- [ ] 实现 chat session 创建和消息写入
-- [ ] 按问题类型做检索和 prompt 组装
+- [ ] 按问题类型做检索、判定和 prompt 组装
+- [ ] 用单轮一次生成方式返回结构化输出
 - [ ] 应用 `grounded / inferred / insufficient_evidence` 判定
 - [ ] 加入冲突检测和拒答原因
+- [ ] 返回前端可展示的 `basisSummary`
 - [ ] 前端显示“资料支撑 / 风格化推演 / 暂无法可靠回答”
 
-### Task 9: 用户创建、预览、发布闭环 `[P1]`
+### Task 10: 用户创建、预览、发布闭环 `[P1]`
 
 **目的：** 跑通 V1 的第二条核心链路：用户也能创建并发布对象。
 
@@ -345,6 +407,7 @@
 - 创建流程
 - 预览页
 - 发布/不发布选择
+- 版本发布和版本级分享
 
 **建议责任人：**
 
@@ -356,6 +419,7 @@
 - Task 5
 - Task 6
 - Task 7
+- Task 8
 
 **可并行性：**
 
@@ -365,21 +429,23 @@
 - Create: `apps/api/src/routes/personae/publish.ts`
 - Create: `apps/client/src/pages/create/preview.tsx`
 - Create: `apps/client/src/features/creation/preview/*`
+- Modify: `packages/domain/src/persona.ts`
+- Modify: `packages/domain/src/share.ts`
 
 - [ ] 创建页收集对象名、类型、资料、蒸馏重点
-- [ ] 预览页展示人设、推荐问题、示例回答
+- [ ] 预览页展示候选版本的人设、推荐问题、示例回答
 - [ ] 支持“仅自己使用 / 公开分享”
-- [ ] 公开发布前校验资料状态和风控条件
-- [ ] 生成发布后的分享身份
+- [ ] 公开发布前校验资料状态、质量分和发布审核条件
+- [ ] 发布后更新 `current_published_version_id` 并生成版本级分享身份
 
-### Task 10: 质量反馈、观测与开发保护网 `[P2]`
+### Task 11: 质量反馈、观测与开发保护网 `[P2]`
 
 **目的：** 让蒸馏质量和线上行为可观测，否则后期会全靠体感调 prompt。
 
 **预计产出：**
 
 - feedback 采集
-- job 可观测性
+- workflow/job 可观测性
 - prompt/eval 基线
 
 **建议责任人：**
@@ -388,8 +454,8 @@
 
 **依赖：**
 
-- Task 7
 - Task 8
+- Task 9
 
 **可并行性：**
 
@@ -401,7 +467,7 @@
 - Create: `docs/evals.md`
 
 - [ ] 记录“像不像 / 没依据”反馈
-- [ ] 为关键 worker job 打日志和状态追踪
+- [ ] 为关键 workflow 和 worker job 打日志和状态追踪
 - [ ] 准备官方人物的回归问题集
 - [ ] 建立最小 prompt evaluation 基线
 - [ ] 加入限流、审计日志和失败告警
@@ -422,19 +488,20 @@
 8. Task 8
 9. Task 9
 10. Task 10
+11. Task 11
 
 ### 两人并行建议
 
-- 人员 A：Task 1 -> 2 -> 5 -> 6 -> 7 -> 8
-- 人员 B：Task 3 -> 4 -> 9 -> 10
+- 人员 A：Task 1 -> 2 -> 5 -> 6 -> 7 -> 8 -> 9
+- 人员 B：Task 3 -> 4 -> 10 -> 11
 
-其中 Task 3 和 Task 4 可以在 Task 2 结束后立即展开。
+其中 Task 3、Task 4 和 Task 5 可以在 Task 2 结束后立即展开。
 
 ### 三人并行建议
 
-- 后端/平台：Task 1 -> 2 -> 5
-- AI/数据：Task 6 -> 7 -> 8
-- 客户端：Task 3 -> 4 -> 9 -> 10
+- 后端/平台：Task 1 -> 2 -> 5 -> 6
+- AI/数据：Task 7 -> 8 -> 9
+- 客户端：Task 3 -> 4 -> 10 -> 11
 
 ## 4. 本地开发环境准备
 
@@ -547,6 +614,17 @@ pnpm dev:client:weapp
 - 谁审核用户公开对象
 - 什么情况下直接拒绝发布
 
+### 5.6 版本与分享绑定规则
+
+这些也不能留到实现时再拍脑袋。
+
+至少要先想清楚：
+
+- `current_draft_version_id` 和 `current_published_version_id` 怎么维护
+- 发布时是“沿用旧 share”还是“为新版本生成新 share”
+- 预览聊天默认命中 draft 版本，公开聊天默认命中 published 版本
+- 旧分享如何保证不因重新蒸馏而失真
+
 ## 6. 推荐里程碑
 
 ### Milestone 1
@@ -555,8 +633,9 @@ pnpm dev:client:weapp
 
 - 官方人物馆可浏览
 - 可进入对象详情
-- 可进行基础对话
-- 可生成分享落地页
+- 可进行最小基础对话
+- 可生成版本级分享落地页
+- 审核能力基础可用
 
 ### Milestone 2
 
@@ -564,8 +643,9 @@ pnpm dev:client:weapp
 
 - 用户可创建对象
 - 可提交文本/URL
+- URL 安全边界可用
 - 可完成蒸馏和预览
-- 可公开发布
+- 可经审核后公开发布
 
 ### Milestone 3
 
@@ -573,6 +653,7 @@ pnpm dev:client:weapp
 
 - 推演/拒答规则稳定
 - 质量反馈闭环可用
+- 前端依据摘要层可用
 - 小程序和 H5 分享链路都跑通
 
 ## 7. 我补充的建议
