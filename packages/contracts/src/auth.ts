@@ -16,3 +16,9 @@ export const wechatMiniappLoginSchema = z.object({
 export const refreshSessionSchema = z.object({
   refreshToken: z.string().min(1),
 });
+
+export const authSessionResponseSchema = z.object({
+  userId: z.string().uuid(),
+  accessToken: z.string(),
+  refreshToken: z.string(),
+});

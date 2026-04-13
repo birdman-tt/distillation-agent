@@ -10,13 +10,14 @@ import type { FastifyPluginAsync } from "fastify";
 
 import { createSeedReply, resolvePersonaSeed } from "../seed/official-personae.js";
 import { getChatSession, saveChatSession } from "../store/chat-store.js";
+import { createDynamicReply, resolveChatTarget } from "../store/persona-store.js";
 
 export const chatsRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/chats", async (request, reply) => {
     const input = createChatSchema.parse(request.body);
-    const seed = resolvePersonaSeed(input);
+    const resolved = resolveChatTarget(input);
 
-    if (!seed) {
+    if (!resolved) {
       return reply.code(404).send({
         message: "Chat target not found",
       });
@@ -25,9 +26,9 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     const session = chatSessionSchema.parse({
       id: randomUUID(),
       targetType: input.targetType,
-      targetPersonaId: seed.persona.id,
-      targetPersonaVersionId: seed.version.id,
-      shareSlug: input.targetType === "share_link" ? input.shareSlug : null,
+      targetPersonaId: resolved.personaId,
+      targetPersonaVersionId: resolved.personaVersionId,
+      shareSlug: resolved.shareSlug,
       messages: [],
     });
 
@@ -57,18 +58,12 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const input = createChatMessageSchema.parse(request.body);
-    const seed = resolvePersonaSeed({
+    const officialSeed = resolvePersonaSeed({
       targetType: session.targetType,
       personaId: session.targetPersonaId ?? undefined,
       personaVersionId: session.targetPersonaVersionId,
       shareSlug: session.shareSlug ?? undefined,
     });
-
-    if (!seed) {
-      return reply.code(404).send({
-        message: "Persona seed not found",
-      });
-    }
 
     const userMessage = {
       id: randomUUID(),
@@ -82,7 +77,18 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       createdAt: new Date().toISOString(),
     };
 
-    const replyPayload = chatReplySchema.parse(createSeedReply(seed, input.content));
+    const rawReply =
+      officialSeed !== null
+        ? createSeedReply(officialSeed, input.content)
+        : createDynamicReply(session.targetPersonaVersionId, input.content);
+
+    if (!rawReply) {
+      return reply.code(404).send({
+        message: "Persona reply context not found",
+      });
+    }
+
+    const replyPayload = chatReplySchema.parse(rawReply);
     const assistantMessage = {
       id: randomUUID(),
       role: "ASSISTANT" as const,

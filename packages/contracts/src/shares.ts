@@ -15,3 +15,18 @@ export const shareLinkResponseSchema = z.object({
   isPrimary: z.boolean(),
   isActive: z.boolean(),
 });
+
+export const shareLandingResponseSchema = z.object({
+  share: shareLinkResponseSchema,
+  persona: z.object({
+    id: z.string().uuid(),
+    displayName: z.string(),
+    originType: z.enum(["OFFICIAL", "USER"]),
+  }),
+  version: z.object({
+    id: z.string().uuid(),
+    versionNumber: z.number().int().positive(),
+    previewIntro: z.string().nullable(),
+    recommendedQuestions: z.array(z.string()),
+  }),
+});
