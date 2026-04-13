@@ -1,0 +1,16 @@
+{
+  "name": "@hall-of-fame/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hall-of-fame/contracts": "workspace:*",
+    "@hall-of-fame/domain": "workspace:*",
+    "@hall-of-fame/prompt-kit": "workspace:*"
+  }
+}

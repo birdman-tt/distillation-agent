@@ -1,0 +1,26 @@
+{
+  "name": "hall-of-fame-miniapp",
+  "private": true,
+  "packageManager": "pnpm@10.6.5",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "dev:api": "pnpm --filter @hall-of-fame/api dev",
+    "dev:worker": "pnpm --filter @hall-of-fame/worker dev",
+    "dev:client:h5": "pnpm --filter @hall-of-fame/client dev:h5",
+    "dev:client:weapp": "pnpm --filter @hall-of-fame/client dev:weapp"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
