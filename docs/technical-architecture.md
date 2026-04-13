@@ -308,15 +308,21 @@ V1 不建议继续使用 SQLite 作为主存储。
 推荐：
 
 - `PostgreSQL`
-- `pgvector`
 - 对象存储（S3 兼容，或腾讯云 COS）
 
 理由：
 
 - 用户、对象、版本、消息、分享、审核状态都需要关系型约束
-- 蒸馏资料需要 embedding 检索
+- V1 先采用数据库内全文检索和 metadata filter，不依赖额外 embedding API
 - 对象版本与公开分享更适合数据库建模
 - 后续并发和部署弹性明显优于 SQLite
+
+补充说明：
+
+- 当前已确定单供应商为 `DeepSeek`
+- DeepSeek 公共 API 文档当前提供的主能力是 `deepseek-chat` 和 `deepseek-reasoner`
+- 为保持单供应商约束，V1 不额外接入第三方 hosted embeddings
+- 如后续需要向量检索，可再评估自托管 embedding 或第二供应商，但不纳入 V1
 
 ### 5.3 异步任务
 
@@ -332,7 +338,7 @@ V1 不建议继续使用 SQLite 作为主存储。
 
 - 拉取 URL 内容
 - 清洗文本
-- 切块和 embedding
+- 切块和本地索引构建
 - 人物画像提取
 - 生成预览问答
 - 审核或质量打分
@@ -553,7 +559,7 @@ V1 至少需要这些安全和幂等边界：
 2. 提取正文和元数据
 3. 写入 `persona_sources`，状态为 `PENDING_REVIEW`
 4. 人工通过后改为 `APPROVED`
-5. 只有 `APPROVED` 资料允许进入 embedding、画像提取和正式蒸馏
+5. 只有 `APPROVED` 资料允许进入索引构建、画像提取和正式蒸馏
 6. 被拒绝资料标记为 `REJECTED`，保留审计记录
 
 这样可以避免：
@@ -592,8 +598,8 @@ V1 至少需要这些安全和幂等边界：
 
 - 按语义段落切块
 - 控制每块长度
-- 生成 embedding
-- 写入向量索引
+- 写入 `tsvector` / trigram / metadata 索引
+- 为后续全文检索生成关键词和主题标签
 - 为 chunk 绑定可引用的 span 和 source 元数据
 
 输出：
@@ -680,6 +686,7 @@ V1 至少需要这些安全和幂等边界：
    - 人生建议
    - 历史经历
    - 某主题判断
+   - V1 采用 `rule-first`，规则不确定时再用轻量模型补判
 3. 从 `persona_profile` 和 `chunks` 中检索最相关证据
 4. 组装 prompt
 5. 生成结构化输出
@@ -838,18 +845,34 @@ V1 推荐将 LLM 主链路固定为：
 
 ### 7.2 模型层
 
-聊天模型和蒸馏模型可以是同一个供应商，但职责不同：
+当前推荐的单供应商是 `DeepSeek`。
 
-- 蒸馏阶段：偏抽取、归纳、结构化
-- 对话阶段：偏风格表达、受控生成
-- embedding 阶段：偏向量化和召回稳定性
+补充说明：
+
+- DeepSeek API 在 SDK 接入层面兼容 OpenAI 风格接口
+- 这使得 `Fastify` / `Mastra` 侧可以沿用熟悉的 OpenAI-compatible client 封装方式
+
+V1 采用两种生成模型职责拆分：
+
+- `deepseek-reasoner`
+  - 用于蒸馏阶段
+  - 偏抽取、归纳、结构化
+  - 更适合离线 workflow，不放进高频在线主链路
+- `deepseek-chat`
+  - 用于在线对话
+  - 偏风格表达、受控生成
+  - 延迟和调用复杂度更适合单轮一次生成
 
 不要直接让一个 prompt 同时完成“提取画像 + 聊天回答”。
 
-推荐采用：
+检索层在 V1 不使用外部 embedding API，而采用：
 
-- 单一供应商
-- 三种能力拆分：`distillModel`、`embeddingModel`、`chatModel`
+- PostgreSQL 全文检索
+- metadata filter
+- trigram/关键词召回
+- 必要时增加轻量 rerank
+
+这样可以满足“单供应商”约束，同时避免引入第二家模型服务。
 
 ### 7.3 Prompt 结构
 
@@ -871,6 +894,12 @@ V1 推荐将 LLM 主链路固定为：
    - inferenceLevel
    - conflictDetected
    - refusalReason
+
+补充建议：
+
+- 将 system prompt、persona profile 骨架和输出 schema 保持稳定前缀
+- 将变化最大的检索证据放在后半段
+- 优先利用 DeepSeek 的 context caching 降低高重复前缀的成本和首 token 延迟
 
 ### 7.3.1 Prompt 硬约束
 
@@ -970,10 +999,14 @@ V1 的记忆不要做得太重。
 - 双端：`H5 + 微信小程序`
 - 后端：`Fastify + TypeScript + zod`
 - LLM runtime：`Mastra workflow-first`
-- 数据库：`PostgreSQL + pgvector`
+- LLM provider：`DeepSeek`
+- distill model：`deepseek-reasoner`
+- chat model：`deepseek-chat`
+- 数据库：`PostgreSQL`
 - 异步：`worker + queue`
 - 存储：`对象存储`
-- 蒸馏：`结构化画像 + 向量检索 + 受控对话生成`
+- 检索：`全文检索 + metadata filter`
+- 蒸馏：`结构化画像 + 受控对话生成`
 
 一句话总结：
 

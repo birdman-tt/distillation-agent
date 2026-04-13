@@ -16,14 +16,19 @@ This project should use:
 - `Mastra` as the internal LLM workflow/runtime layer
 - `workflow-first` for production paths
 - `agent` only for internal auxiliary tasks
-- `single provider + three capability split` for model usage
+- `DeepSeek` as the single provider for generative models
+- local retrieval in V1, not a hosted embedding dependency
 
 Confirmed decisions from discussion:
 
 - Framework choice: `Mastra`, not `Dify`
 - Integration mode: embed Mastra inside the existing `Fastify + worker` codebase
+- Provider choice: `DeepSeek`
+- Distill model: `deepseek-reasoner`
+- Chat model: `deepseek-chat`
 - Review gate: manual review stays in business backend, not in Mastra agent state
 - Chat mode: single-pass generation, not multi-pass rewrite
+- Classification mode: `rule-first`, with model fallback only when needed
 
 ## 2. Final Recommendation
 
@@ -212,20 +217,26 @@ Mastra does not own the business truth of the system.
 
 ## 6. Model Strategy
 
-Use a single provider, but split responsibilities into three capability classes:
+Use `DeepSeek` as the single provider for generative model calls:
 
-- `distillModel`
+- `deepseek-reasoner`
   - extraction
   - summarization
   - structured persona profiling
-- `embeddingModel`
-  - vectorization for source chunks and retrieval
-- `chatModel`
+  - offline distillation workflow
+- `deepseek-chat`
   - grounded or inferred response generation
   - stable structured output
   - style control under hard constraints
+  - online single-pass chat replies
 
-This keeps provider management simple while avoiding one-model-does-everything coupling.
+For retrieval in V1:
+
+- do not depend on a hosted embedding API
+- use local full-text retrieval plus metadata filters
+- add trigram or keyword-based recall where needed
+
+This preserves the single-provider constraint without forcing in a second model vendor.
 
 ## 7. Production Workflows
 
@@ -239,7 +250,7 @@ Recommended steps:
 
 1. `loadApprovedSources`
 2. `normalizeAndDeduplicate`
-3. `chunkAndEmbed`
+3. `chunkAndIndex`
 4. `extractPersonaProfile`
 5. `generatePreviewQA`
 6. `scoreQuality`
@@ -339,9 +350,6 @@ This decision implies the future code layout should likely look like:
 
 These are still undecided and should be answered before implementation planning:
 
-- which single model provider to use first
-- which model variant maps to distill vs chat
-- whether question classification is rule-first or small-model-first
 - what exact quality score thresholds block publishing
 - whether internal operator tools need a lightweight agent mode in V1
 
@@ -351,7 +359,12 @@ For V1:
 
 - choose `Mastra`
 - embed it inside the existing backend/worker codebase
+- choose `DeepSeek`
+- use `deepseek-reasoner` for distillation
+- use `deepseek-chat` for online replies
 - use `workflow-first`
 - use `single-pass chat generation`
+- use `rule-first` classification
+- use local retrieval in V1 instead of hosted embeddings
 - keep review, publish, share, and version truth in our own backend
 - allow `agent` only for non-production auxiliary tasks

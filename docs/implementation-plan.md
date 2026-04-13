@@ -4,9 +4,9 @@
 
 **Goal:** Build the V1 Hall of Fame product as a public persona distillation platform with a shared backend, dual frontend targets (`H5` and `WeChat Mini Program`), and a controlled distillation/chat pipeline.
 
-**Architecture:** The product uses a single Fastify API, a separate async worker for ingestion/distillation, and one Taro React client compiled to both H5 and WeChat Mini Program. `Mastra` is embedded as the internal LLM workflow runtime for distillation and controlled chat orchestration, while business truth remains in Fastify/PostgreSQL. Persona distillation is implemented as `source ingestion -> review -> structured profile extraction -> retrieval index -> constrained chat generation`, not fine-tuning.
+**Architecture:** The product uses a single Fastify API, a separate async worker for ingestion/distillation, and one Taro React client compiled to both H5 and WeChat Mini Program. `Mastra` is embedded as the internal LLM workflow runtime for distillation and controlled chat orchestration, while business truth remains in Fastify/PostgreSQL. The single provider is `DeepSeek`: `deepseek-reasoner` for distillation and `deepseek-chat` for online reply generation. V1 retrieval uses local full-text search plus metadata filtering rather than an external embedding API.
 
-**Tech Stack:** Taro, React, TypeScript, Fastify, Zod, PostgreSQL, pgvector, Redis/BullMQ, object storage, OpenAI-compatible model provider, WeChat Mini Program DevTools
+**Tech Stack:** Taro, React, TypeScript, Fastify, Zod, PostgreSQL, Redis/BullMQ, object storage, DeepSeek API, WeChat Mini Program DevTools
 
 ---
 
@@ -120,6 +120,7 @@
 - [ ] 定义 `share_links`、`chats`、`chat_messages`、`persona_feedback`
 - [ ] 补全来源审核状态、对象状态、版本状态、推演/拒答枚举
 - [ ] 定义 `current_draft_version_id` 和 `current_published_version_id` 语义
+- [ ] 为 `persona_chunks` 补全文本检索和 metadata filter 所需字段
 - [ ] 将 API request/response 形状统一写进 `packages/contracts`
 
 ### Task 3: 官方人物馆与最小对话闭环 `[P0]`
@@ -325,7 +326,7 @@
 **预计产出：**
 
 - 资料清洗
-- 切块和 embedding
+- 切块和本地检索索引
 - `persona_profile.json`
 - 预览问答
 - 候选 `persona_version`
@@ -352,8 +353,8 @@
 - Modify: `apps/api/src/routes/personae/distill.ts`
 
 - [ ] 用 workflow 方式加载 `APPROVED` 资料并执行清洗、去重和切块
-- [ ] 为批准资料生成 embeddings 和 chunk 索引
-- [ ] 提取结构化人物画像
+- [ ] 为批准资料生成全文检索索引、关键词和 metadata 索引
+- [ ] 使用 `deepseek-reasoner` 提取结构化人物画像
 - [ ] 生成推荐问题、示例回答、一句话人设
 - [ ] 计算最小质量分并写入候选 `persona_version`
 
@@ -392,7 +393,8 @@
 - Modify: `apps/client/src/features/chat/*`
 
 - [ ] 按问题类型做检索、判定和 prompt 组装
-- [ ] 用单轮一次生成方式返回结构化输出
+- [ ] 采用 `rule-first` 分类，规则不确定时再用轻量模型补判
+- [ ] 使用 `deepseek-chat` 以单轮一次生成方式返回结构化输出
 - [ ] 应用 `grounded / inferred / insufficient_evidence` 判定
 - [ ] 加入冲突检测和拒答原因
 - [ ] 返回前端可展示的 `basisSummary`
@@ -533,7 +535,10 @@
 - `S3_BUCKET`
 - `S3_ACCESS_KEY`
 - `S3_SECRET_KEY`
-- `OPENAI_API_KEY` 或等价模型供应商密钥
+- `DEEPSEEK_API_KEY`
+- `DEEPSEEK_BASE_URL`
+- `DEEPSEEK_CHAT_MODEL`
+- `DEEPSEEK_REASONER_MODEL`
 - `WECHAT_APP_ID`
 - `WECHAT_APP_SECRET`
 - `APP_BASE_URL`

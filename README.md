@@ -28,9 +28,12 @@
 - 前端使用一套 `Taro + React + TypeScript` 代码，同时覆盖 `H5` 和 `微信小程序`
 - 后端是一套统一 API，只有登录入口按平台分叉
 - LLM runtime 采用内嵌式 `Mastra workflow`，主生产链路不使用 `agent`
+- 单供应商选择 `DeepSeek`
+- 蒸馏使用 `deepseek-reasoner`，在线对话使用 `deepseek-chat`
 - 分享同时覆盖微信内传播和网页传播
 - 分享身份绑定 `persona_version`，不是可变中的裸对象
 - 蒸馏不做 fine-tune，采用 `结构化画像 + RAG + 输出约束`
+- V1 检索先采用本地全文检索与 metadata filter，不依赖额外 embedding API
 - 公开网页资料允许半自动抓取，但必须经过人工审核后才能进入正式蒸馏
 - 允许风格化推演，但资料不足、资料冲突、越界问题必须降级或拒答
 
