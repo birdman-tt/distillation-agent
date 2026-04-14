@@ -34,25 +34,44 @@ const chatModelReplySchema = z.object({
     mode: z.enum(["SUPPORTED", "INFERRED", "UNSUPPORTED"]),
     summary: z.string(),
   }),
-  inferenceLevel: z.enum(["grounded", "inferred", "insufficient_evidence"]),
+  inferenceLevel: z.string(),
   conflictDetected: z.boolean(),
   refusalReason: z.string().optional().nullable(),
 });
 type ChatModelReply = z.infer<typeof chatModelReplySchema>;
 type ChatStructuredRequester = (input: Parameters<typeof requestStructuredJson>[0]) => Promise<ChatModelReply>;
 
-const normalizeRefusalReason = (
-  value: string | null | undefined,
-  requiredInferenceLevel: "grounded" | "inferred" | "insufficient_evidence",
-) => {
+const normalizeRefusalReason = (value: string | null | undefined) => {
   const normalized = value?.trim() ?? "";
   const parsed = refusalReasonSchema.safeParse(normalized);
   if (parsed.success) {
     return parsed.data;
   }
 
-  return requiredInferenceLevel === "insufficient_evidence" ? "out_of_scope" : "none";
+  return "none";
 };
+
+const normalizeInferenceLevel = (input: {
+  rawLevel: string;
+  classificationCategory: RuntimeClassification["category"];
+  basisMode: ChatModelReply["basisSummary"]["mode"];
+}) => {
+  const normalized = input.rawLevel.trim().toLowerCase();
+  if (normalized === "grounded" || normalized === "inferred" || normalized === "insufficient_evidence") {
+    if (input.classificationCategory === "THEME_ANCHORED") {
+      return normalized;
+    }
+    return normalized === "grounded" ? "inferred" : normalized;
+  }
+
+  if (input.basisMode === "SUPPORTED" && input.classificationCategory === "THEME_ANCHORED") {
+    return "grounded";
+  }
+
+  return "inferred";
+};
+
+type RuntimeClassification = ReturnType<typeof classifyUserQuestion>;
 
 const buildOfficialSeedContext = (seed: OfficialSeed): RuntimeContext => {
   const supportedEvidence = seed.supportedReply.basis.map((item) => ({
@@ -108,12 +127,10 @@ export const runChatWorkflow = async (input: {
   const classification = classifyUserQuestion(input.content, runtimeContext.focusKeywords);
   const requiredInferenceLevel =
     classification.category === "HIGH_RISK"
-      ? "insufficient_evidence"
-      : classification.category === "SUPPORTED_TOPIC"
+      ? "inferred"
+      : classification.category === "THEME_ANCHORED"
         ? "grounded"
-        : classification.category === "STYLE_INFERENCE"
-          ? "inferred"
-          : "insufficient_evidence";
+        : "inferred";
 
   const systemPrompt = buildChatSystemPrompt({
     displayName: runtimeContext.displayName,
@@ -133,20 +150,6 @@ export const runChatWorkflow = async (input: {
     snippet: item.snippet,
   }));
 
-  if (classification.category === "OUT_OF_SCOPE") {
-    return chatGenerationSchema.parse({
-      answer: "这个问题超出了当前对象资料的覆盖范围，我不能稳定地给出可靠回答。",
-      basis,
-      basisSummary: {
-        mode: "UNSUPPORTED",
-        summary: "当前问题没有命中已知主题，也不适合做自由扩展。",
-      },
-      inferenceLevel: "insufficient_evidence",
-      conflictDetected: false,
-      refusalReason: "out_of_scope",
-    });
-  }
-
   try {
     const modelResult = await (deps.requestStructuredJson ?? requestStructuredJson)({
       apiKey: process.env.DEEPSEEK_API_KEY,
@@ -162,30 +165,26 @@ export const runChatWorkflow = async (input: {
       personaVersionId: runtimeContext.personaVersionId,
     });
 
-    const clampedInferenceLevel =
-      requiredInferenceLevel === "grounded"
-        ? "grounded"
-        : requiredInferenceLevel === "insufficient_evidence"
-          ? "insufficient_evidence"
-          : modelResult.inferenceLevel === "grounded"
-            ? "inferred"
-            : modelResult.inferenceLevel;
+    const normalizedInferenceLevel = normalizeInferenceLevel({
+      rawLevel: modelResult.inferenceLevel,
+      classificationCategory: classification.category,
+      basisMode: modelResult.basisSummary.mode,
+    });
 
     return chatGenerationSchema.parse({
       ...modelResult,
       basis,
       basisSummary:
-        requiredInferenceLevel === "inferred"
-          ? {
-              mode: "INFERRED",
-              summary: modelResult.basisSummary.summary,
-            }
-          : modelResult.basisSummary,
-      inferenceLevel: clampedInferenceLevel,
-      refusalReason:
-        requiredInferenceLevel === "insufficient_evidence"
-          ? "out_of_scope"
-          : normalizeRefusalReason(modelResult.refusalReason, requiredInferenceLevel),
+        classification.category === "THEME_ANCHORED" && modelResult.basisSummary.mode === "SUPPORTED"
+          ? modelResult.basisSummary
+          : modelResult.basisSummary.mode === "SUPPORTED"
+            ? {
+                mode: "INFERRED",
+                summary: modelResult.basisSummary.summary,
+              }
+            : modelResult.basisSummary,
+      inferenceLevel: normalizedInferenceLevel,
+      refusalReason: normalizeRefusalReason(modelResult.refusalReason),
     });
   } catch (error) {
     if (!(error instanceof DeepSeekNotConfiguredError)) {
@@ -193,10 +192,14 @@ export const runChatWorkflow = async (input: {
     }
   }
 
+  const reply = createDynamicReply(runtimeContext.personaVersionId, input.content, classification);
+  if (reply) {
+    return chatGenerationSchema.parse(reply);
+  }
+
   if (input.seed) {
     return chatGenerationSchema.parse(createSeedReply(input.seed, input.content));
   }
 
-  const reply = createDynamicReply(runtimeContext.personaVersionId, input.content, classification);
-  return reply ? chatGenerationSchema.parse(reply) : null;
+  return null;
 };

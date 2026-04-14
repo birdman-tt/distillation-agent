@@ -1,4 +1,5 @@
 import Fastify, { type FastifyReply } from "fastify";
+import { buildReplyInspectorHtml } from "./chat-presentation.js";
 
 const apiBaseUrl = () => process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
 
@@ -128,6 +129,22 @@ const pageStyles = `
   }
   .bubble.assistant { background: #fcf6ed; }
   .bubble small { display: block; margin-top: 8px; color: var(--muted); }
+  .reply-inspector {
+    margin-top: 10px;
+    border-top: 1px dashed rgba(216, 200, 178, 0.8);
+    padding-top: 8px;
+  }
+  .reply-inspector summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+    list-style: none;
+  }
+  .reply-inspector summary::-webkit-details-marker { display: none; }
+  .reply-inspector .meta {
+    margin-top: 8px;
+    line-height: 1.5;
+  }
   .status-line { font-size: 14px; color: var(--muted); min-height: 1.4em; }
   code.inline { padding: 2px 6px; border-radius: 8px; background: #efe6d8; }
 `;
@@ -309,10 +326,33 @@ const renderChatScript = (input: {
   const status = document.querySelector("[data-chat-status]");
   let chatId = null;
 
-  const appendBubble = (role, content, meta) => {
+  const escapeHtml = (value) =>
+    String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+
+  const buildReplyInspectorHtml = (reply) => {
+    const parts = [];
+    const summary = reply?.basisSummary?.summary?.trim?.();
+    if (summary) {
+      parts.push(summary);
+    }
+    if (reply?.conflictDetected) {
+      parts.push("当前答案主动避开了彼此冲突的材料。");
+    }
+    if (!parts.length) {
+      return "";
+    }
+    return '<details class="reply-inspector"><summary>这句话怎么来的</summary><div class="meta">' + escapeHtml(parts.join(" ")) + '</div></details>';
+  };
+
+  const appendBubble = (role, content, metaHtml) => {
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (role === "ASSISTANT" ? "assistant" : "user");
-    bubble.innerHTML = "<strong>" + role + "</strong><div>" + content + "</div>" + (meta ? "<small>" + meta + "</small>" : "");
+    bubble.innerHTML = "<strong>" + role + "</strong><div>" + escapeHtml(content) + "</div>" + (metaHtml || "");
     log.appendChild(bubble);
   };
 
@@ -341,11 +381,7 @@ const renderChatScript = (input: {
         method: "POST",
         body: JSON.stringify({ content }),
       });
-      appendBubble(
-        "ASSISTANT",
-        reply.content,
-        "推断级别：" + reply.inferenceLevel + " / 依据：" + (reply.basisSummary?.summary || "无")
-      );
+      appendBubble("ASSISTANT", reply.content, buildReplyInspectorHtml(reply));
       input.value = "";
       status.textContent = "已完成";
     } catch (error) {
@@ -859,3 +895,5 @@ export const buildH5Server = () => {
 
   return app;
 };
+
+export { buildReplyInspectorHtml };

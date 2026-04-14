@@ -1034,7 +1034,7 @@ export const resolveChatTarget = (input: {
 };
 
 type ChatClassification = {
-  category: "HIGH_RISK" | "SUPPORTED_TOPIC" | "STYLE_INFERENCE" | "OUT_OF_SCOPE";
+  category: "HIGH_RISK" | "FACT_SPECIFIC" | "THEME_ANCHORED" | "OPEN_ENDED";
   matchedKeyword: string | null;
   shouldEscalateToModelJudge: boolean;
 };
@@ -1047,22 +1047,10 @@ export const createDynamicReply = (versionId: string, content: string, classific
 
   const approvedSources = listPersonaSources(version.personaId).filter((item) => item.reviewStatus === "APPROVED");
   const firstSource = approvedSources[0];
-  const mode = classification?.category ?? "SUPPORTED_TOPIC";
-
-  if (mode === "HIGH_RISK") {
-    return {
-      answer: "这个问题已经落到高风险现实决策范围，我不能把蒸馏对象的风格化回答包装成可靠建议。",
-      basis: [],
-      basisSummary: {
-        mode: "UNSUPPORTED" as const,
-        summary: "当前问题属于高风险现实决策，超出 V1 蒸馏对话边界。",
-      },
-      inferenceLevel: "insufficient_evidence" as const,
-      conflictDetected: false,
-      refusalReason: "high_risk" as const,
-    };
-  }
-
+  const mode = classification?.category ?? "THEME_ANCHORED";
+  const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");
+  const primaryLens = version.distillFocus[0] ?? "判断尺度";
+  const secondaryLens = version.distillFocus[1] ?? "行动边界";
   const basis = firstSource
     ? [
         {
@@ -1072,34 +1060,52 @@ export const createDynamicReply = (versionId: string, content: string, classific
       ]
     : [];
 
-  if (basis.length === 0) {
+  if (mode === "HIGH_RISK") {
     return {
-      answer: "当前版本还没有足够的已审核资料，我不能稳定地给出这类回答。",
-      basis: [],
+      answer: `${normalizedIntro}。真碰到这类现实代价很高的事，我会先把风险边界、承受力和长期后果看清，再决定该不该动，不会鼓励你凭一时冲动下重手。`,
+      basis,
       basisSummary: {
-        mode: "UNSUPPORTED" as const,
-        summary: "当前没有足够的已审核资料直接支撑该回答。",
+        mode: "INFERRED" as const,
+        summary: "保持人物口吻，只给原则、边界与审慎框架，不提供可执行建议。",
       },
-      inferenceLevel: "insufficient_evidence" as const,
+      inferenceLevel: "inferred" as const,
       conflictDetected: false,
-      refusalReason: "insufficient_evidence" as const,
+      refusalReason: "none" as const,
     };
   }
 
-  const inferred = mode === "STYLE_INFERENCE";
-  const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");
+  if (basis.length === 0) {
+    return {
+      answer: `${normalizedIntro}。若只按我一贯的取向来想，我会先从${primaryLens}和${secondaryLens}去判断，再决定动作轻重，而不会急着把话说死。`,
+      basis: [],
+      basisSummary: {
+        mode: "INFERRED" as const,
+        summary: "当前回答主要依据人物导语与蒸馏重点，保持人格取向，不扩展成具体事实。",
+      },
+      inferenceLevel: "inferred" as const,
+      conflictDetected: false,
+      refusalReason: "none" as const,
+    };
+  }
+
   return {
-    answer: inferred
-      ? `基于 ${normalizedIntro} 和现有资料，我只能给出风格化推演：这个问题更适合继续补充资料后再收紧答案。`
-      : `${normalizedIntro}。如果只依据现有资料，我会先从 ${version.distillFocus[0] ?? "主要观点"} 角度回应这个问题。`,
+    answer:
+      mode === "FACT_SPECIFIC"
+        ? `${normalizedIntro}。若不把未经坐实的细节说成定论，我更愿意把重点放在${primaryLens}与${secondaryLens}上；真到具体事实，还得回到当时处境再看。`
+        : mode === "OPEN_ENDED"
+          ? `${normalizedIntro}。若顺着我一贯的判断走，我会先抓住${primaryLens}，再用${secondaryLens}去校正动作，不会只盯着表面的输赢。`
+          : `${normalizedIntro}。如果沿着现有材料里的主线来回答，我会先从${primaryLens}入手，再把${secondaryLens}压进去，尽量让判断和动作保持同一把尺度。`,
     basis,
     basisSummary: {
-      mode: inferred ? ("INFERRED" as const) : ("SUPPORTED" as const),
-      summary: inferred
-        ? `当前回答以 ${firstSource?.sourceTitle ?? "已审核资料"} 和人物画像做近邻推演，不等于直接引文。`
-        : `主要依据 ${firstSource?.sourceTitle ?? "已审核资料"} 的摘要与当前版本画像。`,
+      mode: mode === "THEME_ANCHORED" ? ("SUPPORTED" as const) : ("INFERRED" as const),
+      summary:
+        mode === "THEME_ANCHORED"
+          ? `主要依据 ${firstSource?.sourceTitle ?? "已审核资料"} 的摘要与当前版本画像。`
+          : mode === "FACT_SPECIFIC"
+            ? `没有把未坐实的具体细节说成事实，而是依据 ${firstSource?.sourceTitle ?? "已审核资料"} 和人物画像给出态度与判断框架。`
+            : `回答依据 ${firstSource?.sourceTitle ?? "已审核资料"} 和人物画像延展出自然口吻，没有扩展成新的具体事实。`,
     },
-    inferenceLevel: inferred ? ("inferred" as const) : ("grounded" as const),
+    inferenceLevel: mode === "THEME_ANCHORED" ? ("grounded" as const) : ("inferred" as const),
     conflictDetected: false,
     refusalReason: "none" as const,
   };

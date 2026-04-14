@@ -6,7 +6,7 @@
     "dev:h5": "tsx src/dev-h5.ts",
     "dev:weapp": "tsx src/dev-weapp.ts",
     "build": "tsc -p tsconfig.json",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit"
   },

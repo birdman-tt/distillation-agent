@@ -18,4 +18,6 @@ test("chat system prompt explicitly requires JSON output for structured response
   assert.match(prompt, /inferenceLevel/);
   assert.match(prompt, /conflictDetected/);
   assert.match(prompt, /refusalReason/);
+  assert.match(prompt, /不要因为问题没有命中/);
+  assert.match(prompt, /不能编造.*具体事实|不能补出.*具体事实/);
 });

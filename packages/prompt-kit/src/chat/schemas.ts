@@ -8,7 +8,7 @@ export const promptEvidenceItemSchema = z.object({
 });
 
 export const chatClassificationSchema = z.object({
-  category: z.enum(["HIGH_RISK", "SUPPORTED_TOPIC", "STYLE_INFERENCE", "OUT_OF_SCOPE"]),
+  category: z.enum(["HIGH_RISK", "FACT_SPECIFIC", "THEME_ANCHORED", "OPEN_ENDED"]),
   matchedKeyword: z.string().nullable(),
   shouldEscalateToModelJudge: z.boolean(),
 });
