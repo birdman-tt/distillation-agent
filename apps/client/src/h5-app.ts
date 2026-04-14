@@ -814,7 +814,6 @@ const renderStaticBubble = (role: "assistant" | "user", label: string, content: 
 export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   <div class="stage page-stack">
     <section class="page-stack">
-      <p class="section-label">Curated Personas</p>
       <h2 class="page-title">今夜先从这里开始</h2>
       <section class="chat-shell">
         <div class="chat-log">
@@ -855,53 +854,34 @@ export const buildFeaturedListBody = (items: FeaturedItem[]) => `
 
 export const buildPersonaPageBody = (detail: PersonaDetail) => `
   <div class="stage page-stack">
-    <section class="stage-columns">
-      <div class="chat-stage">
-        <section class="chat-shell">
-          <span class="badge">${escapeHtml(detail.persona.originType)}</span>
-          <div class="stack">
-            <p class="section-label">Chat-first persona</p>
-            <h2 class="page-title">先让${escapeHtml(detail.persona.displayName)}开口</h2>
-            <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
-          </div>
-          <div class="chat-log" data-chat-log>
-            ${renderStaticBubble("assistant", "Persona", detail.version.sampleAnswers[0] ?? detail.version.previewIntro ?? "先开口吧。")}
-            ${renderStaticBubble("user", "You", detail.version.recommendedQuestions[0] ?? "如果现在要开口，你会先说什么？")}
-          </div>
-          <div class="stack">
-            <p class="section-label">先从这些问题开始</p>
-            <div class="stack">
-              ${detail.version.recommendedQuestions
-                .slice(0, 3)
-                .map((question) => renderQuestionPrompt(question))
-                .join("")}
-            </div>
-          </div>
-          <div class="chat-composer">
-            <h3>和${escapeHtml(detail.persona.displayName)}聊聊</h3>
-            <form data-chat-form class="chat-composer">
-              <textarea placeholder="输入一个问题，比如：面对冲突时会先考虑什么？"></textarea>
-              <div class="composer-actions">
-                <span class="meta">默认是单轮对话，先看这个人格会怎么开口。</span>
-                <button type="submit">发送问题</button>
-              </div>
-            </form>
-            <div class="status-line" data-chat-status></div>
-          </div>
-        </section>
+    <section class="chat-shell">
+      <span class="badge">${escapeHtml(detail.persona.originType)}</span>
+      <div class="stack">
+        <h2 class="page-title">先让${escapeHtml(detail.persona.displayName)}开口</h2>
+        <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
       </div>
-      <div class="page-stack">
-        <section class="panel stack">
-          <p class="section-label">人物气质</p>
-          <h3 class="card-title">这个人格会怎样组织语言</h3>
-          <p class="body-copy">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
-        </section>
-        <section class="panel stack">
-          <p class="section-label">回答样本</p>
-          <div class="question-list">
-            ${detail.version.sampleAnswers.map((item) => `<div class="answer-note">${escapeHtml(item)}</div>`).join("")}
+      <div class="chat-log" data-chat-log>
+        ${renderStaticBubble("assistant", "Persona", detail.version.sampleAnswers[0] ?? detail.version.previewIntro ?? "先开口吧。")}
+        ${renderStaticBubble("user", "You", detail.version.recommendedQuestions[0] ?? "如果现在要开口，你会先说什么？")}
+      </div>
+      <div class="stack">
+        <div class="stack">
+          ${detail.version.recommendedQuestions
+            .slice(0, 3)
+            .map((question) => renderQuestionPrompt(question))
+            .join("")}
+        </div>
+      </div>
+      <div class="chat-composer">
+        <h3>和${escapeHtml(detail.persona.displayName)}聊聊</h3>
+        <form data-chat-form class="chat-composer">
+          <textarea placeholder="输入一个问题，比如：面对冲突时会先考虑什么？"></textarea>
+          <div class="composer-actions">
+            <span class="meta">默认是单轮对话，先看这个人格会怎么开口。</span>
+            <button type="submit">发送问题</button>
           </div>
-        </section>
+        </form>
+        <div class="status-line" data-chat-status></div>
       </div>
     </section>
   </div>

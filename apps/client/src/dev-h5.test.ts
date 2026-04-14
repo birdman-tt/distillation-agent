@@ -30,7 +30,7 @@ test("home page reads like a mobile-first persona hall instead of a plain card g
 
   assert.match(body, /今夜先从这里开始/);
   assert.match(body, /进入对话/);
-  assert.doesNotMatch(body, /Step 1|Chat-first entry|每张人物卡只保留最值得开口的线索/);
+  assert.doesNotMatch(body, /Step 1|Chat-first entry|每张人物卡只保留最值得开口的线索|Curated Personas/);
 });
 
 test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
@@ -51,6 +51,7 @@ test("persona page surfaces suggested prompts as tap-friendly chat starters", ()
   assert.match(body, /bubble user/);
   assert.match(body, /data-suggested-question=/);
   assert.match(body, /和苏轼聊聊/);
+  assert.doesNotMatch(body, /人物气质|回答样本|Chat-first persona/);
 });
 
 test("creation and review flows keep the same warm editorial product language", () => {
