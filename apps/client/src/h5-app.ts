@@ -734,8 +734,8 @@ const baseClientScript = `
 
 const renderShell = (input: {
   title: string;
-  subtitle: string;
   body: string;
+  subtitle?: string;
   script?: string;
   eyebrow?: string;
 }) => `<!doctype html>
@@ -750,14 +750,14 @@ const renderShell = (input: {
     <div class="shell">
       <section class="hero">
         <div class="hero-head">
-          <div class="eyebrow">${input.eyebrow ?? "Hall of Fame"}</div>
+          ${input.eyebrow ? `<div class="eyebrow">${input.eyebrow}</div>` : ""}
           <div class="top-nav">
             <a class="nav-link" href="/">人物馆</a>
             <a class="nav-link" href="/create">创建对象</a>
             <a class="nav-link" href="/review">审核台</a>
           </div>
           <h1 class="hero-title">${input.title}</h1>
-          <p class="hero-copy">${input.subtitle}</p>
+          ${input.subtitle ? `<p class="hero-copy">${input.subtitle}</p>` : ""}
         </div>
       </section>
       <div data-session-slot></div>
@@ -813,14 +813,11 @@ const renderStaticBubble = (role: "assistant" | "user", label: string, content: 
 
 export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   <div class="stage page-stack">
-    <section class="page-stack">
-      <h2 class="page-title">今夜先从这里开始</h2>
-      <section class="chat-shell">
-        <div class="chat-log">
-          ${renderStaticBubble("assistant", "Persona", "今晚不必急着解释自己。你先问一句，我会顺着那句话靠近你。")}
-          ${renderStaticBubble("user", "You", "我该先去找谁聊聊？")}
-        </div>
-      </section>
+    <section class="chat-shell">
+      <div class="chat-log">
+        ${renderStaticBubble("assistant", "Persona", "今晚不必急着解释自己。你先问一句，我会顺着那句话靠近你。")}
+        ${renderStaticBubble("user", "You", "我该先去找谁聊聊？")}
+      </div>
     </section>
     <section class="mobile-grid two-up">
       ${items
@@ -891,9 +888,7 @@ export const buildCreatePageBody = () => `
   <div class="stage page-stack">
     <section class="review-grid">
       <section class="panel stack">
-        <p class="section-label">Step 1</p>
         <h3 class="section-title">先给这个人格一个名字</h3>
-        <p class="body-copy">名字和蒸馏重点决定了后面的语气骨架。重点可以是“表达、判断、边界”这种词，而不是任务列表。</p>
         <form data-create-form class="stack">
           <input name="displayName" placeholder="对象名称" />
           <input name="distillFocus" placeholder="蒸馏重点，用逗号分隔，例如：表达,判断" />
@@ -905,7 +900,6 @@ export const buildCreatePageBody = () => `
         <div class="status-line" data-create-status></div>
       </section>
       <section class="panel stack">
-        <p class="section-label">Step 2</p>
         <h3 class="section-title">喂给它足够说话的材料</h3>
         <p class="meta">当前 persona: <span data-persona-id>未创建</span></p>
         <form data-text-source-form class="stack">
@@ -935,8 +929,7 @@ export const buildCreatePageBody = () => `
       </section>
     </section>
     <section class="panel stack">
-      <p class="section-label">Source notebook</p>
-      <h3 class="section-title">当前资料</h3>
+      <h3 class="section-title">资料簿</h3>
       <ul class="question-list" data-source-list><li class="empty-state">暂无资料</li></ul>
     </section>
   </div>
@@ -945,8 +938,7 @@ export const buildCreatePageBody = () => `
 export const buildReviewPageBody = () => `
   <div class="stage page-stack">
     <section class="panel stack">
-      <p class="section-label">Reviewer session</p>
-      <h3 class="section-title">切换到 reviewer 身份</h3>
+      <h3 class="section-title">切换 reviewer 身份</h3>
       <div class="actions">
         <button type="button" data-reviewer-login>进入 reviewer 身份</button>
         <button type="button" class="secondary" data-clear-session>清除当前身份</button>
@@ -955,13 +947,11 @@ export const buildReviewPageBody = () => `
     </section>
     <section class="review-grid">
       <section class="panel stack">
-        <p class="section-label">Source review</p>
-        <h3 class="section-title">资料审核</h3>
+        <h3 class="section-title">待审资料</h3>
         <ul class="question-list" data-source-review-list><li class="empty-state">请先登录 reviewer</li></ul>
       </section>
       <section class="panel stack">
-        <p class="section-label">Publish review</p>
-        <h3 class="section-title">发布审核</h3>
+        <h3 class="section-title">待审发布</h3>
         <ul class="question-list" data-version-review-list><li class="empty-state">请先登录 reviewer</li></ul>
       </section>
     </section>
@@ -973,9 +963,7 @@ const renderFeaturedList = async () => {
   const items = featured?.items ?? [];
 
   return renderShell({
-    title: "Hall of Fame",
-    subtitle: "把一句问题轻轻交给另一个人格。",
-    eyebrow: "Mobile-first persona hall",
+    title: "把一句问题轻轻交给另一个人格。",
     body: buildFeaturedListBody(items),
   });
 };
@@ -1066,15 +1054,12 @@ const renderPersonaPage = async (personaId: string) => {
   if (!detail) {
     return renderShell({
       title: "对象不存在",
-      subtitle: "没有找到对应对象。",
       body: '<div class="empty-state">请返回首页重新选择对象。</div>',
     });
   }
 
   return renderShell({
-    title: detail.persona.displayName,
-    subtitle: "先让对话发生，系统退后。",
-    eyebrow: "Persona conversation",
+    title: `先让${detail.persona.displayName}开口`,
     body: buildPersonaPageBody(detail),
     script: renderChatScript({
       targetType: "published_persona",
@@ -1093,48 +1078,32 @@ const renderSharePage = async (shareSlug: string) => {
   if (!landing) {
     return renderShell({
       title: "分享不存在",
-      subtitle: "这个分享链接没有命中可用版本。",
       body: '<div class="empty-state">请确认 share slug 是否正确。</div>',
     });
   }
 
   return renderShell({
-    title: `${landing.persona.displayName} 分享页`,
-    subtitle: "把这一轮对话直接递给别人。",
-    eyebrow: "Shared conversation",
+    title: `直接和${landing.persona.displayName}聊`,
     body: `
       <div class="stage page-stack">
-        <section class="stage-columns">
-          <section class="chat-shell">
-            <span class="badge">${escapeHtml(landing.persona.originType)}</span>
-            <div class="stack">
-              <p class="section-label">Share entry</p>
-              <h2 class="page-title">先从一轮对话认识${escapeHtml(landing.persona.displayName)}</h2>
-              <p class="page-subtitle">${escapeHtml(landing.version.previewIntro ?? "基于已发布版本的分享入口。")}</p>
+        <section class="chat-shell">
+          <span class="badge">${escapeHtml(landing.persona.originType)}</span>
+          <div class="stack">
+            <p class="page-subtitle">${escapeHtml(landing.version.previewIntro ?? "基于已发布版本的分享入口。")}</p>
+          </div>
+          <div class="chat-log" data-chat-log>
+            ${renderStaticBubble("assistant", "Persona", landing.version.previewIntro ?? "先问一句。")}
+          </div>
+          <div class="stack">
+            ${landing.version.recommendedQuestions.slice(0, 3).map((question) => renderQuestionPrompt(question)).join("")}
+          </div>
+          <form data-chat-form class="chat-composer">
+            <textarea placeholder="从分享页直接开聊"></textarea>
+            <div class="composer-actions">
+              <button type="submit">开始对话</button>
             </div>
-            <div class="chat-log" data-chat-log>
-              ${renderStaticBubble("assistant", "Persona", landing.version.previewIntro ?? "先问一句。")}
-            </div>
-            <div class="stack">
-              <p class="section-label">可以这样开口</p>
-              <div class="stack">
-                ${landing.version.recommendedQuestions.slice(0, 3).map((question) => renderQuestionPrompt(question)).join("")}
-              </div>
-            </div>
-            <form data-chat-form class="chat-composer">
-              <textarea placeholder="从分享页直接开聊"></textarea>
-              <div class="composer-actions">
-                <span class="meta">这是一条面向分享场景的单轮对话入口。</span>
-                <button type="submit">开始对话</button>
-              </div>
-            </form>
-            <div class="status-line" data-chat-status></div>
-          </section>
-          <section class="panel stack">
-            <p class="section-label">Share details</p>
-            <p class="body-copy">固定分享，直接开口。</p>
-            <p class="meta">canonical: <span class="inline-code">${escapeHtml(landing.share.canonicalUrl)}</span></p>
-          </section>
+          </form>
+          <div class="status-line" data-chat-status></div>
         </section>
       </div>
     `,
@@ -1147,9 +1116,7 @@ const renderSharePage = async (shareSlug: string) => {
 
 const renderCreatePage = () =>
   renderShell({
-    title: "塑造一个能开口的人格",
-    subtitle: "先给它一条会说话的主线。",
-    eyebrow: "Create persona",
+    title: "塑造一个会开口的人格",
     body: buildCreatePageBody(),
     script: `
       const createStatus = document.querySelector("[data-create-status]");
@@ -1298,23 +1265,18 @@ const renderCreatePage = () =>
 
 const renderPreviewPage = async (personaVersionId: string) =>
   renderShell({
-    title: "在发布前，先听它自己说一轮",
-    subtitle: "先听，再决定要不要公开。",
-    eyebrow: "Preview before publish",
+    title: "先听它开口",
     body: `
       <div class="stage page-stack">
         <section class="stage-columns">
           <section class="chat-shell">
-            <p class="section-label">Preview chat</p>
-            <h2 class="page-title">先听听它会怎么回答</h2>
-            <p class="page-subtitle">这里走 preview chat，只对当前草稿版本生效。</p>
+            <p class="page-subtitle">先听一轮，再决定要不要公开。</p>
             <div class="chat-log" data-chat-log>
               ${renderStaticBubble("assistant", "Persona", "如果这句话还不够像它，就不要急着发布。")}
             </div>
             <form data-chat-form class="chat-composer">
               <textarea placeholder="这里走 draft preview chat"></textarea>
               <div class="composer-actions">
-                <span class="meta">预览阶段建议多问几类问题，先看人格是否稳定。</span>
                 <button type="submit">发送预览问题</button>
               </div>
             </form>
@@ -1322,7 +1284,6 @@ const renderPreviewPage = async (personaVersionId: string) =>
           </section>
           <section class="page-stack">
             <section class="panel stack">
-              <p class="section-label">Version summary</p>
               <h3 class="section-title">版本信息</h3>
               <div data-version-summary class="body-copy">加载中...</div>
               <div class="actions">
@@ -1332,11 +1293,11 @@ const renderPreviewPage = async (personaVersionId: string) =>
               <div class="status-line" data-preview-status></div>
             </section>
             <section class="panel stack">
-              <p class="section-label">Suggested openings</p>
+              <h3 class="section-title">建议开场</h3>
               <ul class="question-list" data-preview-questions><li class="empty-state">加载中...</li></ul>
             </section>
             <section class="panel stack">
-              <p class="section-label">Sample voice</p>
+              <h3 class="section-title">声音样本</h3>
               <ul class="question-list" data-preview-answers><li class="empty-state">加载中...</li></ul>
             </section>
           </section>
@@ -1387,8 +1348,6 @@ const renderPreviewPage = async (personaVersionId: string) =>
 const renderReviewPage = () =>
   renderShell({
     title: "审核台",
-    subtitle: "让判断留在台后，不打断前台对话。",
-    eyebrow: "Reviewer console",
     body: buildReviewPageBody(),
     script: `
       const reviewerStatus = document.querySelector("[data-reviewer-status]");

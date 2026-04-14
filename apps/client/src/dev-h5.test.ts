@@ -28,9 +28,9 @@ test("home page reads like a mobile-first persona hall instead of a plain card g
     },
   ]);
 
-  assert.match(body, /今夜先从这里开始/);
+  assert.match(body, /bubble assistant/);
   assert.match(body, /进入对话/);
-  assert.doesNotMatch(body, /Step 1|Chat-first entry|每张人物卡只保留最值得开口的线索|Curated Personas/);
+  assert.doesNotMatch(body, /今夜先从这里开始|Step 1|Chat-first entry|每张人物卡只保留最值得开口的线索|Curated Personas/);
 });
 
 test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
@@ -58,8 +58,9 @@ test("creation and review flows keep the same warm editorial product language", 
   const createPage = buildCreatePageBody();
   const reviewPage = buildReviewPageBody();
 
-  assert.match(createPage, /Source notebook/);
+  assert.match(createPage, /资料簿/);
   assert.match(createPage, /先给这个人格一个名字/);
-  assert.match(reviewPage, /Reviewer session/);
-  assert.match(reviewPage, /发布审核/);
+  assert.doesNotMatch(createPage, /Step 1|Step 2/);
+  assert.match(reviewPage, /待审发布/);
+  assert.doesNotMatch(reviewPage, /Reviewer session|Source review|Publish review/);
 });
