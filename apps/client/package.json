@@ -13,6 +13,7 @@
   "dependencies": {
     "@hall-of-fame/api-client": "workspace:*",
     "@hall-of-fame/runtime-env": "workspace:*",
+    "@hall-of-fame/ui-tokens": "workspace:*",
     "fastify": "^5.4.0",
     "react": "^19.2.0"
   },

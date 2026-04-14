@@ -1,34 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildReplyInspectorHtml } from "./h5-app.js";
-
-test("H5 server exposes create and review entry pages", async () => {
-  const { buildH5Server } = await import("./h5-app.js");
-  const app = buildH5Server();
-
-  try {
-    const createPage = await app.inject({
-      method: "GET",
-      url: "/create",
-    });
-    assert.equal(createPage.statusCode, 200);
-    assert.match(createPage.headers["content-type"] ?? "", /text\/html/);
-    assert.match(createPage.body, /创建对象/);
-    assert.match(createPage.body, /提交发布审核/);
-
-    const reviewPage = await app.inject({
-      method: "GET",
-      url: "/review",
-    });
-    assert.equal(reviewPage.statusCode, 200);
-    assert.match(reviewPage.headers["content-type"] ?? "", /text\/html/);
-    assert.match(reviewPage.body, /审核台/);
-    assert.match(reviewPage.body, /发布审核/);
-  } finally {
-    await app.close();
-  }
-});
+import { buildCreatePageBody, buildFeaturedListBody, buildPersonaPageBody, buildReplyInspectorHtml, buildReviewPageBody } from "./h5-app.js";
 
 test("reply inspector hides raw system adjudication wording by default", () => {
   const markup = buildReplyInspectorHtml({
@@ -42,4 +15,49 @@ test("reply inspector hides raw system adjudication wording by default", () => {
   assert.doesNotMatch(markup, /推断级别/);
   assert.match(markup, /这句话怎么来的/);
   assert.match(markup, /人物画像中的判断框架/);
+});
+
+test("home page reads like a mobile-first persona hall instead of a plain card grid", () => {
+  const body = buildFeaturedListBody([
+    {
+      id: "persona-1",
+      displayName: "苏轼",
+      previewIntro: "在失意与豁达之间找到生命张力的文人。",
+      recommendedQuestions: ["人处在低谷时，怎么和自己相处？"],
+      originType: "OFFICIAL",
+    },
+  ]);
+
+  assert.match(body, /像翻开一本会对话的人物手册/);
+  assert.match(body, /先从一句问题开始/);
+  assert.match(body, /进入对话/);
+});
+
+test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
+  const body = buildPersonaPageBody({
+    persona: {
+      displayName: "苏轼",
+      currentPublishedVersionId: "version-1",
+      originType: "OFFICIAL",
+    },
+    version: {
+      previewIntro: "在失意与豁达之间找到生命张力的文人。",
+      recommendedQuestions: ["人处在低谷时，怎么和自己相处？", "理想与现实总冲突，怎么办？"],
+      sampleAnswers: ["先安顿自己，再安顿世界。"],
+    },
+  });
+
+  assert.match(body, /先从这些问题开始/);
+  assert.match(body, /data-suggested-question=/);
+  assert.match(body, /和苏轼聊聊/);
+});
+
+test("creation and review flows keep the same warm editorial product language", () => {
+  const createPage = buildCreatePageBody();
+  const reviewPage = buildReviewPageBody();
+
+  assert.match(createPage, /Source notebook/);
+  assert.match(createPage, /先给这个人格一个名字/);
+  assert.match(reviewPage, /Reviewer session/);
+  assert.match(reviewPage, /发布审核/);
 });

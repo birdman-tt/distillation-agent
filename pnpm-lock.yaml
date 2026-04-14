@@ -53,6 +53,9 @@ importers:
       '@hall-of-fame/runtime-env':
         specifier: workspace:*
         version: link:../../packages/runtime-env
+      '@hall-of-fame/ui-tokens':
+        specifier: workspace:*
+        version: link:../../packages/ui-tokens
       fastify:
         specifier: ^5.4.0
         version: 5.8.4
