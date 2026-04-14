@@ -51,9 +51,9 @@ const pageStyles = `
     color: var(--ink);
     font-family: var(--sans);
     background:
-      radial-gradient(circle at top right, rgba(155, 92, 46, 0.10), transparent 22rem),
-      radial-gradient(circle at top left, rgba(122, 70, 33, 0.06), transparent 18rem),
-      linear-gradient(180deg, #fbf7f0 0%, var(--bg) 100%);
+      radial-gradient(circle at top right, rgba(209, 161, 180, 0.18), transparent 26rem),
+      radial-gradient(circle at 20% 15%, rgba(127, 93, 153, 0.16), transparent 20rem),
+      linear-gradient(180deg, #140f19 0%, var(--bg) 48%, #120f17 100%);
   }
 
   a {
@@ -92,10 +92,10 @@ const pageStyles = `
     inset: 0;
     pointer-events: none;
     background-image:
-      linear-gradient(to right, rgba(155, 92, 46, 0.018) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(155, 92, 46, 0.016) 1px, transparent 1px);
-    background-size: 24px 24px;
-    mask-image: linear-gradient(180deg, rgba(0,0,0,0.25), transparent 85%);
+      linear-gradient(to right, rgba(209, 161, 180, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(209, 161, 180, 0.02) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.4), transparent 88%);
   }
 
   .stage {
@@ -105,32 +105,32 @@ const pageStyles = `
 
   .hero {
     position: relative;
-    overflow: hidden;
     display: grid;
-    gap: 20px;
-    padding: 24px 20px;
-    border: 1px solid rgba(203, 180, 148, 0.72);
+    gap: 14px;
+    padding: 20px 18px 12px;
+    border: 1px solid rgba(109, 90, 120, 0.72);
     border-radius: 32px;
     background:
-      linear-gradient(160deg, rgba(255, 253, 248, 0.92), rgba(250, 242, 230, 0.94)),
+      linear-gradient(160deg, rgba(40, 31, 47, 0.96), rgba(27, 21, 33, 0.96)),
       var(--bg-raised);
     box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
   }
 
   .hero::after {
     content: "";
     position: absolute;
-    inset: auto -10% -35% auto;
-    width: 220px;
-    height: 220px;
+    inset: -12% -10% auto auto;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(155, 92, 46, 0.14), transparent 70%);
+    background: radial-gradient(circle, rgba(209, 161, 180, 0.22), transparent 72%);
   }
 
   .hero-head {
     display: grid;
-    gap: 12px;
-    max-width: 38rem;
+    gap: 10px;
+    max-width: 34rem;
   }
 
   .eyebrow {
@@ -140,7 +140,7 @@ const pageStyles = `
     width: fit-content;
     padding: 6px 12px;
     border-radius: var(--radius-pill);
-    background: var(--accent-wash);
+    background: rgba(209, 161, 180, 0.12);
     color: var(--accent);
     font-size: 12px;
     font-weight: 700;
@@ -169,33 +169,9 @@ const pageStyles = `
   .hero-note {
     margin: 0;
     color: var(--ink-muted);
-    font-size: 16px;
-    line-height: 1.68;
-  }
-
-  .hero-strip {
-    display: grid;
-    gap: 12px;
-  }
-
-  .hero-strip-card {
-    padding: 16px 18px;
-    border-radius: 22px;
-    border: 1px solid rgba(203, 180, 148, 0.72);
-    background: rgba(255, 253, 248, 0.82);
-  }
-
-  .hero-strip-card strong {
-    display: block;
-    margin-bottom: 6px;
     font-size: 15px;
-  }
-
-  .hero-strip-card p {
-    margin: 0;
-    color: var(--ink-muted);
     line-height: 1.6;
-    font-size: 14px;
+    max-width: 24rem;
   }
 
   .top-nav {
@@ -222,15 +198,15 @@ const pageStyles = `
   .nav-link,
   .button-link.secondary,
   button.secondary {
-    background: rgba(255, 253, 248, 0.78);
-    border-color: rgba(203, 180, 148, 0.84);
-    color: var(--ink);
+    background: rgba(34, 27, 41, 0.78);
+    border-color: rgba(109, 90, 120, 0.78);
+    color: var(--ink-muted);
   }
 
   .button-link.primary,
   button {
     background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-    color: #fff8f1;
+    color: #1c141b;
     box-shadow: var(--shadow-card);
   }
 
@@ -256,8 +232,8 @@ const pageStyles = `
     margin-top: -4px;
     padding: 12px 14px;
     border-radius: 18px;
-    border: 1px solid rgba(203, 180, 148, 0.72);
-    background: rgba(255, 251, 244, 0.9);
+    border: 1px solid rgba(109, 90, 120, 0.56);
+    background: rgba(31, 25, 37, 0.8);
     color: var(--ink-muted);
     font-size: 14px;
   }
@@ -297,13 +273,13 @@ const pageStyles = `
     gap: 14px;
     padding: 18px;
     border-radius: 24px;
-    border: 1px solid rgba(216, 200, 178, 0.86);
-    background: rgba(255, 253, 248, 0.9);
+    border: 1px solid rgba(109, 90, 120, 0.56);
+    background: rgba(33, 26, 38, 0.92);
     box-shadow: var(--shadow-card);
   }
 
   .panel-muted {
-    background: rgba(250, 243, 233, 0.78);
+    background: rgba(38, 30, 45, 0.88);
   }
 
   .section-title {
@@ -352,7 +328,7 @@ const pageStyles = `
     width: fit-content;
     padding: 6px 12px;
     border-radius: var(--radius-pill);
-    background: var(--accent-wash);
+    background: rgba(209, 161, 180, 0.12);
     color: var(--accent);
     font-size: 12px;
     font-weight: 700;
@@ -366,9 +342,9 @@ const pageStyles = `
     gap: 14px;
     padding: 18px;
     border-radius: 26px;
-    border: 1px solid rgba(203, 180, 148, 0.86);
+    border: 1px solid rgba(109, 90, 120, 0.64);
     background:
-      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(249, 241, 230, 0.94));
+      linear-gradient(180deg, rgba(35, 27, 42, 0.96), rgba(27, 21, 33, 0.94));
     box-shadow: var(--shadow-card);
   }
 
@@ -379,7 +355,7 @@ const pageStyles = `
     width: 120px;
     height: 120px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(155, 92, 46, 0.12), transparent 72%);
+    background: radial-gradient(circle, rgba(209, 161, 180, 0.16), transparent 72%);
   }
 
   .persona-topline {
@@ -419,8 +395,8 @@ const pageStyles = `
   .source-item {
     padding: 14px;
     border-radius: 18px;
-    border: 1px solid rgba(216, 200, 178, 0.82);
-    background: rgba(255, 250, 243, 0.88);
+    border: 1px solid rgba(109, 90, 120, 0.5);
+    background: rgba(41, 32, 48, 0.82);
   }
 
   .question-slip {
@@ -438,8 +414,8 @@ const pageStyles = `
   .question-slip .button-link,
   .prompt-button {
     background: transparent;
-    color: var(--accent-deep);
-    border: 1px solid rgba(203, 180, 148, 0.92);
+    color: var(--accent);
+    border: 1px solid rgba(109, 90, 120, 0.72);
     box-shadow: none;
     min-height: 40px;
   }
@@ -447,8 +423,9 @@ const pageStyles = `
   .prompt-button {
     justify-content: flex-start;
     width: 100%;
-    background: rgba(255, 250, 243, 0.92);
+    background: rgba(45, 34, 52, 0.9);
     text-align: left;
+    border-radius: 20px;
   }
 
   .stack {
@@ -466,9 +443,9 @@ const pageStyles = `
     gap: 16px;
     padding: 18px;
     border-radius: 28px;
-    border: 1px solid rgba(203, 180, 148, 0.88);
+    border: 1px solid rgba(109, 90, 120, 0.76);
     background:
-      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(248, 239, 226, 0.92));
+      linear-gradient(180deg, rgba(35, 27, 42, 0.98), rgba(26, 20, 31, 0.96));
     box-shadow: var(--shadow-panel);
   }
 
@@ -482,6 +459,7 @@ const pageStyles = `
   .chat-log {
     display: grid;
     gap: 12px;
+    padding: 6px 0 2px;
   }
 
   .bubble {
@@ -489,20 +467,20 @@ const pageStyles = `
     gap: 8px;
     padding: 14px 16px;
     border-radius: var(--radius-bubble);
-    border: 1px solid rgba(216, 200, 178, 0.9);
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 10px 24px rgba(52, 39, 24, 0.04);
+    border: 1px solid rgba(122, 104, 135, 0.58);
+    box-shadow: 0 12px 28px rgba(5, 3, 9, 0.26);
     animation: bubble-rise ${uiTokens.motion.chatRevealMs}ms ease;
+    max-width: 88%;
   }
 
   .bubble.user {
-    margin-left: 16px;
-    background: rgba(251, 246, 239, 0.95);
+    margin-left: auto;
+    background: linear-gradient(180deg, rgba(95, 63, 88, 0.96), rgba(71, 47, 67, 0.94));
   }
 
   .bubble.assistant {
-    margin-right: 12px;
-    background: linear-gradient(180deg, rgba(255, 250, 243, 0.96), rgba(249, 239, 225, 0.94));
+    margin-right: auto;
+    background: linear-gradient(180deg, rgba(52, 41, 63, 0.98), rgba(39, 31, 48, 0.96));
   }
 
   .bubble-label {
@@ -510,19 +488,19 @@ const pageStyles = `
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: #e8bdd0;
   }
 
   .bubble-copy {
     line-height: 1.72;
     font-size: 16px;
-    color: var(--ink);
+    color: #f3e9df;
     white-space: pre-wrap;
   }
 
   .reply-inspector {
     margin-top: 2px;
-    border-top: 1px dashed rgba(216, 200, 178, 0.86);
+    border-top: 1px dashed rgba(109, 90, 120, 0.6);
     padding-top: 8px;
   }
 
@@ -550,11 +528,11 @@ const pageStyles = `
   select {
     width: 100%;
     border-radius: 18px;
-    border: 1px solid rgba(203, 180, 148, 0.92);
-    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(109, 90, 120, 0.78);
+    background: rgba(25, 20, 31, 0.96);
     padding: 14px 16px;
     color: var(--ink);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .chat-composer textarea {
@@ -582,7 +560,7 @@ const pageStyles = `
     align-items: center;
     padding: 2px 6px;
     border-radius: 10px;
-    background: rgba(239, 225, 207, 0.88);
+    background: rgba(56, 42, 54, 0.9);
     font-family: var(--mono);
     font-size: 12px;
   }
@@ -604,17 +582,17 @@ const pageStyles = `
     min-height: 36px;
     padding: 8px 12px;
     border-radius: var(--radius-pill);
-    border: 1px solid rgba(203, 180, 148, 0.88);
-    background: rgba(255, 250, 243, 0.88);
-    color: var(--accent-deep);
+    border: 1px solid rgba(109, 90, 120, 0.72);
+    background: rgba(42, 31, 49, 0.86);
+    color: var(--accent);
     font-size: 13px;
   }
 
   .empty-state {
     padding: 18px;
     border-radius: 22px;
-    border: 1px dashed rgba(203, 180, 148, 0.9);
-    background: rgba(255, 252, 246, 0.82);
+    border: 1px dashed rgba(109, 90, 120, 0.68);
+    background: rgba(32, 25, 38, 0.76);
     color: var(--ink-muted);
   }
 
@@ -758,7 +736,6 @@ const renderShell = (input: {
   title: string;
   subtitle: string;
   body: string;
-  heroAside?: string;
   script?: string;
   eyebrow?: string;
 }) => `<!doctype html>
@@ -781,18 +758,6 @@ const renderShell = (input: {
           </div>
           <h1 class="hero-title">${input.title}</h1>
           <p class="hero-copy">${input.subtitle}</p>
-        </div>
-        <div class="hero-strip">
-          ${input.heroAside ?? `
-            <div class="hero-strip-card">
-              <strong>聊天优先</strong>
-              <p>先让用户感到自己正在和一个人格对话，再展示系统能力。</p>
-            </div>
-            <div class="hero-strip-card">
-              <strong>移动端优先</strong>
-              <p>所有主要路径都先按手机拇指区设计，再扩展到桌面。</p>
-            </div>
-          `}
         </div>
       </section>
       <div data-session-slot></div>
@@ -839,21 +804,24 @@ type PersonaDetail = {
 const renderQuestionPrompt = (question: string, attrs = "") =>
   `<button type="button" class="prompt-button" data-suggested-question="${escapeHtml(question)}" ${attrs}>${escapeHtml(question)}</button>`;
 
+const renderStaticBubble = (role: "assistant" | "user", label: string, content: string) => `
+  <div class="bubble ${role}">
+    <div class="bubble-label">${escapeHtml(label)}</div>
+    <div class="bubble-copy">${escapeHtml(content)}</div>
+  </div>
+`;
+
 export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   <div class="stage page-stack">
     <section class="page-stack">
       <p class="section-label">Curated Personas</p>
-      <h2 class="page-title">像翻开一本会对话的人物手册</h2>
-      <p class="page-subtitle">先从一句问题开始，再看这个人格怎样组织语气、判断和边界。这里不是工具箱，而是一组可以进入的声音。</p>
-      <div class="panel panel-muted stack">
-        <p class="section-label">Chat-first entry</p>
-        <p class="body-copy">先从一句问题开始。每张人物卡只保留最值得开口的线索，不把首页做成卡片货架。</p>
-        <div class="pill-row">
-          <span class="soft-pill">官方人物</span>
-          <span class="soft-pill">分享页可直接开聊</span>
-          <span class="soft-pill">移动端优先</span>
+      <h2 class="page-title">今夜先从这里开始</h2>
+      <section class="chat-shell">
+        <div class="chat-log">
+          ${renderStaticBubble("assistant", "Persona", "今晚不必急着解释自己。你先问一句，我会顺着那句话靠近你。")}
+          ${renderStaticBubble("user", "You", "我该先去找谁聊聊？")}
         </div>
-      </div>
+      </section>
     </section>
     <section class="mobile-grid two-up">
       ${items
@@ -896,6 +864,10 @@ export const buildPersonaPageBody = (detail: PersonaDetail) => `
             <h2 class="page-title">先让${escapeHtml(detail.persona.displayName)}开口</h2>
             <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
           </div>
+          <div class="chat-log" data-chat-log>
+            ${renderStaticBubble("assistant", "Persona", detail.version.sampleAnswers[0] ?? detail.version.previewIntro ?? "先开口吧。")}
+            ${renderStaticBubble("user", "You", detail.version.recommendedQuestions[0] ?? "如果现在要开口，你会先说什么？")}
+          </div>
           <div class="stack">
             <p class="section-label">先从这些问题开始</p>
             <div class="stack">
@@ -915,7 +887,6 @@ export const buildPersonaPageBody = (detail: PersonaDetail) => `
               </div>
             </form>
             <div class="status-line" data-chat-status></div>
-            <div class="chat-log" data-chat-log></div>
           </div>
         </section>
       </div>
@@ -1023,18 +994,8 @@ const renderFeaturedList = async () => {
 
   return renderShell({
     title: "Hall of Fame",
-    subtitle: "每一个入口都先服务聊天，再服务功能。你看到的不是一组 AI 卡片，而是一排可以走进去的声音。",
+    subtitle: "把一句问题轻轻交给另一个人格。",
     eyebrow: "Mobile-first persona hall",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>像一本随手翻开的对话册</strong>
-        <p>首页只保留足够让你开口的线索，不用在一开始就承受系统复杂度。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>人物先于功能</strong>
-        <p>创建、审核和分享都存在，但它们只能围绕“和这个人格说话”来服务。</p>
-      </div>
-    `,
     body: buildFeaturedListBody(items),
   });
 };
@@ -1132,18 +1093,8 @@ const renderPersonaPage = async (personaId: string) => {
 
   return renderShell({
     title: detail.persona.displayName,
-    subtitle: detail.version.previewIntro ?? "暂无导语",
+    subtitle: "先让对话发生，系统退后。",
     eyebrow: "Persona conversation",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>先从问题进入</strong>
-        <p>不用先理解所有设定，先问一句，再从回话里感受这个人格。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>解释层默认隐藏</strong>
-        <p>系统不会打断聊天，只在你愿意的时候再展开“这句话怎么来的”。</p>
-      </div>
-    `,
     body: buildPersonaPageBody(detail),
     script: renderChatScript({
       targetType: "published_persona",
@@ -1169,18 +1120,8 @@ const renderSharePage = async (shareSlug: string) => {
 
   return renderShell({
     title: `${landing.persona.displayName} 分享页`,
-    subtitle: landing.version.previewIntro ?? "基于已发布版本的分享入口。",
+    subtitle: "把这一轮对话直接递给别人。",
     eyebrow: "Shared conversation",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>最快进入聊天的入口</strong>
-        <p>分享页比人物页更轻，只保留足够让你开口的引导。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>版本已冻结</strong>
-        <p>当前对话来自固定版本。<span class="inline-code">${escapeHtml(landing.share.shareSlug)}</span></p>
-      </div>
-    `,
     body: `
       <div class="stage page-stack">
         <section class="stage-columns">
@@ -1190,6 +1131,9 @@ const renderSharePage = async (shareSlug: string) => {
               <p class="section-label">Share entry</p>
               <h2 class="page-title">先从一轮对话认识${escapeHtml(landing.persona.displayName)}</h2>
               <p class="page-subtitle">${escapeHtml(landing.version.previewIntro ?? "基于已发布版本的分享入口。")}</p>
+            </div>
+            <div class="chat-log" data-chat-log>
+              ${renderStaticBubble("assistant", "Persona", landing.version.previewIntro ?? "先问一句。")}
             </div>
             <div class="stack">
               <p class="section-label">可以这样开口</p>
@@ -1205,11 +1149,10 @@ const renderSharePage = async (shareSlug: string) => {
               </div>
             </form>
             <div class="status-line" data-chat-status></div>
-            <div class="chat-log" data-chat-log></div>
           </section>
           <section class="panel stack">
             <p class="section-label">Share details</p>
-            <p class="body-copy">如果你只是想感受这个人格如何回话，分享页应该比完整人物页更轻、更快、更像一个邀请。</p>
+            <p class="body-copy">固定分享，直接开口。</p>
             <p class="meta">canonical: <span class="inline-code">${escapeHtml(landing.share.canonicalUrl)}</span></p>
           </section>
         </section>
@@ -1225,18 +1168,8 @@ const renderSharePage = async (shareSlug: string) => {
 const renderCreatePage = () =>
   renderShell({
     title: "塑造一个能开口的人格",
-    subtitle: "创建不是填工单，而是先给这个对象一个名字、一条主线，再把资料慢慢送进去，让它具备稳定的口吻与判断框架。",
+    subtitle: "先给它一条会说话的主线。",
     eyebrow: "Create persona",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>一步一步来</strong>
-        <p>先命名，再喂资料，再蒸馏预览。流程不短，但每一步都应该像在塑造一个人。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>会话自动领取</strong>
-        <p>进入页面后先领取匿名会话，你可以稍后再升级成手机号身份。</p>
-      </div>
-    `,
     body: buildCreatePageBody(),
     script: `
       const createStatus = document.querySelector("[data-create-status]");
@@ -1386,18 +1319,8 @@ const renderCreatePage = () =>
 const renderPreviewPage = async (personaVersionId: string) =>
   renderShell({
     title: "在发布前，先听它自己说一轮",
-    subtitle: "预览页的目标不是看分数，而是确认这个人格已经有稳定的语气、判断和边界，再决定要不要公开出去。",
+    subtitle: "先听，再决定要不要公开。",
     eyebrow: "Preview before publish",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>预览优先</strong>
-        <p>先和预览版本聊一轮，再看分数和发布动作，不要反过来。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>发布是第二层动作</strong>
-        <p>如果人格还没有活起来，就不该急着把它送进审核。</p>
-      </div>
-    `,
     body: `
       <div class="stage page-stack">
         <section class="stage-columns">
@@ -1405,6 +1328,9 @@ const renderPreviewPage = async (personaVersionId: string) =>
             <p class="section-label">Preview chat</p>
             <h2 class="page-title">先听听它会怎么回答</h2>
             <p class="page-subtitle">这里走 preview chat，只对当前草稿版本生效。</p>
+            <div class="chat-log" data-chat-log>
+              ${renderStaticBubble("assistant", "Persona", "如果这句话还不够像它，就不要急着发布。")}
+            </div>
             <form data-chat-form class="chat-composer">
               <textarea placeholder="这里走 draft preview chat"></textarea>
               <div class="composer-actions">
@@ -1413,7 +1339,6 @@ const renderPreviewPage = async (personaVersionId: string) =>
               </div>
             </form>
             <div class="status-line" data-chat-status></div>
-            <div class="chat-log" data-chat-log></div>
           </section>
           <section class="page-stack">
             <section class="panel stack">
@@ -1482,18 +1407,8 @@ const renderPreviewPage = async (personaVersionId: string) =>
 const renderReviewPage = () =>
   renderShell({
     title: "审核台",
-    subtitle: "这块可以更功能化，但仍然要保留同一套暖色、轻边框和稳定节奏。它是人工判断的工作面，不是系统警报墙。",
+    subtitle: "让判断留在台后，不打断前台对话。",
     eyebrow: "Reviewer console",
-    heroAside: `
-      <div class="hero-strip-card">
-        <strong>人工兜底</strong>
-        <p>资料审核和发布审核都留在人手里，界面应当清楚，但不能变成冷硬控制台。</p>
-      </div>
-      <div class="hero-strip-card">
-        <strong>系统退后</strong>
-        <p>运营工具可以更直接，但仍然不该污染主产品的情绪基调。</p>
-      </div>
-    `,
     body: buildReviewPageBody(),
     script: `
       const reviewerStatus = document.querySelector("[data-reviewer-status]");

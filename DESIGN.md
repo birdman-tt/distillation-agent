@@ -66,12 +66,12 @@ Desktop should expand gracefully, but must not redefine the experience into a mu
 
 The desired atmosphere is:
 
-- thoughtful
 - intimate
+- private
+- slightly ambiguous
 - composed
-- warm
-- tactile
-- a little literary
+- nocturnal
+- literary
 
 The product must not feel:
 
@@ -88,17 +88,17 @@ If a page can be described as "looks like admin software", it is wrong.
 
 ### 5.1 Material Direction
 
-The base world is warm paper, soft ink, and quiet borders.
-Depth comes from layering, tonal shifts, and restraint, not from glossy gradients or hard shadows.
+The base world is private nocturne: dark lacquer, warm ink, dusty rose light, and quiet borders.
+Depth comes from layered darkness, selective glow, and restraint, not from glossy gradients or hard shadows.
 
 Preferred material cues:
 
-- paper-like warm backgrounds
-- soft cream cards
-- near-black ink text
-- terracotta or clay-like warm accents
-- whisper borders
-- shallow, warm shadows
+- deep plum or ink-black canvases
+- softly lifted night surfaces
+- warm parchment text
+- dusty rose / muted mauve accents
+- quiet borders
+- soft glow instead of bright contrast
 
 Avoid:
 
@@ -112,19 +112,19 @@ Avoid:
 
 Core palette:
 
-- Canvas: `#f6f0e7`
-- Elevated canvas: `#fffdf8`
-- Soft alternate surface: `#f2eadf`
-- Primary ink: `#1f1a14`
-- Secondary ink: `#6b5c4b`
-- Hairline border: `#d8c8b2`
-- Emphasis border: `#cbb494`
-- Brand terracotta: `#9b5c2e`
-- Brand terracotta deep: `#7a4621`
-- Accent wash: `#efe1cf`
-- Success: `#296748`
-- Warning: `#a15d1a`
-- Danger: `#9c2f2f`
+- Canvas: `#17131b`
+- Elevated canvas: `#211a26`
+- Soft alternate surface: `#2a2231`
+- Primary ink: `#f4e7dc`
+- Secondary ink: `#d2c0b5`
+- Hairline border: `#4f4158`
+- Emphasis border: `#6d5a78`
+- Brand accent: `#d1a1b4`
+- Brand accent deep: `#a46d87`
+- Accent wash: `#382a36`
+- Success: `#5e9b82`
+- Warning: `#c4945b`
+- Danger: `#c56d83`
 
 Interactive blue is allowed only for accessible focus states.
 It is not a brand color.
@@ -132,6 +132,7 @@ It is not a brand color.
 ### 5.3 Contrast Rules
 
 - Long-form reading surfaces should never be pure black on pure white.
+- Main canvases should prefer dark privacy over bright openness.
 - Metadata must remain readable, but it should not visually compete with persona content.
 - Destructive and warning colors should be warm and serious, not alarm-siren bright.
 
@@ -210,19 +211,22 @@ The chat bubble is the most important component in the system.
 
 User bubble:
 
-- lighter neutral surface
-- minimal decoration
-- visually subordinate to assistant bubble
+- darker plum or smoke surface
+- compact
+- aligned to the right
+- visually quieter than the assistant bubble
 
 Assistant bubble:
 
-- warmer surface
+- warmer but still dark surface
 - slightly softer edge
 - more breathing room
-- should feel authored, not machine printed
+- aligned to the left
+- should feel whispered, not machine printed
 
 Never attach raw system text directly under every reply.
 If rationale is available, expose it via a quiet disclosure affordance.
+The default state must look like an ongoing conversation, not a trace viewer.
 
 ### 8.2 Reply Inspector
 
@@ -257,7 +261,18 @@ Rules:
 - sentence case
 - comfortable touch target
 - visually softer than a primary button
-- can look like prompt slips or conversation notes rather than pills from a SaaS component library
+- should read like intimate openings, not action chips
+- can look like folded notes or quiet prompt bubbles rather than pills from a SaaS component library
+
+## 8.5 Slogan Discipline
+
+Each page should try to survive on one line of promise.
+
+Rules:
+
+- hero copy should usually be one sentence
+- do not stack explanatory cards near the top of chat-first pages
+- if a sentence explains the system instead of deepening the mood, remove it
 
 ### 8.5 Inputs
 

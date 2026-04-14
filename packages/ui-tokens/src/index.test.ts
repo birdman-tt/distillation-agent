@@ -7,8 +7,8 @@ test("ui tokens describe a mobile-first editorial chat system", () => {
   assert.equal(uiTokens.projectName, "Hall of Fame");
   assert.equal(uiTokens.layout.mobileViewportWidth, 390);
   assert.equal(uiTokens.layout.maxReadableWidth, 780);
-  assert.equal(uiTokens.colors.canvas, "#f6f0e7");
-  assert.equal(uiTokens.colors.accent, "#9b5c2e");
+  assert.equal(uiTokens.colors.canvas, "#17131b");
+  assert.equal(uiTokens.colors.accent, "#d1a1b4");
   assert.equal(uiTokens.typography.display.family, '"Iowan Old Style", "Palatino Linotype", Georgia, serif');
   assert.equal(uiTokens.motion.chatRevealMs, 180);
 });
