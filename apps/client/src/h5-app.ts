@@ -334,6 +334,119 @@ const pageStyles = `
     letter-spacing: 0.04em;
   }
 
+  .badge.subtle {
+    background: rgba(35, 40, 51, 0.92);
+    color: var(--ink-soft);
+    border: 1px solid rgba(58, 65, 77, 0.9);
+  }
+
+  .persona-carousel {
+    display: grid;
+    gap: 14px;
+  }
+
+  .carousel-viewport {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(84%, 84%);
+    gap: 12px;
+    overflow-x: auto;
+    padding: 4px 0 2px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .carousel-viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  .carousel-card {
+    position: relative;
+    display: grid;
+    align-content: end;
+    min-height: 72vh;
+    padding: 18px;
+    border-radius: 32px;
+    border: 1px solid rgba(58, 65, 77, 0.92);
+    background:
+      radial-gradient(circle at 20% 16%, rgba(216, 138, 164, 0.18), transparent 24%),
+      radial-gradient(circle at 100% 0%, rgba(143, 99, 118, 0.16), transparent 26%),
+      linear-gradient(180deg, rgba(20, 23, 29, 0.96), rgba(15, 17, 21, 0.98));
+    box-shadow: var(--shadow-panel);
+    scroll-snap-align: center;
+    overflow: hidden;
+  }
+
+  .carousel-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -18% -12% auto;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(216, 138, 164, 0.18), transparent 72%);
+    pointer-events: none;
+  }
+
+  .carousel-card.is-current {
+    border-color: rgba(216, 138, 164, 0.5);
+  }
+
+  .card-image {
+    position: absolute;
+    inset: 16px 16px auto auto;
+    width: 112px;
+    height: 140px;
+    border-radius: 30px;
+    border: 1px solid rgba(58, 65, 77, 0.88);
+    background:
+      linear-gradient(180deg, rgba(143, 99, 118, 0.3), rgba(27, 31, 39, 0.4)),
+      rgba(20, 23, 29, 0.92);
+    display: grid;
+    place-items: center;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 42px;
+    line-height: 1;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-copy {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 12px;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .card-hint {
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .card-name {
+    margin: 0;
+    max-width: 9ch;
+    font-family: var(--serif);
+    font-size: clamp(2rem, 7vw, 2.9rem);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+  }
+
+  .card-hook {
+    margin: 0;
+    max-width: 16ch;
+    color: var(--ink-muted);
+    font-size: 16px;
+    line-height: 1.62;
+  }
+
   .persona-card {
     position: relative;
     overflow: hidden;
@@ -836,35 +949,26 @@ const renderBottomShuttle = (current: "home" | "create" | "review" | "profile") 
 export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   <div class="stage page-stack">
     <p class="single-slogan">只差一句开场。</p>
-    <section class="chat-shell">
-      <div class="chat-log">
-        ${renderStaticBubble("assistant", "Persona", "今晚不必急着解释自己。你先问一句，我会顺着那句话靠近你。")}
-        ${renderStaticBubble("user", "You", "我该先去找谁聊聊？")}
-      </div>
-    </section>
-    <section class="mobile-grid two-up">
+    <section class="persona-carousel" aria-label="今夜想和谁聊">
+      <div class="carousel-viewport">
       ${items
         .map(
-          (item) => `
-            <article class="persona-card">
-              <div class="persona-topline">
-                <span class="badge">${escapeHtml(item.originType)}</span>
-                <a class="button-link secondary" href="/persona/${item.id}">进入对话</a>
+          (item, index) => `
+            <a class="carousel-card ${index === 0 ? "is-current" : ""}" href="/persona/${item.id}">
+              <div class="card-image" aria-hidden="true">${escapeHtml(item.displayName.slice(0, 1))}</div>
+              <div class="card-copy">
+                <div class="card-meta">
+                  <span class="badge subtle">${escapeHtml(item.originType)}</span>
+                  <span class="card-hint">点进来聊</span>
+                </div>
+                <h2 class="card-name">${escapeHtml(item.displayName)}</h2>
+                <p class="card-hook">${escapeHtml(item.previewIntro ?? "今夜先用一句话认识你。")}</p>
               </div>
-              <div class="stack">
-                <h3 class="persona-name">${escapeHtml(item.displayName)}</h3>
-                <p class="persona-intro">${escapeHtml(item.previewIntro ?? "暂无导语")}</p>
-              </div>
-              <div class="prompt-cluster">
-                ${item.recommendedQuestions
-                  .slice(0, 1)
-                  .map((question) => `<div class="question-slip"><strong>${escapeHtml(question)}</strong></div>`)
-                  .join("")}
-              </div>
-            </article>
+            </a>
           `,
         )
         .join("")}
+      </div>
     </section>
     ${renderBottomShuttle("home")}
   </div>

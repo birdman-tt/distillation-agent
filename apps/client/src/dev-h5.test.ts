@@ -55,6 +55,23 @@ test("home shell keeps only one short slogan above the fold", () => {
   assert.doesNotMatch(body, /产品说明|进入人物馆|进入对话预览/);
 });
 
+test("home page centers one persona carousel card with side peeks", () => {
+  const body = buildFeaturedListBody([
+    {
+      id: "persona-1",
+      displayName: "苏轼",
+      previewIntro: "今夜你会先把什么说出口？",
+      recommendedQuestions: [],
+      originType: "OFFICIAL",
+    },
+  ]);
+
+  assert.match(body, /persona-carousel/);
+  assert.match(body, /carousel-viewport/);
+  assert.match(body, /carousel-card is-current/);
+  assert.doesNotMatch(body, /persona-topline|prompt-cluster|question-slip|persona-card/);
+});
+
 test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
   const body = buildPersonaPageBody({
     persona: {
