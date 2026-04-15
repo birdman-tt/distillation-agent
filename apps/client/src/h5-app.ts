@@ -8,16 +8,18 @@ const apiBaseUrl = () => process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
 const pageStyles = `
   :root {
     --bg: ${uiTokens.colors.canvas};
-    --bg-raised: ${uiTokens.colors.canvasRaised};
-    --bg-soft: ${uiTokens.colors.canvasSoft};
+    --bg-chrome: ${uiTokens.colors.chrome};
+    --bg-raised: ${uiTokens.colors.assistantSurface};
+    --bg-soft: ${uiTokens.colors.neutralSurface};
     --ink: ${uiTokens.colors.ink};
     --ink-muted: ${uiTokens.colors.inkMuted};
     --ink-soft: ${uiTokens.colors.inkSoft};
     --line: ${uiTokens.colors.border};
     --line-strong: ${uiTokens.colors.borderStrong};
-    --accent: ${uiTokens.colors.accent};
-    --accent-deep: ${uiTokens.colors.accentDeep};
-    --accent-wash: ${uiTokens.colors.accentWash};
+    --accent: ${uiTokens.colors.action};
+    --accent-deep: ${uiTokens.colors.actionPressed};
+    --accent-wash: ${uiTokens.colors.actionWash};
+    --user-bubble: ${uiTokens.colors.userBubble};
     --success: ${uiTokens.colors.success};
     --warning: ${uiTokens.colors.warning};
     --danger: ${uiTokens.colors.danger};
@@ -51,9 +53,9 @@ const pageStyles = `
     color: var(--ink);
     font-family: var(--sans);
     background:
-      radial-gradient(circle at top right, rgba(209, 161, 180, 0.18), transparent 26rem),
-      radial-gradient(circle at 20% 15%, rgba(127, 93, 153, 0.16), transparent 20rem),
-      linear-gradient(180deg, #140f19 0%, var(--bg) 48%, #120f17 100%);
+      radial-gradient(circle at 18% 10%, rgba(216, 138, 164, 0.09), transparent 18rem),
+      radial-gradient(circle at 100% 0%, rgba(143, 99, 118, 0.08), transparent 16rem),
+      linear-gradient(180deg, #0b0d10 0%, var(--bg) 38%, #0d0f14 100%);
   }
 
   a {
@@ -83,7 +85,8 @@ const pageStyles = `
     position: relative;
     max-width: var(--shell-width);
     margin: 0 auto;
-    padding: 24px 16px 64px;
+    min-height: 100vh;
+    padding: 12px 12px 108px;
   }
 
   .shell::before {
@@ -100,52 +103,7 @@ const pageStyles = `
 
   .stage {
     display: grid;
-    gap: 24px;
-  }
-
-  .hero {
-    position: relative;
-    display: grid;
-    gap: 14px;
-    padding: 20px 18px 12px;
-    border: 1px solid rgba(109, 90, 120, 0.72);
-    border-radius: 32px;
-    background:
-      linear-gradient(160deg, rgba(40, 31, 47, 0.96), rgba(27, 21, 33, 0.96)),
-      var(--bg-raised);
-    box-shadow: var(--shadow-panel);
-    backdrop-filter: blur(18px);
-  }
-
-  .hero::after {
-    content: "";
-    position: absolute;
-    inset: -12% -10% auto auto;
-    width: 180px;
-    height: 180px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(209, 161, 180, 0.22), transparent 72%);
-  }
-
-  .hero-head {
-    display: grid;
-    gap: 10px;
-    max-width: 34rem;
-  }
-
-  .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    width: fit-content;
-    padding: 6px 12px;
-    border-radius: var(--radius-pill);
-    background: rgba(209, 161, 180, 0.12);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    gap: 18px;
   }
 
   .hero-title,
@@ -158,29 +116,6 @@ const pageStyles = `
     text-wrap: balance;
   }
 
-  .hero-title {
-    margin: 0;
-    font-size: var(--title-hero);
-    font-weight: 500;
-    line-height: 1.02;
-  }
-
-  .hero-copy,
-  .hero-note {
-    margin: 0;
-    color: var(--ink-muted);
-    font-size: 15px;
-    line-height: 1.6;
-    max-width: 24rem;
-  }
-
-  .top-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .nav-link,
   .button-link,
   button {
     display: inline-flex;
@@ -195,11 +130,10 @@ const pageStyles = `
     transition: transform ${uiTokens.motion.sectionRevealMs}ms ease, background ${uiTokens.motion.sectionRevealMs}ms ease, border-color ${uiTokens.motion.sectionRevealMs}ms ease;
   }
 
-  .nav-link,
   .button-link.secondary,
   button.secondary {
-    background: rgba(34, 27, 41, 0.78);
-    border-color: rgba(109, 90, 120, 0.78);
+    background: rgba(27, 31, 39, 0.9);
+    border-color: rgba(58, 65, 77, 0.9);
     color: var(--ink-muted);
   }
 
@@ -222,20 +156,83 @@ const pageStyles = `
     color: #fff7f7;
   }
 
-  .nav-link:hover,
   .button-link:hover,
   button:hover {
     transform: translateY(-1px);
   }
 
+  .page-frame {
+    display: grid;
+    gap: 16px;
+  }
+
+  .single-slogan {
+    margin: 0;
+    padding: 6px 4px 2px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(1.9rem, 7vw, 2.65rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  .bottom-shuttle {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    z-index: 20;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .shuttle-track {
+    pointer-events: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+    padding: 8px;
+    border: 1px solid rgba(58, 65, 77, 0.95);
+    border-radius: 999px;
+    background: rgba(20, 23, 29, 0.94);
+    box-shadow: 0 18px 36px rgba(3, 4, 7, 0.42);
+    scrollbar-width: none;
+  }
+
+  .shuttle-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shuttle-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .shuttle-item.is-active {
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    color: #1b1218;
+    box-shadow: var(--shadow-card);
+  }
+
   .session-banner {
-    margin-top: -6px;
+    margin-top: -2px;
     width: fit-content;
     max-width: 100%;
     padding: 8px 12px;
     border-radius: 999px;
-    border: 1px solid rgba(109, 90, 120, 0.42);
-    background: rgba(31, 25, 37, 0.58);
+    border: 1px solid rgba(58, 65, 77, 0.5);
+    background: rgba(20, 23, 29, 0.7);
     color: var(--ink-soft);
     font-size: 12px;
   }
@@ -735,9 +732,7 @@ const baseClientScript = `
 const renderShell = (input: {
   title: string;
   body: string;
-  subtitle?: string;
   script?: string;
-  eyebrow?: string;
 }) => `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -748,20 +743,10 @@ const renderShell = (input: {
   </head>
   <body>
     <div class="shell">
-      <section class="hero">
-        <div class="hero-head">
-          ${input.eyebrow ? `<div class="eyebrow">${input.eyebrow}</div>` : ""}
-          <div class="top-nav">
-            <a class="nav-link" href="/">人物馆</a>
-            <a class="nav-link" href="/create">创建对象</a>
-            <a class="nav-link" href="/review">审核台</a>
-          </div>
-          <h1 class="hero-title">${input.title}</h1>
-          ${input.subtitle ? `<p class="hero-copy">${input.subtitle}</p>` : ""}
-        </div>
-      </section>
-      <div data-session-slot></div>
-      ${input.body}
+      <div class="page-frame">
+        <div data-session-slot></div>
+        ${input.body}
+      </div>
     </div>
     <script>${baseClientScript}</script>
     <script>${input.script ?? ""}</script>
@@ -827,8 +812,30 @@ const renderStaticBubble = (role: "assistant" | "user", label: string, content: 
   </div>
 `;
 
+const renderBottomShuttle = (current: "home" | "create" | "review" | "profile") => `
+  <nav class="bottom-shuttle" aria-label="主导航">
+    <div class="shuttle-track">
+      ${[
+        { id: "home", label: "聊天", href: "/" },
+        { id: "create", label: "创建", href: "/create" },
+        { id: "review", label: "审核", href: "/review" },
+        { id: "profile", label: "我的", href: "/share/demo" },
+      ]
+        .map(
+          (item) => `
+            <a class="shuttle-item ${item.id === current ? "is-active" : ""}" href="${item.href}">
+              <span>${item.label}</span>
+            </a>
+          `,
+        )
+        .join("")}
+    </div>
+  </nav>
+`;
+
 export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   <div class="stage page-stack">
+    <p class="single-slogan">只差一句开场。</p>
     <section class="chat-shell">
       <div class="chat-log">
         ${renderStaticBubble("assistant", "Persona", "今晚不必急着解释自己。你先问一句，我会顺着那句话靠近你。")}
@@ -859,6 +866,7 @@ export const buildFeaturedListBody = (items: FeaturedItem[]) => `
         )
         .join("")}
     </section>
+    ${renderBottomShuttle("home")}
   </div>
 `;
 

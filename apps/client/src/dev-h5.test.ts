@@ -24,20 +24,35 @@ test("reply inspector hides raw system adjudication wording by default", () => {
   assert.match(markup, /人物画像中的判断框架/);
 });
 
-test("home page reads like a mobile-first persona hall instead of a plain card grid", () => {
+test("home shell uses a bottom shuttle nav instead of top pills", () => {
   const body = buildFeaturedListBody([
     {
       id: "persona-1",
       displayName: "苏轼",
-      previewIntro: "在失意与豁达之间找到生命张力的文人。",
-      recommendedQuestions: ["人处在低谷时，怎么和自己相处？"],
+      previewIntro: "今夜你会先把什么说出口？",
+      recommendedQuestions: [],
       originType: "OFFICIAL",
     },
   ]);
 
-  assert.match(body, /bubble assistant/);
-  assert.match(body, /进入对话/);
-  assert.doesNotMatch(body, /今夜先从这里开始|先从一句问题开始|Step 1|Chat-first entry|每张人物卡只保留最值得开口的线索|Curated Personas/);
+  assert.match(body, /bottom-shuttle/);
+  assert.match(body, /shuttle-track/);
+  assert.doesNotMatch(body, /top-nav|nav-link/);
+});
+
+test("home shell keeps only one short slogan above the fold", () => {
+  const body = buildFeaturedListBody([
+    {
+      id: "persona-1",
+      displayName: "苏轼",
+      previewIntro: "今夜你会先把什么说出口？",
+      recommendedQuestions: [],
+      originType: "OFFICIAL",
+    },
+  ]);
+
+  assert.match(body, /只差一句开场/);
+  assert.doesNotMatch(body, /产品说明|进入人物馆|进入对话预览/);
 });
 
 test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
