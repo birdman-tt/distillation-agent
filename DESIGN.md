@@ -1,49 +1,53 @@
 # Hall of Fame Design System
 
-Version: 0.1
-Status: Drafted for implementation
-Primary references: Claude design language for warmth and editorial tone; Notion design language for restraint, structure, and functional clarity.
+Version: 0.2
+Status: Approved direction for redesign
+Primary references: current virtual companion chat products, refined into a mobile private-chat language for Hall of Fame.
 
 ## 1. Product Intent
 
-Hall of Fame is not a dashboard and not a generic AI utility.
-It should feel like entering a living collection of people you can talk to.
+Hall of Fame should feel like opening a private conversation, not entering a product catalog.
 
 The product promise is:
 
-- you are meeting a persona, not querying a database
-- the interface should support intimacy and thoughtfulness, not speed-run productivity
-- the primary emotional tone is warm, composed, and literate
-- the UI must make chat feel like the center of gravity, with all other flows orbiting around it
+- you are entering a live chat with a persona, not browsing a tool
+- the interface should feel intimate, immediate, and slightly charged
+- the primary emotional tone is private nocturne, not editorial warmth
+- all non-chat flows should feel like orbiting utilities around the conversation
 
 This system is mobile-first and chat-first.
-If a design decision improves the conversation experience on a phone but weakens desktop density, choose the mobile conversation experience.
+If a design decision improves the feeling of a private conversation on a phone but weakens desktop density or feature discoverability, choose the conversation feeling.
 
 ## 2. Design Principles
 
-### 2.1 Persona First
+### 2.1 Chat Window First
 
-The interface must always foreground who the user is talking to before it foregrounds controls, metadata, or system state.
+The interface must feel like a messaging app before it feels like a profile, card system, or content browser.
 
-### 2.2 Warm, Not Cute
+### 2.2 Private, Not Decorative
 
-The product should feel human and refined, but never playful, childish, or mascot-driven.
+The product should feel intimate and slightly ambiguous, but never ornamental, cute, or theatrical.
 
-### 2.3 Editorial, Not Corporate
+### 2.3 Action Color Must Work
 
-Typography, spacing, and pacing should feel closer to a well-designed essay or printed profile than to a SaaS console.
+Theme color is not for painting the whole page.
+It exists to carry interaction: user bubble, send button, selected state, and current navigation item.
 
-### 2.4 Calm Utility
-
-Functional surfaces like creation, review, and preview pages may be simpler and more operational, but they must still inherit the same warm material language.
-
-### 2.5 Hidden Machinery
+### 2.4 Hidden Machinery
 
 System logic, inference jargon, and internal decisioning should stay behind the curtain unless the user explicitly asks to inspect them.
 
-### 2.6 Mobile Thumb Priority
+### 2.5 Bottom-Thumb Priority
 
-Primary actions, send controls, suggested prompts, and navigation must sit in comfortable thumb zones on a typical phone viewport around 390px wide.
+Primary actions and navigation must live in the lower reach zone on a typical phone viewport around 390px wide.
+
+### 2.6 One Strong Thing Per Screen
+
+Each primary screen should have one obvious visual center:
+
+- home: the current persona carousel card
+- persona page: the message flow
+- share page: the conversation entry point
 
 ## 3. Platform Priority
 
@@ -69,65 +73,70 @@ The desired atmosphere is:
 - intimate
 - private
 - slightly ambiguous
-- composed
 - nocturnal
-- literary
+- magnetic
+- emotionally restrained
 
 The product must not feel:
 
-- gamified
-- futuristic
-- neon
+- catalog-like
 - dashboard-heavy
-- aggressively minimalist
-- productivity-bro
+- line-led
+- explainer-heavy
+- gamified
+- corporate
 
-If a page can be described as "looks like admin software", it is wrong.
+If a page can be described as "looks like admin software" or "looks like a content card feed", it is wrong.
 
 ## 5. Visual Language
 
 ### 5.1 Material Direction
 
-The base world is private nocturne: dark lacquer, warm ink, dusty rose light, and quiet borders.
-Depth comes from layered darkness, selective glow, and restraint, not from glossy gradients or hard shadows.
+The base world is a private chat at night: near-black backdrop, calm surfaces, one active accent, and almost no decorative framing.
+Depth comes from layered darkness and clear interaction hierarchy, not from card stacks or border choreography.
 
 Preferred material cues:
 
-- deep plum or ink-black canvases
-- softly lifted night surfaces
-- warm parchment text
-- dusty rose / muted mauve accents
-- quiet borders
-- soft glow instead of bright contrast
+- near-black canvases
+- darker header bars than the message field
+- one clear action color
+- assistant surfaces that stay neutral
+- user surfaces that carry the product's emotional accent
+- soft edge separation, not loud outlines
 
 Avoid:
 
-- cold blue-gray canvases
-- purple-led AI aesthetics
-- glassmorphism
-- oversized glowing effects
-- hard black-and-white contrast blocks except where deliberately needed
+- making the whole page one tinted color
+- border-first design
+- multiple competing accents
+- bright social-app blue
+- decorative gradients as the main identity
 
 ### 5.2 Color System
 
+Color should be role-based, not wash-based.
+
 Core palette:
 
-- Canvas: `#17131b`
-- Elevated canvas: `#211a26`
-- Soft alternate surface: `#2a2231`
-- Primary ink: `#f4e7dc`
-- Secondary ink: `#d2c0b5`
-- Hairline border: `#4f4158`
-- Emphasis border: `#6d5a78`
-- Brand accent: `#d1a1b4`
-- Brand accent deep: `#a46d87`
-- Accent wash: `#382a36`
-- Success: `#5e9b82`
-- Warning: `#c4945b`
-- Danger: `#c56d83`
+- Canvas: `#0f1115`
+- Header / chrome surface: `#14171d`
+- Assistant surface: `#1b1f27`
+- Alternate neutral surface: `#232833`
+- Primary ink: `#f6efe7`
+- Secondary ink: `#cabfb6`
+- Quiet ink: `#8c909d`
+- Hairline border: `#2a303a`
+- Emphasis border: `#3a414d`
+- User bubble accent: `#8f6376`
+- Send / active accent: `#d88aa4`
+- Accent press / deep state: `#b46f88`
+- Accent wash: `#2f222a`
+- Success: `#5f9f85`
+- Warning: `#bf8e58`
+- Danger: `#bf667d`
 
-Interactive blue is allowed only for accessible focus states.
-It is not a brand color.
+Interactive blue is allowed only for accessibility focus states.
+It is never a brand color.
 
 ### 5.3 Contrast Rules
 
@@ -135,13 +144,14 @@ It is not a brand color.
 - Main canvases should prefer dark privacy over bright openness.
 - Metadata must remain readable, but it should not visually compete with persona content.
 - Destructive and warning colors should be warm and serious, not alarm-siren bright.
+- Theme color belongs to action and ownership, not to every surface.
 
 ## 6. Typography
 
 ### 6.1 Tone
 
-Typography must carry the product.
-The system should feel like reading a profile, a notebook, or correspondence, not a software table.
+Typography should support intimacy, not exposition.
+The system should feel closer to a private chat app than to a reading surface or dashboard.
 
 ### 6.2 Font Roles
 
@@ -157,31 +167,31 @@ Recommended fallback stack for current implementation:
 
 ### 6.3 Hierarchy
 
-- Hero title: 36-44px, serif, medium weight, tight line height
-- Page title: 28-34px, serif
-- Card title: 22-24px, serif
-- Section title: 18-20px, sans or serif depending on emotional weight
-- Body: 16-17px, sans, line-height 1.6
-- Bubble text: 16px, line-height 1.65
+- Hero title: 32-40px, serif, medium weight, tight line height
+- Page title: 24-30px, serif
+- Card title: 20-24px, serif
+- Section title: 16-18px, sans
+- Body: 15-16px, sans, line-height 1.55
+- Bubble text: 16px, line-height 1.6
 - Meta: 13-14px, muted
 - Badge: 12-13px, medium
 
 ### 6.4 Typographic Rules
 
-- Serif is for presence, not everywhere.
-- Sans handles forms, controls, labels, and secondary reading.
+- Serif is for emotional anchors and hero moments, not for every screen label.
+- Sans handles messages, controls, labels, and metadata.
 - Do not use all caps for major headings.
-- Suggested prompts should read like invitations, not chips from a component kit.
+- Message UI should never feel typographically overloaded.
 
 ## 7. Layout Principles
 
 ### 7.1 Mobile Stack
 
-Most pages should read as a vertical narrative:
+Most pages should read as a direct conversation path:
 
 - identity
-- prompt to act
-- content
+- conversation
+- action
 - secondary detail
 
 Do not default to two-column layouts on mobile.
@@ -190,11 +200,11 @@ Do not default to two-column layouts on mobile.
 
 - Main reading column on mobile: full width minus 16px side padding
 - Main reading column on desktop: cap around 720-820px for conversation-heavy surfaces
-- Card grids may widen on desktop, but chat should remain readable and narrow enough to feel personal
+- Carousel and chat may widen on desktop, but the conversation lane should still feel personal and app-like rather than web-layout wide
 
 ### 7.3 Spacing Rhythm
 
-Use an 8px base with a soft editorial scale:
+Use an 8px base with a calm mobile-chat scale:
 
 - 8px micro spacing
 - 12px control spacing
@@ -207,28 +217,39 @@ Use an 8px base with a soft editorial scale:
 
 ### 8.1 Chat Bubble
 
-The chat bubble is the most important component in the system.
+The chat bubble is the primary brand surface of the product.
 
 User bubble:
 
-- darker plum or smoke surface
-- compact
+- carries the emotional theme color
+- softer and darker than the send button
 - aligned to the right
-- visually quieter than the assistant bubble
+- readable but clearly owned by the user
 
 Assistant bubble:
 
-- warmer but still dark surface
-- slightly softer edge
-- more breathing room
+- neutral dark surface
+- clearly lifted off the background
 - aligned to the left
-- should feel whispered, not machine printed
+- should feel calm and human, not system-generated
 
 Never attach raw system text directly under every reply.
 If rationale is available, expose it via a quiet disclosure affordance.
-The default state must look like an ongoing conversation, not a trace viewer.
+The default state must look like an ongoing private conversation, not a trace viewer.
 
-### 8.2 Reply Inspector
+### 8.2 Chat Header
+
+The persona page header should behave like a messaging app header.
+
+Rules:
+
+- independent bar from the message field
+- only persona name and a very short status line
+- no persona summary paragraph
+- no metadata chips
+- no secondary explanation block
+
+### 8.3 Reply Inspector
 
 This is the "这句话怎么来的" affordance.
 
@@ -240,31 +261,31 @@ Rules:
 - no raw model jargon
 - no raw internal enums
 
-### 8.3 Persona Card
+### 8.4 Persona Card
 
-Used on home, share entry, and persona listing surfaces.
+Used primarily on the home carousel.
 
 Must include:
 
-- identity marker
-- one-line persona introduction
-- a small number of suggested conversation hooks
+- name
+- one-line hook that creates the urge to enter the conversation
+- light identity imagery or atmospheric portrait treatment
 
-Must not look like a product SKU card.
+Must feel like an emotional entry point, not a SKU card or profile tile.
 
-### 8.4 Suggested Question
+### 8.5 Bottom Shuttle Navigation
 
-Suggested prompts should feel like conversation starters.
+Global navigation should live at the bottom and behave like a shuttle, not a generic tab bar.
 
 Rules:
 
-- sentence case
-- comfortable touch target
-- visually softer than a primary button
-- should read like intimate openings, not action chips
-- can look like folded notes or quiet prompt bubbles rather than pills from a SaaS component library
+- horizontally scrollable when needed
+- low-profile by default
+- current destination clearly active
+- shaped like a contained track, not floating pills scattered across the screen
+- should feel tactile and thumb-friendly
 
-## 8.5 Slogan Discipline
+### 8.6 Slogan Discipline
 
 Each page should try to survive on one line of promise.
 
@@ -274,89 +295,99 @@ Rules:
 - do not stack explanatory cards near the top of chat-first pages
 - if a sentence explains the system instead of deepening the mood, remove it
 
-### 8.5 Inputs
+### 8.7 Inputs
 
 Inputs should feel calm and tactile.
 
 Rules:
 
 - generous radius
-- warm border
-- white or near-white fill
+- dark field
+- quiet neutral edge
 - no hard blue default chrome
 - focus ring may use accessible blue, but only on focus
 
-### 8.6 Buttons
+### 8.8 Buttons
 
 Primary:
 
-- terracotta fill
-- light text
-- rounded
-- solid but not loud
+- same family as the user bubble accent
+- brighter and more legible than the bubble
+- clearly the strongest action surface on the screen
 
 Secondary:
 
-- warm neutral fill or ghost
-- dark text
-- visible border
+- neutral dark surface
+- light text
+- quiet border
 
 Danger:
 
-- warm red-brown, not bright red
+- warm muted red
+- serious, not alarm-bright
 
 ## 9. Page Patterns
 
 ### 9.1 Home / Hall
 
-The homepage is not a catalog grid first.
-It is an invitation into a curated hall of personalities.
+The homepage is a conversation launcher.
+It is not a catalog grid, feature list, or explainer.
 
 Must communicate:
 
-- this is a place of people, not tools
-- each entry is a different voice
-- you can enter quickly
+- pick someone
+- feel the mood
+- enter chat immediately
 
 The first screen on mobile should privilege:
 
-- title
-- short product promise
-- one or two featured entries
+- one strong slogan
+- one current persona carousel card
+- side peeks of adjacent cards to signal swipe
+- direct tap entry into conversation
+
+Rules:
+
+- no long descriptive copy
+- no stacked feature cards near the top
+- the current card should dominate the screen
+- each card should carry name, hook line, and identity imagery with roughly equal emotional weight
+- carousel should be hand-driven, never auto-rotating
 
 ### 9.2 Persona Detail Page
 
-This page should quickly answer:
+This page should feel like a messaging app thread.
 
-- who is this
-- what is the tone
-- what kinds of questions fit naturally
-- how do I start chatting
+Rules:
 
-Chat should appear early.
-Do not bury it beneath long metadata.
+- chat must occupy the visual center immediately
+- the first visible message should be from the persona
+- no suggested question rail
+- no descriptive block between the header and the messages
+- composer is fixed and visually primary
+- all non-chat context must be either folded away or absent
 
 ### 9.3 Share Page
 
-The share page is the fastest path to conversation.
+The share page is the fastest path into the same private-chat feeling.
 
 Rules:
 
-- lighter than the full persona page
-- less operational detail
-- stronger emotional framing
-- prompt to start chat should be above the fold
+- should look like the persona page's lighter sibling
+- preserve the header and bubble language
+- reduce any operational or provenance text
+- entry to chat must sit above the fold
 
 ### 9.4 Create Page
 
-Creation should feel like shaping a persona, not filling a ticket.
+Creation should still feel like shaping a conversation partner, not filling a product form.
 
 Rules:
 
-- break tasks into clear stages
-- use warm guidance copy
-- keep system status visible but low-drama
-- preserve a sense of authorship
+- keep the steps visually restrained
+- use short prompts, not explanatory paragraphs
+- preserve clear action hierarchy
+- avoid turning the page into a management console
 
 ### 9.5 Preview Page
 
@@ -371,12 +402,12 @@ Rules:
 ### 9.6 Review Page
 
 This is the only page allowed to lean more operational.
-Even here, it should still inherit the warm system.
+Even here, it should still inherit the same dark-chat system.
 
 Rules:
 
 - clear queues
-- calm borders
+- restrained panels
 - readable status treatment
 - no harsh back-office aesthetic
 
@@ -387,8 +418,8 @@ Motion should be subtle and purposeful.
 Allowed:
 
 - gentle fade/slide on page entry
-- staggered reveal for suggested questions
 - small send-state transitions
+- soft carousel movement
 - soft details expansion
 
 Avoid:
@@ -436,13 +467,15 @@ Do:
 - design for the first thumb reach
 - let the persona lead the page
 - keep chat visually central
-- use warm neutrals everywhere
+- make action color work hard
+- use neutral dark surfaces everywhere else
 - make detail disclosure optional and quiet
 - preserve enough whitespace for reading
 
 Do not:
 
 - make the product look like a moderation console
+- let borders do the work of hierarchy
 - center design around cards before conversation
 - use multiple saturated accent colors
 - expose inference jargon by default
