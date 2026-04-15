@@ -93,15 +93,16 @@ test("persona page behaves like a messaging thread", () => {
   assert.doesNotMatch(body, /data-suggested-question=|人物气质|回答样本|prompt-cluster/);
 });
 
-test("creation and review flows keep the same warm editorial product language", () => {
+test("supporting pages inherit the same dark-chat shell", () => {
   const createPage = buildCreatePageBody();
   const reviewPage = buildReviewPageBody();
 
-  assert.match(createPage, /资料簿/);
-  assert.match(createPage, /先给这个人格一个名字/);
-  assert.doesNotMatch(createPage, /Step 1|Step 2/);
-  assert.match(reviewPage, /待审发布/);
-  assert.doesNotMatch(reviewPage, /Reviewer session|Source review|Publish review/);
+  assert.match(createPage, /bottom-shuttle/);
+  assert.match(createPage, /quiet-panel|composer-shell/);
+  assert.doesNotMatch(createPage, /hero|top-nav|Step 1/);
+
+  assert.match(reviewPage, /bottom-shuttle/);
+  assert.doesNotMatch(reviewPage, /hero|section-label|Source review/);
 });
 
 test("session banner keeps auth state human and hides raw technical identifiers", () => {
