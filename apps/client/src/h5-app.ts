@@ -588,20 +588,21 @@ const pageStyles = `
     gap: 8px;
     padding: 14px 16px;
     border-radius: var(--radius-bubble);
-    border: 1px solid rgba(122, 104, 135, 0.58);
-    box-shadow: 0 12px 28px rgba(5, 3, 9, 0.26);
+    border: 1px solid rgba(58, 65, 77, 0.82);
+    box-shadow: 0 12px 28px rgba(5, 6, 9, 0.26);
     animation: bubble-rise ${uiTokens.motion.chatRevealMs}ms ease;
     max-width: 88%;
   }
 
   .bubble.user {
     margin-left: auto;
-    background: linear-gradient(180deg, rgba(95, 63, 88, 0.96), rgba(71, 47, 67, 0.94));
+    background: linear-gradient(180deg, color-mix(in srgb, var(--user-bubble) 88%, black), color-mix(in srgb, var(--accent-wash) 78%, black));
+    border-color: color-mix(in srgb, var(--user-bubble) 62%, var(--line));
   }
 
   .bubble.assistant {
     margin-right: auto;
-    background: linear-gradient(180deg, rgba(52, 41, 63, 0.98), rgba(39, 31, 48, 0.96));
+    background: linear-gradient(180deg, rgba(27, 31, 39, 0.98), rgba(20, 23, 29, 0.96));
   }
 
   .bubble-label {
@@ -643,6 +644,65 @@ const pageStyles = `
     gap: 12px;
   }
 
+  .thread-screen {
+    display: grid;
+    gap: 12px;
+  }
+
+  .thread-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(58, 65, 77, 0.9);
+    border-radius: 22px;
+    background: rgba(20, 23, 29, 0.94);
+    box-shadow: 0 10px 20px rgba(3, 4, 7, 0.24);
+    backdrop-filter: blur(14px);
+  }
+
+  .thread-name {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: clamp(1.35rem, 5vw, 1.8rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .thread-status {
+    margin: 4px 0 0;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .message-list {
+    display: grid;
+    gap: 12px;
+    padding: 8px 0 2px;
+    min-height: 52vh;
+  }
+
+  .composer-shell {
+    position: sticky;
+    bottom: 86px;
+    z-index: 3;
+    padding: 10px;
+    border: 1px solid rgba(58, 65, 77, 0.92);
+    border-radius: 24px;
+    background: rgba(20, 23, 29, 0.94);
+    box-shadow: 0 18px 36px rgba(3, 4, 7, 0.34);
+    backdrop-filter: blur(14px);
+  }
+
+  .composer {
+    display: grid;
+    gap: 10px;
+  }
+
   .chat-composer textarea,
   input,
   textarea,
@@ -660,6 +720,12 @@ const pageStyles = `
     min-height: 104px;
     line-height: 1.6;
     resize: vertical;
+  }
+
+  .composer textarea {
+    min-height: 92px;
+    line-height: 1.6;
+    resize: none;
   }
 
   .composer-actions {
@@ -976,29 +1042,27 @@ export const buildFeaturedListBody = (items: FeaturedItem[]) => `
 
 export const buildPersonaPageBody = (detail: PersonaDetail) => `
   <div class="stage page-stack">
-    <section class="chat-shell">
-      <span class="badge">${escapeHtml(detail.persona.originType)}</span>
-      <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
-      <div class="chat-log" data-chat-log>
-        ${renderStaticBubble("assistant", "Persona", detail.version.sampleAnswers[0] ?? detail.version.previewIntro ?? "先开口吧。")}
-        ${renderStaticBubble("user", "You", detail.version.recommendedQuestions[0] ?? "如果现在要开口，你会先说什么？")}
+    <section class="thread-screen">
+      <header class="thread-header">
+        <div>
+          <h1 class="thread-name">${escapeHtml(detail.persona.displayName)}</h1>
+          <p class="thread-status">在线，等你先开口</p>
+        </div>
+      </header>
+      <div class="message-list" data-chat-log>
+        ${renderStaticBubble("assistant", "Persona", detail.version.previewIntro ?? detail.version.sampleAnswers[0] ?? "先开口吧。")}
       </div>
-      <div class="prompt-cluster">
-        ${detail.version.recommendedQuestions
-          .slice(0, 3)
-          .map((question) => renderQuestionPrompt(question))
-          .join("")}
-      </div>
-      <div class="chat-composer">
-        <form data-chat-form class="chat-composer">
-          <textarea placeholder="输入一个问题，比如：面对冲突时会先考虑什么？"></textarea>
+      <section class="composer-shell">
+        <form data-chat-form class="composer">
+          <textarea placeholder="发一句今晚想说的话"></textarea>
           <div class="composer-actions">
-            <button type="submit">发送问题</button>
+            <button type="submit">发送</button>
           </div>
         </form>
         <div class="status-line" data-chat-status></div>
-      </div>
+      </section>
     </section>
+    ${renderBottomShuttle("home")}
   </div>
 `;
 

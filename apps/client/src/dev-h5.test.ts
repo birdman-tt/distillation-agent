@@ -72,7 +72,7 @@ test("home page centers one persona carousel card with side peeks", () => {
   assert.doesNotMatch(body, /persona-topline|prompt-cluster|question-slip|persona-card/);
 });
 
-test("persona page surfaces suggested prompts as tap-friendly chat starters", () => {
+test("persona page behaves like a messaging thread", () => {
   const body = buildPersonaPageBody({
     persona: {
       displayName: "苏轼",
@@ -86,11 +86,11 @@ test("persona page surfaces suggested prompts as tap-friendly chat starters", ()
     },
   });
 
-  assert.match(body, /bubble assistant/);
-  assert.match(body, /bubble user/);
-  assert.match(body, /data-suggested-question=/);
-  assert.match(body, /发送问题/);
-  assert.doesNotMatch(body, /人物气质|回答样本|Chat-first persona|先让苏轼开口/);
+  assert.match(body, /thread-header/);
+  assert.match(body, /thread-status/);
+  assert.match(body, /message-list/);
+  assert.match(body, /composer/);
+  assert.doesNotMatch(body, /data-suggested-question=|人物气质|回答样本|prompt-cluster/);
 });
 
 test("creation and review flows keep the same warm editorial product language", () => {
