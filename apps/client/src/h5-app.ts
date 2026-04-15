@@ -229,13 +229,15 @@ const pageStyles = `
   }
 
   .session-banner {
-    margin-top: -4px;
-    padding: 12px 14px;
-    border-radius: 18px;
-    border: 1px solid rgba(109, 90, 120, 0.56);
-    background: rgba(31, 25, 37, 0.8);
-    color: var(--ink-muted);
-    font-size: 14px;
+    margin-top: -6px;
+    width: fit-content;
+    max-width: 100%;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(109, 90, 120, 0.42);
+    background: rgba(31, 25, 37, 0.58);
+    color: var(--ink-soft);
+    font-size: 12px;
   }
 
   .page-stack {
@@ -410,6 +412,12 @@ const pageStyles = `
     font-weight: 600;
   }
 
+  .prompt-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .question-slip button,
   .question-slip .button-link,
   .prompt-button {
@@ -422,10 +430,13 @@ const pageStyles = `
 
   .prompt-button {
     justify-content: flex-start;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
+    min-height: 38px;
+    padding: 9px 14px;
     background: rgba(45, 34, 52, 0.9);
     text-align: left;
-    border-radius: 20px;
+    border-radius: 999px;
   }
 
   .stack {
@@ -484,11 +495,11 @@ const pageStyles = `
   }
 
   .bubble-label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #e8bdd0;
+    color: #ddb8c8;
   }
 
   .bubble-copy {
@@ -536,7 +547,7 @@ const pageStyles = `
   }
 
   .chat-composer textarea {
-    min-height: 132px;
+    min-height: 104px;
     line-height: 1.6;
     resize: vertical;
   }
@@ -544,7 +555,7 @@ const pageStyles = `
   .composer-actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 10px;
     align-items: center;
   }
@@ -701,23 +712,12 @@ const baseClientScript = `
     return session;
   };
 
-  const renderSession = () => {
-    const slot = document.querySelector("[data-session-slot]");
-    if (!slot) return;
-    const session = readSession();
-    if (!session) {
-      slot.innerHTML = '<div class="session-banner">你现在还没有身份。进入创建页会先自动领取匿名会话。</div>';
-      return;
-    }
-    slot.innerHTML =
-      '<div class="session-banner">当前身份：<strong>' +
-      session.role +
-      '</strong> / ' +
-      session.sessionKind +
-      ' / user ' +
-      session.userId.slice(0, 8) +
-      '</div>';
-  };
+	  const renderSession = () => {
+	    const slot = document.querySelector("[data-session-slot]");
+	    if (!slot) return;
+	    const session = readSession();
+	    slot.innerHTML = ${"buildSessionBannerHtml(session)"};
+	  };
 
   window.HallOfFameClient = {
     API_BASE_URL,
@@ -804,6 +804,22 @@ type PersonaDetail = {
 const renderQuestionPrompt = (question: string, attrs = "") =>
   `<button type="button" class="prompt-button" data-suggested-question="${escapeHtml(question)}" ${attrs}>${escapeHtml(question)}</button>`;
 
+export const buildSessionBannerHtml = (session: { role?: string | null; sessionKind?: string | null; userId?: string | null } | null) => {
+  if (!session) {
+    return '<div class="session-banner">进入创建页时会先替你领一枚匿名会话。</div>';
+  }
+
+  if (session.role === "REVIEWER") {
+    return '<div class="session-banner">reviewer 身份已启用。</div>';
+  }
+
+  if (session.role === "USER") {
+    return '<div class="session-banner">你的会话已经连上了。</div>';
+  }
+
+  return '<div class="session-banner">匿名会话已就绪。</div>';
+};
+
 const renderStaticBubble = (role: "assistant" | "user", label: string, content: string) => `
   <div class="bubble ${role}">
     <div class="bubble-label">${escapeHtml(label)}</div>
@@ -832,14 +848,11 @@ export const buildFeaturedListBody = (items: FeaturedItem[]) => `
                 <h3 class="persona-name">${escapeHtml(item.displayName)}</h3>
                 <p class="persona-intro">${escapeHtml(item.previewIntro ?? "暂无导语")}</p>
               </div>
-              <div class="stack">
-                <p class="section-label">先从一句问题开始</p>
-                <div class="question-list">
-                  ${item.recommendedQuestions
-                    .slice(0, 2)
-                    .map((question) => `<div class="question-slip"><strong>${escapeHtml(question)}</strong></div>`)
-                    .join("")}
-                </div>
+              <div class="prompt-cluster">
+                ${item.recommendedQuestions
+                  .slice(0, 1)
+                  .map((question) => `<div class="question-slip"><strong>${escapeHtml(question)}</strong></div>`)
+                  .join("")}
               </div>
             </article>
           `,
@@ -853,28 +866,21 @@ export const buildPersonaPageBody = (detail: PersonaDetail) => `
   <div class="stage page-stack">
     <section class="chat-shell">
       <span class="badge">${escapeHtml(detail.persona.originType)}</span>
-      <div class="stack">
-        <h2 class="page-title">先让${escapeHtml(detail.persona.displayName)}开口</h2>
-        <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
-      </div>
+      <p class="page-subtitle">${escapeHtml(detail.version.previewIntro ?? "暂无导语")}</p>
       <div class="chat-log" data-chat-log>
         ${renderStaticBubble("assistant", "Persona", detail.version.sampleAnswers[0] ?? detail.version.previewIntro ?? "先开口吧。")}
         ${renderStaticBubble("user", "You", detail.version.recommendedQuestions[0] ?? "如果现在要开口，你会先说什么？")}
       </div>
-      <div class="stack">
-        <div class="stack">
-          ${detail.version.recommendedQuestions
-            .slice(0, 3)
-            .map((question) => renderQuestionPrompt(question))
-            .join("")}
-        </div>
+      <div class="prompt-cluster">
+        ${detail.version.recommendedQuestions
+          .slice(0, 3)
+          .map((question) => renderQuestionPrompt(question))
+          .join("")}
       </div>
       <div class="chat-composer">
-        <h3>和${escapeHtml(detail.persona.displayName)}聊聊</h3>
         <form data-chat-form class="chat-composer">
           <textarea placeholder="输入一个问题，比如：面对冲突时会先考虑什么？"></textarea>
           <div class="composer-actions">
-            <span class="meta">默认是单轮对话，先看这个人格会怎么开口。</span>
             <button type="submit">发送问题</button>
           </div>
         </form>
@@ -1094,7 +1100,7 @@ const renderSharePage = async (shareSlug: string) => {
           <div class="chat-log" data-chat-log>
             ${renderStaticBubble("assistant", "Persona", landing.version.previewIntro ?? "先问一句。")}
           </div>
-          <div class="stack">
+          <div class="prompt-cluster">
             ${landing.version.recommendedQuestions.slice(0, 3).map((question) => renderQuestionPrompt(question)).join("")}
           </div>
           <form data-chat-form class="chat-composer">
