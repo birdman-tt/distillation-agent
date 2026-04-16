@@ -12,9 +12,12 @@
 
 ## 资料索引
 
-- [产品设计](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/product-design.md)
-- [技术方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/technical-architecture.md)
-- [实施计划](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/implementation-plan.md)
+- [产品设计](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/product-design.md)
+- [产品规格](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/product-specification.md)
+- [设计系统规范](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/design-system-specification.md)
+- [技术方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/technical-architecture.md)
+- [项目架构蓝图](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/Project_Architecture_Blueprint.md)
+- [实施计划](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/implementation-plan.md)
 
 ## 已确定的关键决策
 
