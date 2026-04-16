@@ -1,13 +1,11 @@
-import { chatSessionSchema } from "@hall-of-fame/contracts";
 import type { z } from "zod";
+
+import { chatSessionSchema } from "@hall-of-fame/contracts";
+
+import { getPersistedChatSession, savePersistedChatSession } from "../db/repositories/chat-repository.js";
 
 type ChatSession = z.infer<typeof chatSessionSchema>;
 
-const chats = new Map<string, ChatSession>();
+export const saveChatSession = async (session: ChatSession) => savePersistedChatSession(session);
 
-export const saveChatSession = (session: ChatSession) => {
-  chats.set(session.id, session);
-  return session;
-};
-
-export const getChatSession = (chatId: string) => chats.get(chatId) ?? null;
+export const getChatSession = async (chatId: string) => getPersistedChatSession(chatId);

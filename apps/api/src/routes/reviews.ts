@@ -22,7 +22,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const status = (request.query as { status?: string }).status;
-    const items = status && status !== "PENDING_REVIEW" ? [] : listPendingSourceReviews();
+    const items = status && status !== "PENDING_REVIEW" ? [] : await listPendingSourceReviews();
     return listPendingSourceReviewsResponseSchema.parse({ items });
   });
 
@@ -38,7 +38,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
       reason: (request.body as { reason?: string } | undefined)?.reason ?? "Approved by reviewer",
     });
 
-    const source = reviewSource(input.sourceId, {
+    const source = await reviewSource(input.sourceId, {
       reviewerUserId: actor.userId,
       decision: input.decision,
       reason: input.reason,
@@ -63,7 +63,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
       reason: (request.body as { reason?: string } | undefined)?.reason ?? "Rejected by reviewer",
     });
 
-    const source = reviewSource(input.sourceId, {
+    const source = await reviewSource(input.sourceId, {
       reviewerUserId: actor.userId,
       decision: input.decision,
       reason: input.reason,
@@ -82,7 +82,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const status = (request.query as { status?: string }).status;
-    const items = status && status !== "PENDING_PUBLISH_REVIEW" ? [] : listPendingPublishReviews();
+    const items = status && status !== "PENDING_PUBLISH_REVIEW" ? [] : await listPendingPublishReviews();
     return listPendingVersionReviewsResponseSchema.parse({ items });
   });
 
@@ -101,7 +101,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
       });
 
       try {
-        const result = reviewPublishRequest(input.personaVersionId, {
+        const result = await reviewPublishRequest(input.personaVersionId, {
           reviewerUserId: actor.userId,
           decision: input.decision,
           reason: input.reason,
@@ -137,7 +137,7 @@ export const reviewsRoute: FastifyPluginAsync = async (app) => {
         reason: (request.body as { reason?: string } | undefined)?.reason ?? "Rejected for publish",
       });
 
-      const result = reviewPublishRequest(input.personaVersionId, {
+      const result = await reviewPublishRequest(input.personaVersionId, {
         reviewerUserId: actor.userId,
         decision: input.decision,
         reason: input.reason,

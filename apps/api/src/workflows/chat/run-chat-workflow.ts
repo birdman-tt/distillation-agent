@@ -192,7 +192,7 @@ export const runChatWorkflow = async (input: {
     }
   }
 
-  const reply = createDynamicReply(runtimeContext.personaVersionId, input.content, classification);
+  const reply = await createDynamicReply(runtimeContext.personaVersionId, input.content, classification);
   if (reply) {
     return chatGenerationSchema.parse(reply);
   }

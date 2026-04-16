@@ -57,4 +57,10 @@ pnpm dev:client:h5
 pnpm dev:client:weapp
 ```
 
+数据库运行方式：
+
+- 如果你本地仍然跑 `infra/docker-compose.yml` 里的 Postgres，就直接填 `DATABASE_URL`
+- 如果你已经切到 Supabase Session Pooler，可以保留默认占位 `DATABASE_URL`，只填写 `POSTGRES_PASSWORD`
+- API 会在启动时优先使用显式 `DATABASE_URL`；如果它还是本地占位值且存在 `POSTGRES_PASSWORD`，会自动拼出当前项目的 Supabase Session Pooler 连接串
+
 Node 版本锁定为 `22`，`pnpm` 主版本锁定为 `10`。当前如果本机版本低于该约束，安装和 typecheck 仍可能通过，但不作为长期开发基线。

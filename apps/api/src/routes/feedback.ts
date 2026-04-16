@@ -22,7 +22,7 @@ export const feedbackRoute: FastifyPluginAsync = async (app) => {
     const actor = getActorSession(request);
     const input = createFeedbackSchema.parse(request.body);
 
-    return addFeedback({
+    return await addFeedback({
       ...input,
       createdByUserId: actor?.userId,
     });

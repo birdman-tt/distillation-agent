@@ -68,7 +68,7 @@ export const authRoute: FastifyPluginAsync = async (app) => {
       mergeFromAccessToken: request.headers.authorization?.toString().replace(/^Bearer\s+/i, ""),
     });
     if (mergedFromUserId) {
-      transferPersonaOwnership(mergedFromUserId, session.userId);
+      await transferPersonaOwnership(mergedFromUserId, session.userId);
     }
     return authSessionResponseSchema.parse({
       userId: session.userId,
@@ -85,7 +85,7 @@ export const authRoute: FastifyPluginAsync = async (app) => {
       mergeFromAccessToken: request.headers.authorization?.toString().replace(/^Bearer\s+/i, ""),
     });
     if (mergedFromUserId) {
-      transferPersonaOwnership(mergedFromUserId, session.userId);
+      await transferPersonaOwnership(mergedFromUserId, session.userId);
     }
     return authSessionResponseSchema.parse({
       userId: session.userId,

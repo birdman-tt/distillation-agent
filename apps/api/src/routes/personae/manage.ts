@@ -34,7 +34,7 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
     }
 
     const input = createPersonaSchema.parse(request.body);
-    const { persona } = createPersona({
+    const { persona } = await createPersona({
       ...input,
       creatorUserId: actor.userId,
     });
@@ -56,12 +56,12 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply;
     }
 
-    if (!canManagePersona(request.params.personaId, actor.userId, actor.role)) {
+    if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
     const input = updatePersonaSchema.parse(request.body);
-    const updated = updatePersona(request.params.personaId, input);
+    const updated = await updatePersona(request.params.personaId, input);
     if (!updated) {
       return reply.code(404).send({ message: "Persona not found" });
     }
@@ -78,7 +78,7 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { personaId: string } }>("/v1/personae/:personaId/status", async (request, reply) => {
-    const detail = getPersonaDetail(request.params.personaId);
+    const detail = await getPersonaDetail(request.params.personaId);
     if (!detail) {
       return reply.code(404).send({ message: "Persona not found" });
     }
@@ -92,7 +92,7 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { personaId: string } }>("/v1/personae/:personaId/versions", async (request) => {
     return personaVersionListResponseSchema.parse({
-      items: listPersonaVersions(request.params.personaId).map((version) =>
+      items: (await listPersonaVersions(request.params.personaId)).map((version) =>
         personaVersionResponseSchema.parse({
           id: version.id,
           personaId: version.personaId,
@@ -117,12 +117,12 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply;
     }
 
-    if (!canManagePersona(request.params.personaId, actor.userId, actor.role)) {
+    if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
     const input = createTextSourceSchema.parse(request.body);
-    const source = createTextSource(request.params.personaId, {
+    const source = await createTextSource(request.params.personaId, {
       ...input,
       submittedByUserId: actor.userId,
     });
@@ -139,13 +139,13 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply;
     }
 
-    if (!canManagePersona(request.params.personaId, actor.userId, actor.role)) {
+    if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
     try {
       const input = createUrlSourceSchema.parse(request.body);
-      const source = createUrlSource(request.params.personaId, {
+      const source = await createUrlSource(request.params.personaId, {
         ...input,
         submittedByUserId: actor.userId,
       });
@@ -154,7 +154,7 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       }
 
       const ingestResult = await ingestUrlSourceViaWorker(input);
-      persistUrlSourceIngestResult(source.id, ingestResult);
+      await persistUrlSourceIngestResult(source.id, ingestResult);
       return source;
     } catch (error) {
       return reply.code(400).send({
@@ -169,17 +169,17 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply;
     }
 
-    const detail = getPersonaDetail(request.params.personaId);
+    const detail = await getPersonaDetail(request.params.personaId);
     if (!detail || detail.persona.originType === "OFFICIAL") {
       return reply.code(404).send({ message: "Persona not found" });
     }
 
-    if (!canManagePersona(request.params.personaId, actor.userId, actor.role)) {
+    if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
     return listSourcesResponseSchema.parse({
-      items: listPersonaSources(request.params.personaId).map((source) => ({
+      items: (await listPersonaSources(request.params.personaId)).map((source) => ({
         id: source.id,
         personaId: source.personaId,
         inputType: source.inputType,
@@ -200,17 +200,17 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply;
     }
 
-    if (!canManagePersona(request.params.personaId, actor.userId, actor.role)) {
+    if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
     try {
-      const prepared = prepareDistillInput(request.params.personaId);
+      const prepared = await prepareDistillInput(request.params.personaId);
       if (!prepared) {
         return reply.code(404).send({ message: "Persona not found" });
       }
       const distilled = await distillPersonaViaWorker(prepared);
-      const result = persistDistilledVersion(request.params.personaId, actor.userId, distilled);
+      const result = await persistDistilledVersion(request.params.personaId, actor.userId, distilled);
       if (!result) {
         return reply.code(404).send({ message: "Persona not found" });
       }

@@ -24,7 +24,7 @@ import { runChatWorkflow } from "../workflows/chat/index.js";
 export const chatsRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/chats", async (request, reply) => {
     const input = createChatSchema.parse(request.body);
-    const resolved = resolveChatTarget(input);
+    const resolved = await resolveChatTarget(input);
 
     if (!resolved) {
       return reply.code(404).send({
@@ -35,7 +35,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     const actor = getActorSession(request);
     if (
       input.targetType === "draft_version_preview" &&
-      !canAccessPersonaVersion(resolved.personaVersionId, actor?.userId ?? null, actor?.role ?? null)
+      !(await canAccessPersonaVersion(resolved.personaVersionId, actor?.userId ?? null, actor?.role ?? null))
     ) {
       return reply.code(403).send({
         message: "You do not have access to this preview version",
@@ -51,12 +51,11 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       messages: [],
     });
 
-    saveChatSession(session);
-    return session;
+    return await saveChatSession(session);
   });
 
   app.get<{ Params: { chatId: string } }>("/v1/chats/:chatId", async (request, reply) => {
-    const session = getChatSession(request.params.chatId);
+    const session = await getChatSession(request.params.chatId);
 
     if (!session) {
       return reply.code(404).send({
@@ -80,7 +79,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const session = getChatSession(request.params.chatId);
+    const session = await getChatSession(request.params.chatId);
 
     if (!session) {
       return reply.code(404).send({
@@ -108,8 +107,8 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       createdAt: new Date().toISOString(),
     };
 
-    const dynamicVersion = getPersonaVersion(session.targetPersonaVersionId);
-    const dynamicPersona = session.targetPersonaId ? getPersonaDetail(session.targetPersonaId)?.persona ?? null : null;
+    const dynamicVersion = await getPersonaVersion(session.targetPersonaVersionId);
+    const dynamicPersona = session.targetPersonaId ? (await getPersonaDetail(session.targetPersonaId))?.persona ?? null : null;
     const rawReply = await runChatWorkflow({
       content: input.content,
       seed: officialSeed,
@@ -127,7 +126,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                 ...dynamicVersion.recommendedQuestions,
                 ...dynamicVersion.sampleAnswers,
               ],
-              evidence: listApprovedSourceEvidence(dynamicVersion.personaId),
+              evidence: await listApprovedSourceEvidence(dynamicVersion.personaId),
             }
           : undefined,
     });
@@ -152,7 +151,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     };
 
     session.messages.push(userMessage, assistantMessage);
-    saveChatSession(session);
+    await saveChatSession(session);
 
     return assistantMessage;
   });

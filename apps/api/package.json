@@ -17,6 +17,7 @@
     "@hall-of-fame/runtime-env": "workspace:*",
     "@fastify/cors": "^11.0.1",
     "fastify": "^5.4.0",
+    "postgres": "^3.4.7",
     "zod": "^4.0.0"
   }
 }

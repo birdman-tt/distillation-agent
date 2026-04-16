@@ -1,6 +1,8 @@
 import cors from "@fastify/cors";
+import { loadLocalEnv } from "@hall-of-fame/runtime-env";
 import Fastify from "fastify";
 
+import { ensureDatabaseSchema } from "./db/bootstrap.js";
 import { authRoute } from "./routes/auth.js";
 import { chatsRoute } from "./routes/chats.js";
 import { feedbackRoute } from "./routes/feedback.js";
@@ -10,6 +12,8 @@ import { featuredPersonaeRoute } from "./routes/personae/featured.js";
 import { personaeManageRoute } from "./routes/personae/manage.js";
 import { reviewsRoute } from "./routes/reviews.js";
 import { sharesRoute } from "./routes/shares.js";
+
+await loadLocalEnv();
 
 export const buildApiApp = () => {
   const app = Fastify({ logger: true });
@@ -23,6 +27,10 @@ export const buildApiApp = () => {
     ok: true,
     service: "hall-of-fame-api",
   }));
+
+  app.addHook("onReady", async () => {
+    await ensureDatabaseSchema();
+  });
 
   void app.register(authRoute);
   void app.register(featuredPersonaeRoute);

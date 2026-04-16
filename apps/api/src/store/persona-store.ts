@@ -3,6 +3,34 @@ import { randomUUID } from "node:crypto";
 import { defaultPublishQualityGate } from "@hall-of-fame/domain";
 
 import {
+  addDynamicFeedback,
+  canAccessDynamicPersonaVersion,
+  canManageDynamicPersona,
+  createDynamicPersona,
+  createDynamicShareForVersion,
+  createDynamicTextSource,
+  createDynamicUrlSource,
+  getDynamicPersonaDetail,
+  getDynamicPersonaVersion,
+  getDynamicShareLanding,
+  listApprovedDynamicSourceEvidence,
+  listDynamicPersonaSources,
+  listDynamicPersonaVersions,
+  listPendingDynamicPublishReviews,
+  listPendingDynamicSourceReviews,
+  persistDynamicDistilledVersion,
+  persistDynamicUrlSourceIngestResult,
+  resolveDynamicChatTarget,
+  reviewDynamicPublishRequest,
+  reviewDynamicSource,
+  submitDynamicPublishReview,
+  transferDynamicPersonaOwnership,
+  updateDynamicPersona,
+  type PersonaRecord,
+  type PersonaVersionRecord,
+  type SourceRecord,
+} from "../db/repositories/dynamic-persona-repository.js";
+import {
   findPersonaSeedByPersonaId,
   findPersonaSeedByShareSlug,
   findPersonaSeedByVersionId,
@@ -10,229 +38,20 @@ import {
 } from "../seed/official-personae.js";
 import { hashNormalizedUrl, normalizeUrl } from "../utils/url-safety.js";
 
-type PersonaRecord = {
-  id: string;
-  displayName: string;
-  originType: "OFFICIAL" | "USER";
-  personaType: "HISTORICAL_FIGURE" | "AUTHOR_OR_BLOGGER" | "ORIGINAL_PERSONA";
-  listingStatus: "PRIVATE" | "UNLISTED" | "FEATURED" | "REMOVED";
-  status: "DRAFT" | "PROCESSING" | "READY" | "PUBLISHED" | "REJECTED";
-  creatorUserId: string | null;
-  featuredRank: number | null;
-  currentDraftVersionId: string | null;
-  currentPublishedVersionId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type PersonaVersionRecord = {
-  id: string;
-  personaId: string;
-  versionNumber: number;
-  status: "DRAFT" | "CANDIDATE" | "PENDING_PUBLISH_REVIEW" | "PUBLISHED" | "SUPERSEDED" | "REJECTED";
-  profileJson: Record<string, unknown>;
-  distillFocus: string[];
-  previewIntro: string | null;
-  recommendedQuestions: string[];
-  sampleAnswers: string[];
-  coverageScore: number | null;
-  groundingScore: number | null;
-  styleScore: number | null;
-  riskScore: number | null;
-  createdByUserId: string | null;
-  submittedForPublishAt: string | null;
-  publishedAt: string | null;
-  supersededAt: string | null;
-  createdAt: string;
-};
-
-type SourceRecord = {
-  id: string;
-  personaId: string;
-  inputType: "TEXT" | "URL" | "OFFICIAL_SEED";
-  reviewStatus: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
-  sourceUrl: string | null;
-  sourceTitle: string | null;
-  sourceAuthor: string | null;
-  sourceSummary: string | null;
-  sourceKind: "PRIMARY" | "SECONDARY" | "SUMMARY";
-  sourcePublishedAt: string | null;
-  submittedByUserId: string | null;
-  normalizedUrl: string | null;
-  normalizedUrlHash: string | null;
-  trustScore: number | null;
-  reviewReason: string | null;
-  reviewedByUserId: string | null;
-  reviewedAt: string | null;
-  createdAt: string;
-};
-
-type SourceDocumentRecord = {
-  id: string;
-  sourceId: string;
-  title: string | null;
-  author: string | null;
-  url: string | null;
-  normalizedText: string;
-  contentHash: string;
-  fetchStatusCode: number | null;
-  fetchError: string | null;
-  fetchedAt: string | null;
-  createdAt: string;
-};
-
-type EvidenceSpanRecord = {
-  id: string;
-  documentId: string;
-  sectionLabel: string | null;
-  spanStart: number;
-  spanEnd: number;
-  normalizedQuote: string;
-  sourceKind: "PRIMARY" | "SECONDARY" | "SUMMARY";
-  trustScore: number | null;
-  dedupeGroupId: string | null;
-  conflictGroupId: string | null;
-  createdAt: string;
-};
-
-type ShareLinkRecord = {
-  id: string;
-  personaVersionId: string;
-  shareSlug: string;
-  canonicalUrl: string;
-  miniappPath: string;
-  channelHint: "H5" | "WECHAT_IN_APP" | "WECHAT_SHARE_CARD";
-  isPrimary: boolean;
-  isActive: boolean;
-  createdAt: string;
-};
-
-type PublishReviewRecord = {
-  id: string;
-  personaVersionId: string;
-  reviewerUserId: string;
-  decision: "APPROVED" | "REJECTED";
-  reason: string;
-  createdAt: string;
-};
-
-type SourceReviewRecord = {
-  id: string;
-  sourceId: string;
-  reviewerUserId: string;
-  decision: "APPROVED" | "REJECTED";
-  reason: string;
-  createdAt: string;
-};
-
-type FeedbackRecord = {
-  id: string;
-  personaId: string;
-  personaVersionId: string;
-  chatMessageId: string | null;
-  feedbackKind: string;
-  feedbackValue: string;
-  createdByUserId: string | null;
-  createdAt: string;
-};
-
-const dynamicPersonae = new Map<string, PersonaRecord>();
-const dynamicVersions = new Map<string, PersonaVersionRecord>();
-const sources = new Map<string, SourceRecord>();
-const sourceDocuments = new Map<string, SourceDocumentRecord>();
-const evidenceSpans = new Map<string, EvidenceSpanRecord>();
-const shares = new Map<string, ShareLinkRecord>();
-const sourceReviews: SourceReviewRecord[] = [];
-const publishReviews: PublishReviewRecord[] = [];
-const feedbackItems: FeedbackRecord[] = [];
-
 const nowIso = () => new Date().toISOString();
 
-const baseUrl = () => process.env.APP_BASE_URL ?? "http://localhost:3000";
+const getPersonaName = async (personaId: string) =>
+  (await getDynamicPersonaDetail(personaId))?.persona.displayName ??
+  findPersonaSeedByPersonaId(personaId)?.persona.displayName ??
+  "Unknown Persona";
 
-const createCanonicalUrl = (shareSlug: string) => `${baseUrl()}/share/${shareSlug}`;
-const createMiniappPath = (shareSlug: string) => `/pages/share/index?slug=${encodeURIComponent(shareSlug)}`;
-
-const slugify = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "persona";
-
-const getDynamicPersona = (personaId: string) => dynamicPersonae.get(personaId) ?? null;
-const getDynamicVersion = (versionId: string) => dynamicVersions.get(versionId) ?? null;
-
-const getPersonaName = (personaId: string) =>
-  getDynamicPersona(personaId)?.displayName ?? findPersonaSeedByPersonaId(personaId)?.persona.displayName ?? "Unknown Persona";
-
-const getVersionByPersona = (personaId: string) =>
-  [...dynamicVersions.values()]
-    .filter((item) => item.personaId === personaId)
-    .sort((a, b) => a.versionNumber - b.versionNumber);
-
-const deleteSourceDocuments = (sourceId: string) => {
-  const documentIds = [...sourceDocuments.values()].filter((item) => item.sourceId === sourceId).map((item) => item.id);
-  for (const documentId of documentIds) {
-    sourceDocuments.delete(documentId);
-    for (const [spanId, span] of evidenceSpans.entries()) {
-      if (span.documentId === documentId) {
-        evidenceSpans.delete(spanId);
-      }
-    }
-  }
-};
-
-const buildUniqueShareSlug = (base: string, personaId: string, versionNumber: number) => {
-  const personaSuffix = personaId.slice(0, 8).toLowerCase();
-  const candidateBase = `${base}-${personaSuffix}-v${versionNumber}`;
-  let candidate = candidateBase;
-  let counter = 1;
-
-  while ([...shares.values()].some((item) => item.shareSlug === candidate)) {
-    counter += 1;
-    candidate = `${candidateBase}-${counter}`;
-  }
-
-  return candidate;
-};
-
-const createSourceDocument = (source: SourceRecord, normalizedText: string, url: string | null) => {
-  const documentId = randomUUID();
-  const createdAt = nowIso();
-  const document: SourceDocumentRecord = {
-    id: documentId,
-    sourceId: source.id,
-    title: source.sourceTitle,
-    author: source.sourceAuthor,
-    url,
-    normalizedText,
-    contentHash: `${source.id}:${normalizedText.length}`,
-    fetchStatusCode: url ? 202 : null,
-    fetchError: null,
-    fetchedAt: createdAt,
-    createdAt,
-  };
-  sourceDocuments.set(document.id, document);
-
-  const quote = normalizedText.slice(0, 240);
-  const span: EvidenceSpanRecord = {
-    id: randomUUID(),
-    documentId: document.id,
-    sectionLabel: "body",
-    spanStart: 0,
-    spanEnd: quote.length,
-    normalizedQuote: quote,
-    sourceKind: source.sourceKind,
-    trustScore: source.trustScore,
-    dedupeGroupId: null,
-    conflictGroupId: null,
-    createdAt,
-  };
-  evidenceSpans.set(span.id, span);
-
-  return { document, span };
+const buildDistilledQuestions = (displayName: string, focus: string[]) => {
+  const primaryFocus = focus[0] ?? "观点";
+  return [
+    `如果从 ${primaryFocus} 来看，${displayName} 会怎么回答？`,
+    `${displayName} 最在意的问题会是什么？`,
+    `站在 ${displayName} 的角度，应该先做什么？`,
+  ];
 };
 
 export const listFeaturedHall = () =>
@@ -243,7 +62,7 @@ export const listFeaturedHall = () =>
     recommendedQuestions: seed.version.recommendedQuestions,
   }));
 
-export const getPersonaDetail = (personaId: string) => {
+export const getPersonaDetail = async (personaId: string) => {
   const seed = findPersonaSeedByPersonaId(personaId);
   if (seed) {
     return {
@@ -261,33 +80,27 @@ export const getPersonaDetail = (personaId: string) => {
     };
   }
 
-  const persona = getDynamicPersona(personaId);
-  if (!persona) {
-    return null;
-  }
-
-  const versionId = persona.currentPublishedVersionId ?? persona.currentDraftVersionId;
-  const version = versionId ? getDynamicVersion(versionId) : null;
-  if (!version) {
+  const detail = await getDynamicPersonaDetail(personaId);
+  if (!detail) {
     return null;
   }
 
   return {
     persona: {
-      id: persona.id,
-      displayName: persona.displayName,
-      originType: persona.originType,
-      personaType: persona.personaType,
-      listingStatus: persona.listingStatus,
-      status: persona.status,
-      featuredRank: persona.featuredRank,
-      currentPublishedVersionId: version.id,
+      id: detail.persona.id,
+      displayName: detail.persona.displayName,
+      originType: detail.persona.originType,
+      personaType: detail.persona.personaType,
+      listingStatus: detail.persona.listingStatus,
+      status: detail.persona.status,
+      featuredRank: detail.persona.featuredRank,
+      currentPublishedVersionId: detail.version.id,
     },
-    version,
+    version: detail.version,
   };
 };
 
-export const createPersona = (input: {
+export const createPersona = async (input: {
   displayName: string;
   personaType: PersonaRecord["personaType"];
   originType: PersonaRecord["originType"];
@@ -295,105 +108,46 @@ export const createPersona = (input: {
   creatorUserId: string;
 }) => {
   const createdAt = nowIso();
-  const versionId = randomUUID();
-  const personaId = randomUUID();
-
-  const persona: PersonaRecord = {
-    id: personaId,
+  return createDynamicPersona({
+    personaId: randomUUID(),
+    versionId: randomUUID(),
     displayName: input.displayName,
-    originType: input.originType,
+    originType: "USER",
     personaType: input.personaType,
-    listingStatus: "PRIVATE",
-    status: "DRAFT",
-    creatorUserId: input.creatorUserId,
-    featuredRank: null,
-    currentDraftVersionId: versionId,
-    currentPublishedVersionId: null,
-    createdAt,
-    updatedAt: createdAt,
-  };
-
-  const version: PersonaVersionRecord = {
-    id: versionId,
-    personaId,
-    versionNumber: 1,
-    status: "DRAFT",
-    profileJson: {
-      summary: `${input.displayName} 的草稿蒸馏对象`,
-      topicStrengths: input.distillFocus,
-    },
     distillFocus: input.distillFocus,
-    previewIntro: null,
-    recommendedQuestions: [],
-    sampleAnswers: [],
-    coverageScore: null,
-    groundingScore: null,
-    styleScore: null,
-    riskScore: null,
-    createdByUserId: input.creatorUserId,
-    submittedForPublishAt: null,
-    publishedAt: null,
-    supersededAt: null,
+    creatorUserId: input.creatorUserId,
     createdAt,
-  };
-
-  dynamicPersonae.set(persona.id, persona);
-  dynamicVersions.set(version.id, version);
-
-  return { persona, version };
+  });
 };
 
-export const updatePersona = (personaId: string, input: Partial<Pick<PersonaRecord, "displayName" | "listingStatus" | "status">>) => {
-  const persona = getDynamicPersona(personaId);
-  if (!persona) {
-    return null;
-  }
+export const updatePersona = async (
+  personaId: string,
+  input: Partial<Pick<PersonaRecord, "displayName" | "listingStatus" | "status">>,
+) => updateDynamicPersona(personaId, input);
 
-  if (input.displayName !== undefined) {
-    persona.displayName = input.displayName;
-  }
-  if (input.listingStatus !== undefined) {
-    persona.listingStatus = input.listingStatus;
-  }
-  if (input.status !== undefined) {
-    persona.status = input.status;
-  }
-  persona.updatedAt = nowIso();
-  return persona;
-};
-
-export const getPersonaStatus = (personaId: string) => {
-  const dynamicPersona = getDynamicPersona(personaId);
-  if (dynamicPersona) {
-    return {
-      personaId: dynamicPersona.id,
-      status: dynamicPersona.status,
-      currentDraftVersionId: dynamicPersona.currentDraftVersionId,
-      currentPublishedVersionId: dynamicPersona.currentPublishedVersionId,
-    };
-  }
-
-  const detail = getPersonaDetail(personaId);
+export const getPersonaStatus = async (personaId: string) => {
+  const detail = await getPersonaDetail(personaId);
   if (!detail) {
     return null;
   }
 
+  const dynamicDetail = await getDynamicPersonaDetail(personaId);
   return {
     personaId: detail.persona.id,
     status: detail.persona.status,
-    currentDraftVersionId: null,
+    currentDraftVersionId: dynamicDetail?.persona.currentDraftVersionId ?? null,
     currentPublishedVersionId: detail.persona.currentPublishedVersionId,
   };
 };
 
-export const listPersonaVersions = (personaId: string) => {
+export const listPersonaVersions = async (personaId: string) => {
   const seed = findPersonaSeedByPersonaId(personaId);
   if (seed) {
     return [
       {
         ...seed.version,
         personaId: seed.persona.id,
-        status: "PUBLISHED",
+        status: "PUBLISHED" as const,
         coverageScore: 85,
         groundingScore: 85,
         styleScore: 80,
@@ -402,16 +156,16 @@ export const listPersonaVersions = (personaId: string) => {
     ];
   }
 
-  return getVersionByPersona(personaId);
+  return listDynamicPersonaVersions(personaId);
 };
 
-export const getPersonaVersion = (versionId: string) => {
+export const getPersonaVersion = async (versionId: string) => {
   const seed = findPersonaSeedByVersionId(versionId);
   if (seed) {
     return {
       ...seed.version,
       personaId: seed.persona.id,
-      status: "PUBLISHED",
+      status: "PUBLISHED" as const,
       coverageScore: 85,
       groundingScore: 85,
       styleScore: 80,
@@ -419,19 +173,22 @@ export const getPersonaVersion = (versionId: string) => {
     };
   }
 
-  return getDynamicVersion(versionId);
+  return getDynamicPersonaVersion(versionId);
 };
 
-export const canManagePersona = (personaId: string, actorUserId: string, actorRole: "ANONYMOUS" | "USER" | "REVIEWER") => {
+export const canManagePersona = async (
+  personaId: string,
+  actorUserId: string,
+  actorRole: "ANONYMOUS" | "USER" | "REVIEWER",
+) => {
   if (actorRole === "REVIEWER") {
     return true;
   }
 
-  const persona = getDynamicPersona(personaId);
-  return Boolean(persona && persona.creatorUserId === actorUserId);
+  return canManageDynamicPersona(personaId, actorUserId);
 };
 
-export const canAccessPersonaVersion = (
+export const canAccessPersonaVersion = async (
   versionId: string,
   actorUserId: string | null,
   actorRole: "ANONYMOUS" | "USER" | "REVIEWER" | null,
@@ -441,228 +198,116 @@ export const canAccessPersonaVersion = (
     return true;
   }
 
-  const version = getDynamicVersion(versionId);
-  if (!version) {
-    return false;
-  }
-
-  if (version.status === "PUBLISHED") {
-    return true;
-  }
-
   if (actorRole === "REVIEWER") {
     return true;
   }
 
-  const persona = getDynamicPersona(version.personaId);
-  return Boolean(actorUserId && persona?.creatorUserId === actorUserId);
+  return canAccessDynamicPersonaVersion(versionId, actorUserId);
 };
 
-export const transferPersonaOwnership = (fromUserId: string, toUserId: string) => {
-  if (fromUserId === toUserId) {
-    return;
-  }
-
-  for (const persona of dynamicPersonae.values()) {
-    if (persona.creatorUserId === fromUserId) {
-      persona.creatorUserId = toUserId;
-      persona.updatedAt = nowIso();
-    }
-  }
-
-  for (const version of dynamicVersions.values()) {
-    if (version.createdByUserId === fromUserId) {
-      version.createdByUserId = toUserId;
-    }
-  }
-
-  for (const source of sources.values()) {
-    if (source.submittedByUserId === fromUserId) {
-      source.submittedByUserId = toUserId;
-    }
-  }
-
-  for (const item of feedbackItems) {
-    if (item.createdByUserId === fromUserId) {
-      item.createdByUserId = toUserId;
-    }
-  }
+export const transferPersonaOwnership = async (fromUserId: string, toUserId: string) => {
+  await transferDynamicPersonaOwnership(fromUserId, toUserId);
 };
 
-export const createTextSource = (personaId: string, input: {
-  content: string;
-  title?: string;
-  author?: string;
-  sourceKind: SourceRecord["sourceKind"];
-  submittedByUserId: string;
-}) => {
-  if (!getDynamicPersona(personaId)) {
-    return null;
-  }
-
-  const createdAt = nowIso();
-  const source: SourceRecord = {
-    id: randomUUID(),
+export const createTextSource = async (
+  personaId: string,
+  input: {
+    content: string;
+    title?: string;
+    author?: string;
+    sourceKind: SourceRecord["sourceKind"];
+    submittedByUserId: string;
+  },
+) =>
+  createDynamicTextSource({
     personaId,
-    inputType: "TEXT",
-    reviewStatus: "PENDING_REVIEW",
-    sourceUrl: null,
-    sourceTitle: input.title ?? null,
-    sourceAuthor: input.author ?? null,
-    sourceSummary: input.content.slice(0, 160),
+    content: input.content,
+    title: input.title,
+    author: input.author,
     sourceKind: input.sourceKind,
-    sourcePublishedAt: null,
     submittedByUserId: input.submittedByUserId,
-    normalizedUrl: null,
-    normalizedUrlHash: null,
-    trustScore: input.sourceKind === "PRIMARY" ? 90 : input.sourceKind === "SECONDARY" ? 75 : 60,
-    reviewReason: null,
-    reviewedByUserId: null,
-    reviewedAt: null,
-    createdAt,
-  };
+  });
 
-  sources.set(source.id, source);
-  createSourceDocument(source, input.content.trim(), null);
-  return source;
-};
-
-export const createUrlSource = (personaId: string, input: {
-  url: string;
-  title?: string;
-  author?: string;
-  sourceKind: SourceRecord["sourceKind"];
-  submittedByUserId: string;
-}) => {
-  if (!getDynamicPersona(personaId)) {
-    return null;
-  }
-
+export const createUrlSource = async (
+  personaId: string,
+  input: {
+    url: string;
+    title?: string;
+    author?: string;
+    sourceKind: SourceRecord["sourceKind"];
+    submittedByUserId: string;
+  },
+) => {
   const normalizedUrl = normalizeUrl(input.url);
-  const normalizedUrlHash = hashNormalizedUrl(normalizedUrl);
-  const createdAt = nowIso();
-  const source: SourceRecord = {
-    id: randomUUID(),
+  return createDynamicUrlSource({
     personaId,
-    inputType: "URL",
-    reviewStatus: "PENDING_REVIEW",
-    sourceUrl: normalizedUrl,
-    sourceTitle: input.title ?? null,
-    sourceAuthor: input.author ?? null,
-    sourceSummary: `Imported from ${new URL(normalizedUrl).hostname}`,
+    url: input.url,
+    title: input.title,
+    author: input.author,
     sourceKind: input.sourceKind,
-    sourcePublishedAt: null,
     submittedByUserId: input.submittedByUserId,
     normalizedUrl,
-    normalizedUrlHash,
-    trustScore: input.sourceKind === "PRIMARY" ? 85 : input.sourceKind === "SECONDARY" ? 70 : 55,
-    reviewReason: null,
-    reviewedByUserId: null,
-    reviewedAt: null,
-    createdAt,
-  };
-
-  sources.set(source.id, source);
-  return source;
+    normalizedUrlHash: hashNormalizedUrl(normalizedUrl),
+  });
 };
 
-export const persistUrlSourceIngestResult = (sourceId: string, input: {
-  normalizedUrl: string;
-  normalizedUrlHash: string;
-  snapshot: {
-    title: string;
-    author: string | null;
-    normalizedText: string;
-  };
-}) => {
-  const source = sources.get(sourceId);
-  if (!source) {
-    return null;
-  }
+export const persistUrlSourceIngestResult = async (
+  sourceId: string,
+  input: {
+    normalizedUrl: string;
+    normalizedUrlHash: string;
+    snapshot: {
+      title: string;
+      author: string | null;
+      normalizedText: string;
+    };
+  },
+) => persistDynamicUrlSourceIngestResult({ sourceId, ...input });
 
-  source.normalizedUrl = input.normalizedUrl;
-  source.normalizedUrlHash = input.normalizedUrlHash;
-  source.sourceUrl = input.normalizedUrl;
-  source.sourceTitle = input.snapshot.title;
-  source.sourceAuthor = input.snapshot.author;
-  source.sourceSummary = input.snapshot.normalizedText.slice(0, 160);
+export const listPersonaSources = async (personaId: string) => listDynamicPersonaSources(personaId);
 
-  deleteSourceDocuments(sourceId);
-  createSourceDocument(source, input.snapshot.normalizedText.trim(), input.normalizedUrl);
-  return source;
+export const listApprovedSourceEvidence = async (personaId: string) => {
+  const items = await listApprovedDynamicSourceEvidence(personaId);
+  return items.map((item) => ({
+    sourceId: item.sourceId,
+    title: item.title,
+    snippet: item.snippet ?? "已审核资料摘要",
+  }));
 };
 
-export const listPersonaSources = (personaId: string) =>
-  [...sources.values()]
-    .filter((item) => item.personaId === personaId)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+export const listPendingSourceReviews = async () => {
+  const items = await listPendingDynamicSourceReviews();
+  return Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      displayName: item.displayName ?? (await getPersonaName(item.personaId)),
+      createdAt: new Date(item.createdAt).toISOString(),
+    })),
+  );
+};
 
-export const listApprovedSourceEvidence = (personaId: string) =>
-  listPersonaSources(personaId)
-    .filter((item) => item.reviewStatus === "APPROVED")
-    .map((item) => ({
-      sourceId: item.id,
-      title: item.sourceTitle,
-      snippet: item.sourceSummary ?? "已审核资料摘要",
-    }));
-
-export const listPendingSourceReviews = () =>
-  [...sources.values()]
-    .filter((item) => item.reviewStatus === "PENDING_REVIEW")
-    .map((item) => ({
-      sourceId: item.id,
-      personaId: item.personaId,
-      displayName: getPersonaName(item.personaId),
-      sourceTitle: item.sourceTitle,
-      sourceSummary: item.sourceSummary,
-      sourceKind: item.sourceKind,
-      reviewStatus: item.reviewStatus,
-      createdAt: item.createdAt,
-    }));
-
-export const reviewSource = (sourceId: string, input: {
-  reviewerUserId: string;
-  decision: "APPROVED" | "REJECTED";
-  reason: string;
-}) => {
-  const source = sources.get(sourceId);
-  if (!source) {
-    return null;
-  }
-
-  source.reviewStatus = input.decision === "APPROVED" ? "APPROVED" : "REJECTED";
-  source.reviewReason = input.reason;
-  source.reviewedByUserId = input.reviewerUserId;
-  source.reviewedAt = nowIso();
-
-  sourceReviews.push({
-    id: randomUUID(),
+export const reviewSource = async (
+  sourceId: string,
+  input: {
+    reviewerUserId: string;
+    decision: "APPROVED" | "REJECTED";
+    reason: string;
+  },
+) =>
+  reviewDynamicSource({
     sourceId,
     reviewerUserId: input.reviewerUserId,
     decision: input.decision,
     reason: input.reason,
-    createdAt: source.reviewedAt,
   });
 
-  return source;
-};
-
-const buildDistilledQuestions = (displayName: string, focus: string[]) => {
-  const primaryFocus = focus[0] ?? "观点";
-  return [
-    `如果从 ${primaryFocus} 来看，${displayName} 会怎么回答？`,
-    `${displayName} 最在意的问题会是什么？`,
-    `站在 ${displayName} 的角度，应该先做什么？`,
-  ];
-};
-
-export const prepareDistillInput = (personaId: string) => {
-  const persona = getDynamicPersona(personaId);
-  if (!persona) {
+export const prepareDistillInput = async (personaId: string) => {
+  const detail = await getDynamicPersonaDetail(personaId);
+  if (!detail) {
     return null;
   }
 
-  const approvedSources = listPersonaSources(personaId).filter((item) => item.reviewStatus === "APPROVED");
+  const approvedSources = (await listDynamicPersonaSources(personaId)).filter((item) => item.reviewStatus === "APPROVED");
   if (approvedSources.length === 0) {
     throw new Error("At least one approved source is required before distill");
   }
@@ -677,9 +322,9 @@ export const prepareDistillInput = (personaId: string) => {
     { primaryOrSecondary: 0 },
   );
 
-  const focus = getDynamicVersion(persona.currentDraftVersionId ?? "")?.distillFocus ?? ["观点"];
+  const focus = detail.version.distillFocus ?? ["观点"];
   return {
-    displayName: persona.displayName,
+    displayName: detail.persona.displayName,
     distillFocus: focus,
     approvedSources: approvedSources.map((source) => ({
       sourceId: source.id,
@@ -694,68 +339,51 @@ export const prepareDistillInput = (personaId: string) => {
   };
 };
 
-export const persistDistilledVersion = (personaId: string, actorUserId: string, output: {
-  profile: Record<string, unknown>;
-  preview: {
-    previewIntro: string;
-    recommendedQuestions: string[];
-    sampleAnswers: string[];
-  };
-  scores: {
-    coverageScore: number;
-    groundingScore: number;
-    styleScore: number;
-    riskScore: number;
-  };
-}) => {
-  const persona = getDynamicPersona(personaId);
-  if (!persona) {
+export const persistDistilledVersion = async (
+  personaId: string,
+  actorUserId: string,
+  output: {
+    profile: Record<string, unknown>;
+    preview: {
+      previewIntro: string;
+      recommendedQuestions: string[];
+      sampleAnswers: string[];
+    };
+    scores: {
+      coverageScore: number;
+      groundingScore: number;
+      styleScore: number;
+      riskScore: number;
+    };
+  },
+) => {
+  const detail = await getDynamicPersonaDetail(personaId);
+  if (!detail) {
     return null;
   }
 
-  const distillInput = prepareDistillInput(personaId);
+  const distillInput = await prepareDistillInput(personaId);
   if (!distillInput) {
     return null;
   }
 
-  const latestVersionNumber = getVersionByPersona(personaId).at(-1)?.versionNumber ?? 0;
-  const previousDraftId = persona.currentDraftVersionId;
-  if (previousDraftId) {
-    const previousDraft = getDynamicVersion(previousDraftId);
-    if (previousDraft && previousDraft.status === "DRAFT") {
-      previousDraft.status = "SUPERSEDED";
-      previousDraft.supersededAt = nowIso();
-    }
-  }
-
-  const version: PersonaVersionRecord = {
-    id: randomUUID(),
+  const version = await persistDynamicDistilledVersion({
     personaId,
-    versionNumber: latestVersionNumber + 1,
-    status: "CANDIDATE",
+    actorUserId,
     profileJson: output.profile,
-    distillFocus: distillInput.distillFocus,
     previewIntro: output.preview.previewIntro,
-    recommendedQuestions:
-      output.preview.recommendedQuestions.length > 0
-        ? output.preview.recommendedQuestions
-        : buildDistilledQuestions(persona.displayName, distillInput.distillFocus),
+    recommendedQuestions: output.preview.recommendedQuestions,
     sampleAnswers: output.preview.sampleAnswers,
     coverageScore: output.scores.coverageScore,
     groundingScore: output.scores.groundingScore,
     styleScore: output.scores.styleScore,
     riskScore: output.scores.riskScore,
-    createdByUserId: actorUserId,
-    submittedForPublishAt: null,
-    publishedAt: null,
-    supersededAt: null,
-    createdAt: nowIso(),
-  };
+    fallbackQuestions: buildDistilledQuestions(detail.persona.displayName, distillInput.distillFocus),
+  });
 
-  dynamicVersions.set(version.id, version);
-  persona.currentDraftVersionId = version.id;
-  persona.status = "READY";
-  persona.updatedAt = nowIso();
+  if (!version) {
+    return null;
+  }
 
   return {
     version,
@@ -763,33 +391,15 @@ export const persistDistilledVersion = (personaId: string, actorUserId: string, 
   };
 };
 
-export const submitPublishReview = (versionId: string) => {
-  const version = getDynamicVersion(versionId);
-  if (!version) {
-    return null;
-  }
+export const submitPublishReview = async (versionId: string) => submitDynamicPublishReview(versionId);
 
-  version.status = "PENDING_PUBLISH_REVIEW";
-  version.submittedForPublishAt = nowIso();
-  return version;
+export const listPendingPublishReviews = async () => {
+  const items = await listPendingDynamicPublishReviews();
+  return items.map((item) => ({
+    ...item,
+    submittedForPublishAt: item.submittedForPublishAt ? new Date(item.submittedForPublishAt).toISOString() : null,
+  }));
 };
-
-export const listPendingPublishReviews = () =>
-  [...dynamicVersions.values()]
-    .filter((item) => item.status === "PENDING_PUBLISH_REVIEW")
-    .map((item) => ({
-      personaVersionId: item.id,
-      personaId: item.personaId,
-      displayName: getPersonaName(item.personaId),
-      versionNumber: item.versionNumber,
-      status: item.status,
-      previewIntro: item.previewIntro,
-      coverageScore: item.coverageScore,
-      groundingScore: item.groundingScore,
-      styleScore: item.styleScore,
-      riskScore: item.riskScore,
-      submittedForPublishAt: item.submittedForPublishAt,
-    }));
 
 const passesPublishThreshold = (version: PersonaVersionRecord) =>
   (version.coverageScore ?? 0) >= defaultPublishQualityGate.coverageScoreMinimum &&
@@ -797,8 +407,8 @@ const passesPublishThreshold = (version: PersonaVersionRecord) =>
   (version.styleScore ?? 0) >= defaultPublishQualityGate.styleScoreMinimum &&
   (version.riskScore ?? 100) <= defaultPublishQualityGate.riskScoreMaximum;
 
-const passesSourceThreshold = (personaId: string) => {
-  const approvedSources = listPersonaSources(personaId).filter((item) => item.reviewStatus === "APPROVED");
+const passesSourceThreshold = async (personaId: string) => {
+  const approvedSources = (await listDynamicPersonaSources(personaId)).filter((item) => item.reviewStatus === "APPROVED");
   const primaryOrSecondarySources = approvedSources.filter(
     (item) => item.sourceKind === "PRIMARY" || item.sourceKind === "SECONDARY",
   );
@@ -809,114 +419,52 @@ const passesSourceThreshold = (personaId: string) => {
   );
 };
 
-const ensurePrimaryShare = (version: PersonaVersionRecord) => {
-  const existing = [...shares.values()].find((item) => item.personaVersionId === version.id && item.isPrimary);
-  if (existing) {
-    return existing;
-  }
-
-  const persona = getDynamicPersona(version.personaId);
-  const slugBase = slugify(persona?.displayName ?? "persona");
-  const shareSlug = buildUniqueShareSlug(slugBase, version.personaId, version.versionNumber);
-  const share: ShareLinkRecord = {
-    id: randomUUID(),
-    personaVersionId: version.id,
-    shareSlug,
-    canonicalUrl: createCanonicalUrl(shareSlug),
-    miniappPath: createMiniappPath(shareSlug),
-    channelHint: "H5",
-    isPrimary: true,
-    isActive: true,
-    createdAt: nowIso(),
-  };
-
-  shares.set(share.id, share);
-  return share;
-};
-
-export const reviewPublishRequest = (versionId: string, input: {
-  reviewerUserId: string;
-  decision: "APPROVED" | "REJECTED";
-  reason: string;
-}) => {
-  const version = getDynamicVersion(versionId);
+export const reviewPublishRequest = async (
+  versionId: string,
+  input: {
+    reviewerUserId: string;
+    decision: "APPROVED" | "REJECTED";
+    reason: string;
+  },
+) => {
+  const version = await getDynamicPersonaVersion(versionId);
   if (!version) {
     return null;
   }
 
-  const persona = getDynamicPersona(version.personaId);
-  if (!persona) {
-    return null;
-  }
-
-  const createdAt = nowIso();
-  publishReviews.push({
-    id: randomUUID(),
-    personaVersionId: versionId,
-    reviewerUserId: input.reviewerUserId,
-    decision: input.decision,
-    reason: input.reason,
-    createdAt,
-  });
-
-  if (input.decision === "REJECTED") {
-    version.status = "REJECTED";
-    persona.status = "REJECTED";
-    persona.updatedAt = createdAt;
-    return { version, share: null };
-  }
-
-  if (!passesSourceThreshold(persona.id) || !passesPublishThreshold(version)) {
-    throw new Error("Version does not satisfy V1 hard publish thresholds");
-  }
-
-  const previousPublishedId = persona.currentPublishedVersionId;
-  if (previousPublishedId) {
-    const previous = getDynamicVersion(previousPublishedId);
-    if (previous) {
-      previous.status = "SUPERSEDED";
-      previous.supersededAt = createdAt;
+  if (input.decision === "APPROVED") {
+    if (!(await passesSourceThreshold(version.personaId)) || !passesPublishThreshold(version)) {
+      throw new Error("Version does not satisfy V1 hard publish thresholds");
     }
   }
 
-  version.status = "PUBLISHED";
-  version.publishedAt = createdAt;
-  persona.currentPublishedVersionId = version.id;
-  persona.status = "PUBLISHED";
-  persona.listingStatus = "UNLISTED";
-  persona.updatedAt = createdAt;
-
-  const share = ensurePrimaryShare(version);
-  return { version, share };
+  return reviewDynamicPublishRequest({
+    versionId,
+    reviewerUserId: input.reviewerUserId,
+    decision: input.decision,
+    reason: input.reason,
+  });
 };
 
-export const createShareForVersion = (versionId: string) => {
+export const createShareForVersion = async (versionId: string) => {
   const officialSeed = findPersonaSeedByVersionId(versionId);
   if (officialSeed) {
     return {
       id: officialSeed.share.id,
       personaVersionId: officialSeed.version.id,
       shareSlug: officialSeed.share.shareSlug,
-      canonicalUrl: createCanonicalUrl(officialSeed.share.shareSlug),
-      miniappPath: createMiniappPath(officialSeed.share.shareSlug),
+      canonicalUrl: `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/share/${officialSeed.share.shareSlug}`,
+      miniappPath: `/pages/share/index?slug=${encodeURIComponent(officialSeed.share.shareSlug)}`,
       channelHint: "H5" as const,
       isPrimary: true,
       isActive: true,
     };
   }
 
-  const version = getDynamicVersion(versionId);
-  if (!version) {
-    return null;
-  }
-  if (version.status !== "PUBLISHED") {
-    throw new Error("Only published versions can create shares");
-  }
-
-  return ensurePrimaryShare(version);
+  return createDynamicShareForVersion(versionId);
 };
 
-export const getShareLanding = (shareSlug: string) => {
+export const getShareLanding = async (shareSlug: string) => {
   const officialSeed = findPersonaSeedByShareSlug(shareSlug);
   if (officialSeed) {
     return {
@@ -924,8 +472,8 @@ export const getShareLanding = (shareSlug: string) => {
         id: officialSeed.share.id,
         personaVersionId: officialSeed.version.id,
         shareSlug: officialSeed.share.shareSlug,
-        canonicalUrl: createCanonicalUrl(officialSeed.share.shareSlug),
-        miniappPath: createMiniappPath(officialSeed.share.shareSlug),
+        canonicalUrl: `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/share/${officialSeed.share.shareSlug}`,
+        miniappPath: `/pages/share/index?slug=${encodeURIComponent(officialSeed.share.shareSlug)}`,
         channelHint: "H5" as const,
         isPrimary: true,
         isActive: true,
@@ -944,34 +492,10 @@ export const getShareLanding = (shareSlug: string) => {
     };
   }
 
-  const share = [...shares.values()].find((item) => item.shareSlug === shareSlug && item.isActive);
-  if (!share) {
-    return null;
-  }
-
-  const version = getDynamicVersion(share.personaVersionId);
-  const persona = version ? getDynamicPersona(version.personaId) : null;
-  if (!version || !persona) {
-    return null;
-  }
-
-  return {
-    share,
-    persona: {
-      id: persona.id,
-      displayName: persona.displayName,
-      originType: persona.originType,
-    },
-    version: {
-      id: version.id,
-      versionNumber: version.versionNumber,
-      previewIntro: version.previewIntro,
-      recommendedQuestions: version.recommendedQuestions,
-    },
-  };
+  return getDynamicShareLanding(shareSlug);
 };
 
-export const resolveChatTarget = (input: {
+export const resolveChatTarget = async (input: {
   targetType: "published_persona" | "draft_version_preview" | "share_link";
   personaId?: string;
   personaVersionId?: string;
@@ -997,40 +521,7 @@ export const resolveChatTarget = (input: {
     };
   }
 
-  switch (input.targetType) {
-    case "published_persona": {
-      const persona = input.personaId ? getDynamicPersona(input.personaId) : null;
-      if (!persona?.currentPublishedVersionId) return null;
-      return {
-        kind: "dynamic" as const,
-        personaId: persona.id,
-        personaVersionId: persona.currentPublishedVersionId,
-        shareSlug: null,
-      };
-    }
-    case "draft_version_preview": {
-      const version = input.personaVersionId ? getDynamicVersion(input.personaVersionId) : null;
-      if (!version) return null;
-      return {
-        kind: "dynamic" as const,
-        personaId: version.personaId,
-        personaVersionId: version.id,
-        shareSlug: null,
-      };
-    }
-    case "share_link": {
-      const share = input.shareSlug ? [...shares.values()].find((item) => item.shareSlug === input.shareSlug && item.isActive) : null;
-      if (!share) return null;
-      const version = getDynamicVersion(share.personaVersionId);
-      if (!version) return null;
-      return {
-        kind: "dynamic" as const,
-        personaId: version.personaId,
-        personaVersionId: version.id,
-        shareSlug: share.shareSlug,
-      };
-    }
-  }
+  return resolveDynamicChatTarget(input);
 };
 
 type ChatClassification = {
@@ -1039,13 +530,13 @@ type ChatClassification = {
   shouldEscalateToModelJudge: boolean;
 };
 
-export const createDynamicReply = (versionId: string, content: string, classification?: ChatClassification) => {
-  const version = getDynamicVersion(versionId);
+export const createDynamicReply = async (versionId: string, content: string, classification?: ChatClassification) => {
+  const version = await getDynamicPersonaVersion(versionId);
   if (!version) {
     return null;
   }
 
-  const approvedSources = listPersonaSources(version.personaId).filter((item) => item.reviewStatus === "APPROVED");
+  const approvedSources = (await listDynamicPersonaSources(version.personaId)).filter((item) => item.reviewStatus === "APPROVED");
   const firstSource = approvedSources[0];
   const mode = classification?.category ?? "THEME_ANCHORED";
   const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");
@@ -1111,24 +602,19 @@ export const createDynamicReply = (versionId: string, content: string, classific
   };
 };
 
-export const addFeedback = (input: {
+export const addFeedback = async (input: {
   personaId: string;
   personaVersionId: string;
   chatMessageId?: string;
   feedbackKind: string;
   feedbackValue: string;
   createdByUserId?: string;
-}) => {
-  const item: FeedbackRecord = {
-    id: randomUUID(),
+}) =>
+  addDynamicFeedback({
     personaId: input.personaId,
     personaVersionId: input.personaVersionId,
-    chatMessageId: input.chatMessageId ?? null,
+    chatMessageId: input.chatMessageId,
     feedbackKind: input.feedbackKind,
     feedbackValue: input.feedbackValue,
-    createdByUserId: input.createdByUserId ?? null,
-    createdAt: nowIso(),
-  };
-  feedbackItems.push(item);
-  return item;
-};
+    createdByUserId: input.createdByUserId,
+  });
