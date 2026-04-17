@@ -631,6 +631,47 @@ const pageStyles = `
     white-space: pre-wrap;
   }
 
+  .bubble.is-pending {
+    opacity: 0.94;
+  }
+
+  .bubble.user.is-failed {
+    border-color: color-mix(in srgb, var(--danger) 68%, var(--line));
+  }
+
+  .bubble-meta-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bubble-status-copy {
+    color: rgba(243, 233, 223, 0.72);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .bubble.user.is-failed .bubble-status-copy {
+    color: #ffd6df;
+  }
+
+  .bubble-retry {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 214, 223, 0.34);
+    background: rgba(191, 102, 125, 0.16);
+    color: #ffd6df;
+    box-shadow: none;
+  }
+
+  .bubble-retry:hover {
+    transform: none;
+    background: rgba(191, 102, 125, 0.24);
+  }
+
   .reply-inspector {
     margin-top: 2px;
     border-top: 1px dashed rgba(109, 90, 120, 0.6);
@@ -1173,6 +1214,7 @@ const renderChatScript = (input: {
   const status = document.querySelector("[data-chat-status]");
   const promptButtons = document.querySelectorAll("[data-suggested-question]");
   let chatId = null;
+  let chatCreation = null;
 
   const escapeHtml = (value) =>
     String(value)
@@ -1181,6 +1223,67 @@ const renderChatScript = (input: {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+
+  const setStatus = (content) => {
+    if (status) status.textContent = content;
+  };
+
+  const scrollLogToLatest = () => {
+    if (!log) return;
+    requestAnimationFrame(() => {
+      log.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+    });
+  };
+
+  const ensureBubbleMetaRow = (bubble) => {
+    let row = bubble.querySelector(".bubble-meta-row");
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "bubble-meta-row";
+      bubble.appendChild(row);
+    }
+    return row;
+  };
+
+  const buildStatusCopy = (content) => {
+    const copy = document.createElement("span");
+    copy.className = "bubble-status-copy";
+    copy.textContent = content;
+    return copy;
+  };
+
+  const buildRetryButton = (content) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "bubble-retry";
+    button.textContent = "↻";
+    button.setAttribute("aria-label", "重试这句话");
+    button.setAttribute("title", "重试这句话");
+    button.dataset.chatRetry = content;
+    return button;
+  };
+
+  const setUserBubblePending = (bubble) => {
+    bubble.classList.add("is-pending");
+    bubble.classList.remove("is-failed");
+    const row = ensureBubbleMetaRow(bubble);
+    row.replaceChildren(buildStatusCopy("发送中…"));
+  };
+
+  const setUserBubbleDelivered = (bubble) => {
+    bubble.classList.remove("is-pending", "is-failed");
+    bubble.querySelector(".bubble-meta-row")?.remove();
+  };
+
+  const setUserBubbleFailed = (bubble, label) => {
+    bubble.classList.remove("is-pending");
+    bubble.classList.add("is-failed");
+    const row = ensureBubbleMetaRow(bubble);
+    row.replaceChildren(
+      buildStatusCopy(label),
+      buildRetryButton(bubble.getAttribute("data-message-content") || ""),
+    );
+  };
 
   const buildReplyInspectorHtml = (reply) => {
     const parts = [];
@@ -1194,11 +1297,73 @@ const renderChatScript = (input: {
   const appendBubble = (role, content, metaHtml) => {
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (role === "ASSISTANT" ? "assistant" : "user");
-    bubble.innerHTML =
-      '<div class="bubble-label">' + (role === "ASSISTANT" ? "Persona" : "You") + '</div>' +
-      '<div class="bubble-copy">' + escapeHtml(content) + '</div>' +
-      (metaHtml || "");
+    bubble.setAttribute("data-message-content", content);
+
+    const label = document.createElement("div");
+    label.className = "bubble-label";
+    label.textContent = role === "ASSISTANT" ? "Persona" : "You";
+
+    const copy = document.createElement("div");
+    copy.className = "bubble-copy";
+    copy.textContent = content;
+
+    bubble.append(label, copy);
+
+    if (metaHtml) {
+      const meta = document.createElement("div");
+      meta.innerHTML = metaHtml;
+      bubble.append(...meta.childNodes);
+    }
+
     log.appendChild(bubble);
+    scrollLogToLatest();
+    return bubble;
+  };
+
+  const ensureChatId = async () => {
+    if (chatId) return chatId;
+    if (chatCreation) return await chatCreation;
+
+    const payload = ${input.targetType === "published_persona"
+      ? `{ targetType: "published_persona", personaId: "${input.targetValue}" }`
+      : input.targetType === "draft_version_preview"
+        ? `{ targetType: "draft_version_preview", personaVersionId: "${input.targetValue}" }`
+        : `{ targetType: "share_link", shareSlug: "${input.targetValue}" }`};
+
+    chatCreation = HallOfFameClient.requestJson("/v1/chats", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+      .then((created) => {
+        chatId = created.id;
+        return chatId;
+      })
+      .finally(() => {
+        chatCreation = null;
+      });
+
+    return await chatCreation;
+  };
+
+  const deliverUserBubble = async (bubble, content) => {
+    let failureLabel = "发送失败";
+    setUserBubblePending(bubble);
+    setStatus("正在等这个人格开口…");
+
+    try {
+      const sessionId = await ensureChatId();
+      failureLabel = "回复失败";
+      const reply = await HallOfFameClient.requestJson("/v1/chats/" + sessionId + "/messages", {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      });
+      setUserBubbleDelivered(bubble);
+      appendBubble("ASSISTANT", reply.content, buildReplyInspectorHtml(reply));
+      setStatus("这个人格已经回话。");
+    } catch (error) {
+      setUserBubbleFailed(bubble, failureLabel);
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
   };
 
   promptButtons.forEach((button) => {
@@ -1210,37 +1375,24 @@ const renderChatScript = (input: {
     });
   });
 
+  log?.addEventListener("click", (event) => {
+    const retryButton = event.target.closest("[data-chat-retry]");
+    if (!retryButton) return;
+    const bubble = retryButton.closest(".bubble.user");
+    const retryContent = retryButton.getAttribute("data-chat-retry") || bubble?.getAttribute("data-message-content") || "";
+    if (!bubble || !retryContent) return;
+    void deliverUserBubble(bubble, retryContent);
+  });
+
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const input = form.querySelector("textarea");
+    if (!input) return;
     const content = input.value.trim();
     if (!content) return;
-    status.textContent = "正在等这个人格开口…";
-    try {
-      if (!chatId) {
-        const payload = ${input.targetType === "published_persona"
-          ? `{ targetType: "published_persona", personaId: "${input.targetValue}" }`
-          : input.targetType === "draft_version_preview"
-            ? `{ targetType: "draft_version_preview", personaVersionId: "${input.targetValue}" }`
-            : `{ targetType: "share_link", shareSlug: "${input.targetValue}" }`};
-        const created = await HallOfFameClient.requestJson("/v1/chats", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        chatId = created.id;
-      }
-
-      appendBubble("USER", content);
-      const reply = await HallOfFameClient.requestJson("/v1/chats/" + chatId + "/messages", {
-        method: "POST",
-        body: JSON.stringify({ content }),
-      });
-      appendBubble("ASSISTANT", reply.content, buildReplyInspectorHtml(reply));
-      input.value = "";
-      status.textContent = "这个人格已经回话。";
-    } catch (error) {
-      status.textContent = error instanceof Error ? error.message : String(error);
-    }
+    const userBubble = appendBubble("USER", content);
+    input.value = "";
+    void deliverUserBubble(userBubble, content);
   });
 `;
 

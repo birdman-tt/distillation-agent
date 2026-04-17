@@ -403,7 +403,8 @@ export const resolvePersonaSeed = (input: {
 }) => {
   switch (input.targetType) {
     case "published_persona":
-      return input.personaId ? findPersonaSeedByPersonaId(input.personaId) : null;
+      return (input.personaId ? findPersonaSeedByPersonaId(input.personaId) : null)
+        ?? (input.personaVersionId ? findPersonaSeedByVersionId(input.personaVersionId) : null);
     case "draft_version_preview":
       return input.personaVersionId ? findPersonaSeedByVersionId(input.personaVersionId) : null;
     case "share_link":

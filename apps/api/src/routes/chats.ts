@@ -45,7 +45,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     const session = chatSessionSchema.parse({
       id: randomUUID(),
       targetType: input.targetType,
-      targetPersonaId: resolved.personaId,
+      targetPersonaId: resolved.kind === "official" ? null : resolved.personaId,
       targetPersonaVersionId: resolved.personaVersionId,
       shareSlug: resolved.shareSlug,
       messages: [],

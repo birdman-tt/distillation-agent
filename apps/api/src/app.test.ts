@@ -252,3 +252,36 @@ test("anonymous session can create, verify, and continue owning a persona throug
     }
   }
 });
+
+test("official seed persona can open a persisted chat session", async () => {
+  const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "";
+
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+
+  try {
+    const chat = await apiApp.inject({
+      method: "POST",
+      url: "/v1/chats",
+      payload: {
+        targetType: "published_persona",
+        personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
+      },
+    });
+
+    assert.equal(chat.statusCode, 200);
+    const body = chat.json();
+    assert.ok(body.id);
+    assert.equal(body.targetPersonaId, null);
+    assert.equal(body.targetPersonaVersionId, "64c071d9-a7a6-4dad-8a67-dcb0370d03f8");
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    if (originalDeepSeekApiKey !== undefined) {
+      process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
+    } else {
+      delete process.env.DEEPSEEK_API_KEY;
+    }
+  }
+});
