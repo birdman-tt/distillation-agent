@@ -6,7 +6,7 @@ import { getApiBaseUrl } from "../../lib/api.js";
 type FeaturedItem = {
   id: string;
   displayName: string;
-  previewIntro: string;
+  previewIntro: string | null;
   recommendedQuestions: string[];
 };
 

@@ -4,11 +4,15 @@ import { buildDatabaseUrl } from "./config.js";
 
 let sqlSingleton: postgres.Sql | null = null;
 
-export const resetSqlForTests = async () => {
+export const closeSql = async () => {
   if (sqlSingleton) {
     await sqlSingleton.end({ timeout: 0 });
     sqlSingleton = null;
   }
+};
+
+export const resetSqlForTests = async () => {
+  await closeSql();
 };
 
 export const getSql = () => {

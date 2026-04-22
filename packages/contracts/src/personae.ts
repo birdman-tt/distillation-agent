@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const createPersonaSchema = z.object({
   displayName: z.string().min(1).max(80),
+  positioning: z.string().min(1).max(120),
   personaType: personaTypeSchema,
   originType: personaOriginTypeSchema.default("USER"),
   distillFocus: z.array(z.string().min(1)).min(1).max(4),

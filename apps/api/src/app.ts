@@ -15,6 +15,8 @@ import { sharesRoute } from "./routes/shares.js";
 
 await loadLocalEnv();
 
+const shouldRunDatabaseBootstrapOnStartup = () => process.env.RUN_DB_BOOTSTRAP_ON_STARTUP !== "false";
+
 export const buildApiApp = () => {
   const app = Fastify({ logger: true });
 
@@ -29,7 +31,9 @@ export const buildApiApp = () => {
   }));
 
   app.addHook("onReady", async () => {
-    await ensureDatabaseSchema();
+    if (shouldRunDatabaseBootstrapOnStartup()) {
+      await ensureDatabaseSchema();
+    }
   });
 
   void app.register(authRoute);

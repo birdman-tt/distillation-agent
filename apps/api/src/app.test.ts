@@ -41,6 +41,7 @@ test("anonymous session can create, verify, and continue owning a persona throug
       },
       payload: {
         displayName: "测试对象",
+        positioning: "清醒、锋利，帮人把混乱的想法说清楚。",
         personaType: "ORIGINAL_PERSONA",
         originType: "USER",
         distillFocus: ["表达", "判断"],

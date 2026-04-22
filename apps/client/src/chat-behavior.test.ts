@@ -17,7 +17,7 @@ test("chat submit clears the composer before awaiting the reply request", () => 
 
 test("chat submit script renders a retry control for failed user messages", () => {
   assert.match(h5Source, /data-chat-retry/);
-  assert.match(h5Source, /重试这句话/);
+  assert.match(h5Source, /重试/);
 });
 
 test("sendChatMessage throws the API error body when the request fails", async () => {

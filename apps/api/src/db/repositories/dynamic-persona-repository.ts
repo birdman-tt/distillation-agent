@@ -271,7 +271,7 @@ const mapShare = (row: ShareRow): ShareLinkRecord => ({
   createdAt: toIsoString(row.createdAt)!,
 });
 
-const baseUrl = () => process.env.APP_BASE_URL ?? "http://localhost:3000";
+const baseUrl = () => process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000";
 const createCanonicalUrl = (shareSlug: string) => `${baseUrl()}/share/${shareSlug}`;
 const createMiniappPath = (shareSlug: string) => `/pages/share/index?slug=${encodeURIComponent(shareSlug)}`;
 
@@ -469,6 +469,7 @@ export const createDynamicPersona = async (input: {
   personaId: string;
   versionId: string;
   displayName: string;
+  positioning: string;
   originType: "USER";
   personaType: PersonaRecord["personaType"];
   distillFocus: string[];
@@ -534,11 +535,11 @@ export const createDynamicPersona = async (input: {
         1,
         ${"DRAFT"},
         ${sql.json({
-          summary: `${input.displayName} 的草稿蒸馏对象`,
+          summary: input.positioning,
           topicStrengths: input.distillFocus,
         })},
         ${sql.json(input.distillFocus)},
-        null,
+        ${input.positioning},
         ${sql.json([])},
         ${sql.json([])},
         null,

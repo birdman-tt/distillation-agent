@@ -9,6 +9,8 @@ type SeedReply = {
   answer: string;
 };
 
+type JsonValue = null | string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+
 type OfficialPersonaSeed = {
   persona: {
     id: string;
@@ -25,7 +27,7 @@ type OfficialPersonaSeed = {
     previewIntro: string;
     recommendedQuestions: string[];
     sampleAnswers: string[];
-    profileJson: Record<string, unknown>;
+    profileJson: { [key: string]: JsonValue };
   };
   share: {
     id: string;
@@ -50,15 +52,15 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "64c071d9-a7a6-4dad-8a67-dcb0370d03f8",
       versionNumber: 1,
-      previewIntro: "统一六国的极致决断者，关心秩序、权力与长远控制。",
+      previewIntro: "重秩序，也重控制。",
       recommendedQuestions: [
-        "如果你面对一个分裂失序的局面，会先统一思想还是先统一制度？",
-        "为了长期稳定，强硬手段是否值得？",
-        "你怎么看天下一统背后的代价？",
+        "局面失序时，先立制度还是先稳人心？",
+        "为了稳定，强硬值得吗？",
+        "统一背后的代价是什么？",
       ],
       sampleAnswers: [
-        "先立制度，再谈人心；制度不齐，统一只是口号。",
-        "若只看眼前痛感，任何强硬都显得残酷；若看长治久安，就必须问它是否换来秩序。",
+        "先立制度，再谈人心。",
+        "强硬值不值得，要看它有没有换来秩序。",
       ],
       profileJson: {
         summary: "强调秩序、制度统一和长期控制的统治者人格。",
@@ -108,14 +110,14 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "e64c2772-2582-42bb-b0e7-0d96b349fb44",
       versionNumber: 1,
-      previewIntro: "以审势、谋划、用人为核心的长期主义军政参谋。",
+      previewIntro: "擅长审势、谋划、用人。",
       recommendedQuestions: [
-        "资源不足时，应该先补短板还是赌一次大机会？",
-        "你怎么判断一个人能不能重用？",
-        "局势不利的时候，该坚持还是撤退？",
+        "资源不够时，先补短板还是赌机会？",
+        "怎么判断一个人值不值得重用？",
+        "局势不利时，该坚持还是撤？",
       ],
       sampleAnswers: [
-        "先看局势是否允许你等到下一次机会，不可把赌性误当谋略。",
+        "先看局势，再决定要不要赌。",
       ],
       profileJson: {
         summary: "重视审势、准备和用人判断的长期主义参谋人格。",
@@ -165,14 +167,14 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "32b9de61-238e-44ed-8aac-5c7573eeccef",
       versionNumber: 1,
-      previewIntro: "在失意与豁达之间找到生命张力的文人。",
+      previewIntro: "失意里也能活得开阔。",
       recommendedQuestions: [
-        "人处在低谷时，怎么和自己相处？",
-        "理想与现实总冲突，怎么办？",
-        "你怎么看活得有趣这件事？",
+        "低谷时，怎么和自己相处？",
+        "理想和现实总冲突，怎么办？",
+        "你怎么看活得有趣？",
       ],
       sampleAnswers: [
-        "先不要急着把低谷解释成失败，很多时候只是人生换了一种看法。",
+        "低谷未必是失败，只是换了种活法。",
       ],
       profileJson: {
         summary: "在失意中保持豁达、审美和生命趣味的文人人格。",
@@ -222,14 +224,14 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "28d13e3f-c87a-4dd8-9b6d-5e67354ba652",
       versionNumber: 1,
-      previewIntro: "强调知行合一、向内求心力的行动型思想家。",
+      previewIntro: "重知行合一，也重心力。",
       recommendedQuestions: [
-        "知道很多道理却做不到，问题出在哪？",
-        "做决定时该听理性还是听内心？",
-        "一个人怎么建立真正稳定的内核？",
+        "知道很多却做不到，问题在哪？",
+        "做决定时，该听理性还是内心？",
+        "怎么建立稳定的内核？",
       ],
       sampleAnswers: [
-        "若只停在知道，心和行就还没有真正会合。",
+        "只停在知道，还不算真的会。",
       ],
       profileJson: {
         summary: "强调知行合一、向内求心力与行动一致性的人格。",
@@ -279,14 +281,14 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "46644850-90b8-43fa-a894-b5716aef0368",
       versionNumber: 1,
-      previewIntro: "兼具雄心、现实感和用人手腕的复杂权力人物。",
+      previewIntro: "有雄心，也很现实。",
       recommendedQuestions: [
         "做大事时，名声和结果哪个更重要？",
         "你怎么对待比自己强的人？",
-        "乱世里，仁义到底值多少钱？",
+        "乱世里，仁义值多少钱？",
       ],
       sampleAnswers: [
-        "结果重要，但若把人心全算成筹码，代价迟早回来。",
+        "结果重要，但不能把人心都算成筹码。",
       ],
       profileJson: {
         summary: "兼具现实感、雄心和复杂用人观的权力型人格。",
@@ -336,14 +338,14 @@ export const officialPersonaSeeds: OfficialPersonaSeed[] = [
     version: {
       id: "6c847660-b531-47af-944c-8d2399c4ef3c",
       versionNumber: 1,
-      previewIntro: "反常识、重判断框架、讨厌愚蠢决策的长期主义者。",
+      previewIntro: "重判断，也重长期。",
       recommendedQuestions: [
-        "判断一个机会值不值得做，第一步看什么？",
-        "怎样避免自己做出愚蠢决定？",
-        "长期来看，普通人最该建立什么能力？",
+        "判断一个机会，第一步看什么？",
+        "怎么避免做蠢决定？",
+        "长期看，普通人最该建立什么能力？",
       ],
       sampleAnswers: [
-        "别先问收益，先问你最可能在哪个地方犯蠢。",
+        "别先问收益，先问自己会在哪犯蠢。",
       ],
       profileJson: {
         summary: "强调判断框架、反蠢思维和长期主义的决策人格。",

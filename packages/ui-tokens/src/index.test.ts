@@ -3,16 +3,17 @@ import test from "node:test";
 
 import { uiTokens } from "./index.js";
 
-test("ui tokens expose role-based private chat colors", () => {
+test("ui tokens expose the approved dual-theme consumer colors", () => {
   assert.equal(uiTokens.projectName, "Hall of Fame");
-  assert.equal(uiTokens.colors.canvas, "#0f1115");
-  assert.equal(uiTokens.colors.chrome, "#14171d");
-  assert.equal(uiTokens.colors.assistantSurface, "#1b1f27");
-  assert.equal(uiTokens.colors.userBubble, "#8f6376");
-  assert.equal(uiTokens.colors.action, "#d88aa4");
+  assert.equal(uiTokens.colors.lightCanvas, "#eef2f8");
+  assert.equal(uiTokens.colors.lightSurface, "#f9fbff");
+  assert.equal(uiTokens.colors.darkCanvas, "#101315");
+  assert.equal(uiTokens.colors.darkSurface, "#1b2126");
+  assert.equal(uiTokens.colors.signalBlue, "#3870ff");
+  assert.equal(uiTokens.colors.voltGreen, "#b1ff3b");
 });
 
-test("ui tokens keep mobile-first chat layout defaults", () => {
+test("ui tokens keep mobile-first layout defaults", () => {
   assert.equal(uiTokens.layout.mobileViewportWidth, 390);
   assert.equal(uiTokens.layout.pagePaddingX, 16);
   assert.ok(uiTokens.layout.shellMaxWidth >= 960);

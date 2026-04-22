@@ -5,6 +5,7 @@ import {
   buildCreatePageBody,
   buildFeaturedListBody,
   buildPersonaPageBody,
+  buildProfilePageBody,
   buildReplyInspectorHtml,
   buildReviewPageBody,
   buildSessionBannerHtml,
@@ -20,7 +21,7 @@ test("reply inspector hides raw system adjudication wording by default", () => {
   });
 
   assert.doesNotMatch(markup, /推断级别/);
-  assert.match(markup, /这句话怎么来的/);
+  assert.match(markup, /回答依据/);
   assert.match(markup, /人物画像中的判断框架/);
 });
 
@@ -37,6 +38,11 @@ test("home shell uses a bottom shuttle nav instead of top pills", () => {
 
   assert.match(body, /bottom-shuttle/);
   assert.match(body, /shuttle-track/);
+  assert.match(body, />聊天</);
+  assert.match(body, />创建</);
+  assert.match(body, />我的</);
+  assert.doesNotMatch(body, />审核</);
+  assert.doesNotMatch(body, /share\/demo/);
   assert.doesNotMatch(body, /top-nav|nav-link/);
 });
 
@@ -64,11 +70,19 @@ test("home page centers one persona carousel card with side peeks", () => {
       recommendedQuestions: [],
       originType: "OFFICIAL",
     },
+    {
+      id: "persona-2",
+      displayName: "诸葛亮",
+      previewIntro: "换个角度先把局面看清。",
+      recommendedQuestions: [],
+      originType: "OFFICIAL",
+    },
   ]);
 
   assert.match(body, /persona-carousel/);
-  assert.match(body, /carousel-viewport/);
+  assert.match(body, /data-carousel-viewport/);
   assert.match(body, /carousel-card is-current/);
+  assert.match(body, /data-carousel-dot/);
   assert.doesNotMatch(body, /persona-topline|prompt-cluster|question-slip|persona-card/);
 });
 
@@ -96,13 +110,23 @@ test("persona page behaves like a messaging thread", () => {
 test("supporting pages inherit the same dark-chat shell", () => {
   const createPage = buildCreatePageBody();
   const reviewPage = buildReviewPageBody();
+  const profilePage = buildProfilePageBody();
 
   assert.match(createPage, /bottom-shuttle/);
-  assert.match(createPage, /quiet-panel|composer-shell/);
-  assert.doesNotMatch(createPage, /hero|top-nav|Step 1/);
+  assert.match(createPage, /一句话简介/);
+  assert.match(createPage, /风格/);
+  assert.match(createPage, /data-create-success/);
+  assert.match(createPage, /data-create-workbench/);
+  assert.doesNotMatch(createPage, /top-nav|Step 1|share\/demo/);
 
   assert.match(reviewPage, /bottom-shuttle/);
-  assert.doesNotMatch(reviewPage, /hero|section-label|Source review/);
+  assert.doesNotMatch(reviewPage, />审核</);
+  assert.doesNotMatch(reviewPage, /share\/demo/);
+
+  assert.match(profilePage, /切换亮暗模式/);
+  assert.doesNotMatch(profilePage, /审核入口/);
+  assert.match(profilePage, /data-profile-persona-name/);
+  assert.doesNotMatch(profilePage, /主题切换|data-theme-state|data-theme-choice|>浅色<|>深色</);
 });
 
 test("session banner keeps auth state human and hides raw technical identifiers", () => {
@@ -112,6 +136,6 @@ test("session banner keeps auth state human and hides raw technical identifiers"
     userId: "12345678-aaaa-bbbb-cccc-1234567890ab",
   });
 
-  assert.match(anonymous, /匿名会话已就绪/);
+  assert.match(anonymous, /已进入匿名体验/);
   assert.doesNotMatch(anonymous, /ANONYMOUS|12345678|user/);
 });

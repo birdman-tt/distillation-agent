@@ -7,6 +7,7 @@ let bootstrapPromise: Promise<void> | null = null;
 
 const schemaFileUrl = new URL("./schema.sql", import.meta.url);
 const schemaSentinelTable = "persona_version_publish_reviews";
+const readPublicWebBaseUrl = () => process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000";
 
 const syncOfficialSeedShadows = async () => {
   const sql = getSql();
@@ -130,7 +131,7 @@ const syncOfficialSeedShadows = async () => {
           ${seed.share.id}::uuid,
           ${seed.version.id}::uuid,
           ${seed.share.shareSlug},
-          ${`${process.env.APP_BASE_URL ?? "http://localhost:3000"}/share/${seed.share.shareSlug}`},
+          ${`${readPublicWebBaseUrl()}/share/${seed.share.shareSlug}`},
           ${`/pages/share/index?slug=${encodeURIComponent(seed.share.shareSlug)}`},
           'H5',
           true,

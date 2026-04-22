@@ -12,6 +12,7 @@ export const createPersona = async (
   baseUrl: string,
   payload: {
     displayName: string;
+    positioning: string;
     personaType: "HISTORICAL_FIGURE" | "AUTHOR_OR_BLOGGER" | "ORIGINAL_PERSONA";
     originType: "OFFICIAL" | "USER";
     distillFocus: string[];

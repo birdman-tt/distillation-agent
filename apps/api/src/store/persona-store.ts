@@ -102,6 +102,7 @@ export const getPersonaDetail = async (personaId: string) => {
 
 export const createPersona = async (input: {
   displayName: string;
+  positioning: string;
   personaType: PersonaRecord["personaType"];
   originType: PersonaRecord["originType"];
   distillFocus: string[];
@@ -112,6 +113,7 @@ export const createPersona = async (input: {
     personaId: randomUUID(),
     versionId: randomUUID(),
     displayName: input.displayName,
+    positioning: input.positioning,
     originType: "USER",
     personaType: input.personaType,
     distillFocus: input.distillFocus,
@@ -448,12 +450,13 @@ export const reviewPublishRequest = async (
 
 export const createShareForVersion = async (versionId: string) => {
   const officialSeed = findPersonaSeedByVersionId(versionId);
+  const publicWebBaseUrl = process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000";
   if (officialSeed) {
     return {
       id: officialSeed.share.id,
       personaVersionId: officialSeed.version.id,
       shareSlug: officialSeed.share.shareSlug,
-      canonicalUrl: `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/share/${officialSeed.share.shareSlug}`,
+      canonicalUrl: `${publicWebBaseUrl}/share/${officialSeed.share.shareSlug}`,
       miniappPath: `/pages/share/index?slug=${encodeURIComponent(officialSeed.share.shareSlug)}`,
       channelHint: "H5" as const,
       isPrimary: true,
@@ -466,13 +469,14 @@ export const createShareForVersion = async (versionId: string) => {
 
 export const getShareLanding = async (shareSlug: string) => {
   const officialSeed = findPersonaSeedByShareSlug(shareSlug);
+  const publicWebBaseUrl = process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000";
   if (officialSeed) {
     return {
       share: {
         id: officialSeed.share.id,
         personaVersionId: officialSeed.version.id,
         shareSlug: officialSeed.share.shareSlug,
-        canonicalUrl: `${process.env.APP_BASE_URL ?? "http://localhost:3000"}/share/${officialSeed.share.shareSlug}`,
+        canonicalUrl: `${publicWebBaseUrl}/share/${officialSeed.share.shareSlug}`,
         miniappPath: `/pages/share/index?slug=${encodeURIComponent(officialSeed.share.shareSlug)}`,
         channelHint: "H5" as const,
         isPrimary: true,

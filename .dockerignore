@@ -1,0 +1,12 @@
+.DS_Store
+.git
+.gitignore
+.worktrees
+node_modules
+dist
+build
+coverage
+.env
+.env.*
+docs
+infra/docker-compose.yml

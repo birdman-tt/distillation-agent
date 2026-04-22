@@ -19,6 +19,8 @@
 - [项目架构蓝图](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/Project_Architecture_Blueprint.md)
 - [实施计划](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/implementation-plan.md)
 - [平台无关部署基线](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/platform-neutral-deployment-baseline.md)
+- [统一 Docker 部署方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/unified-docker-deployment-plan.md)
+- [腾讯云部署方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/tencent-cloud-deployment-plan.md)
 
 ## 已确定的关键决策
 
@@ -52,6 +54,7 @@
 ```bash
 pnpm install
 pnpm infra:up
+pnpm dev:all
 pnpm dev:api
 pnpm dev:worker
 pnpm dev:client:h5
@@ -65,3 +68,47 @@ pnpm dev:client:weapp
 - API 会在启动时优先使用显式 `DATABASE_URL`；如果它还是本地占位值且存在 `POSTGRES_PASSWORD`，会自动拼出当前项目的 Supabase Session Pooler 连接串
 
 Node 版本锁定为 `22`，`pnpm` 主版本锁定为 `10`。当前如果本机版本低于该约束，安装和 typecheck 仍可能通过，但不作为长期开发基线。
+
+如果你只想在本地一次性拉起 `worker + api + h5`，直接运行：
+
+```bash
+pnpm dev:all
+```
+
+脚本位置在 [`scripts/dev-all.sh`](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/scripts/dev-all.sh)，会自动尝试 `nvm use`，并在 `Ctrl+C` 时一起关闭三个进程。
+
+## 部署初版
+
+统一 Docker 部署初版文件位于 [`infra/deploy`](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/infra/deploy)。
+
+最小使用方式：
+
+```bash
+cp infra/deploy/.env.example.staging infra/deploy/.env.staging
+pnpm docker:build:api
+pnpm docker:build:worker
+pnpm docker:build:h5
+pnpm docker:build:migrate
+pnpm deploy:config:staging
+pnpm deploy:migrate:staging
+pnpm deploy:up:staging
+```
+
+本机用 Docker 直接访问服务：
+
+```bash
+cp infra/deploy/.env.example.local infra/deploy/.env.local
+pnpm docker:build:api
+pnpm docker:build:worker
+pnpm docker:build:h5
+pnpm docker:build:migrate
+pnpm deploy:up:local
+```
+
+启动后可访问：
+
+- `http://localhost:8080`：H5 网关入口
+- `http://api.localhost:8080/health`：API 网关入口
+- `http://localhost:13100/health`：H5 直连
+- `http://localhost:13000/health`：API 直连
+- `http://localhost:13001/health`：Worker 直连

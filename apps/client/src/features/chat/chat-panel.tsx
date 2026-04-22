@@ -1,4 +1,5 @@
 import { createChatSession, sendChatMessage } from "@hall-of-fame/api-client";
+import { uiTokens } from "@hall-of-fame/ui-tokens";
 import { useRef, useState } from "react";
 
 import { getApiBaseUrl } from "../../lib/api.js";
@@ -80,9 +81,7 @@ export const ChatPanel = (props: ChatPanelProps) => {
       errorLabel?: string;
     },
   ) => {
-    setMessages((current) =>
-      current.map((message) => (message.id === messageId ? updater(message) : message)),
-    );
+    setMessages((current) => current.map((message) => (message.id === messageId ? updater(message) : message)));
   };
 
   const deliverUserMessage = async (messageId: string, content: string) => {
@@ -153,28 +152,85 @@ export const ChatPanel = (props: ChatPanelProps) => {
   };
 
   return (
-    <section>
-      <h3>对话</h3>
-      <textarea value={input} onChange={(event) => setInput(event.target.value)} />
-      <button type="button" onClick={() => void handleSend()} disabled={!input.trim()}>
-        发送
-      </button>
-      <ul>
+    <section
+      style={{
+        display: "grid",
+        gap: uiTokens.spacing.md,
+        padding: uiTokens.spacing.lg,
+        borderRadius: 28,
+        background: "rgba(255,255,255,0.58)",
+        border: `1px solid ${uiTokens.colors.lineLight}`,
+      }}
+    >
+      <header style={{ display: "grid", gap: 4 }}>
+        <span style={{ fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.56 }}>Chat</span>
+        <h3 style={{ margin: 0, fontFamily: uiTokens.typography.display.family, fontSize: uiTokens.typography.display.sizes.panel }}>对话</h3>
+      </header>
+
+      <div style={{ display: "grid", gap: uiTokens.spacing.sm }}>
         {messages.map((message) => (
-          <li key={message.id}>
-            <span>{message.role === "ASSISTANT" ? "A" : "Q"}: </span>
-            <span>{message.content}</span>
+          <div
+            key={message.id}
+            style={{
+              marginLeft: message.role === "USER" ? "auto" : 0,
+              maxWidth: "82%",
+              padding: "12px 14px",
+              borderRadius: 22,
+              background:
+                message.role === "USER"
+                  ? uiTokens.colors.signalBlue
+                  : "rgba(255,255,255,0.48)",
+              color: message.role === "USER" ? uiTokens.colors.lightSurface : uiTokens.colors.ink,
+              border: `1px solid ${uiTokens.colors.lineLight}`,
+            }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.6 }}>
+              {message.role === "ASSISTANT" ? "对象" : "我"}
+            </div>
+            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.68 }}>{message.content}</div>
             {message.role === "USER" && message.status === "failed" ? (
-              <>
-                <span> {message.errorLabel}</span>
-                <button type="button" aria-label="重试这句话" onClick={() => void handleRetry(message.id, message.content)}>
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: uiTokens.spacing.xs, marginTop: 8 }}>
+                <span style={{ fontSize: 12, color: uiTokens.colors.danger }}>{message.errorLabel}</span>
+                <button
+                  type="button"
+                  aria-label="重试"
+                  onClick={() => void handleRetry(message.id, message.content)}
+                  style={{
+                    minHeight: 28,
+                    width: 28,
+                    padding: 0,
+                    borderRadius: 999,
+                    border: `1px solid ${uiTokens.colors.lineLight}`,
+                    background: uiTokens.colors.lightSoft,
+                    color: uiTokens.colors.ink,
+                    boxShadow: "none",
+                  }}
+                >
                   ↻
                 </button>
-              </>
+              </div>
             ) : null}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gap: uiTokens.spacing.sm,
+          padding: uiTokens.spacing.sm,
+          borderRadius: 24,
+          background: "rgba(255,255,255,0.58)",
+          border: `1px solid ${uiTokens.colors.lineLight}`,
+        }}
+      >
+        <textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="输入你想说的话" />
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" onClick={() => void handleSend()} disabled={!input.trim()}>
+            发送
+          </button>
+        </div>
+      </div>
     </section>
   );
 };

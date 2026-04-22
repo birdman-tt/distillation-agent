@@ -19,7 +19,7 @@ export const buildReplyInspectorHtml = (reply: ChatReplyLike) => {
   const parts = [summary];
 
   if (reply.conflictDetected) {
-    parts.push("当前答案主动避开了彼此冲突的材料。");
+    parts.push("已避开冲突信息。");
   }
 
   const explanation = parts.filter(Boolean).join(" ");
@@ -27,5 +27,5 @@ export const buildReplyInspectorHtml = (reply: ChatReplyLike) => {
     return "";
   }
 
-  return `<details class="reply-inspector"><summary>这句话怎么来的</summary><div class="meta">${escapeHtml(explanation)}</div></details>`;
+  return `<details class="reply-inspector"><summary>回答依据</summary><div class="meta">${escapeHtml(explanation)}</div></details>`;
 };
