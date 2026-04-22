@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>名人堂当前交互流程图</title>
+    <meta
+      name="description"
+      content="Hall of Fame 当前真实交互流程、业务闭环与运行时协作关系的 HTML 预览版文档。"
+    />
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --paper: rgba(255, 251, 245, 0.88);
+        --paper-strong: #fffdf8;
+        --ink: #1d2628;
+        --muted: #5c666a;
+        --line: rgba(34, 44, 48, 0.12);
+        --line-strong: rgba(34, 44, 48, 0.22);
+        --accent: #a64a3b;
+        --accent-soft: rgba(166, 74, 59, 0.1);
+        --teal: #0f6761;
+        --teal-soft: rgba(15, 103, 97, 0.1);
+        --gold: #9a6b2e;
+        --shadow: 0 18px 50px rgba(31, 26, 22, 0.08);
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --shell: 1240px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family:
+          "Avenir Next",
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Noto Sans SC",
+          sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(166, 74, 59, 0.12), transparent 26rem),
+          radial-gradient(circle at 100% 10%, rgba(15, 103, 97, 0.12), transparent 22rem),
+          linear-gradient(180deg, #efe7db 0%, var(--bg) 38%, #ede7de 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(calc(100% - 32px), var(--shell));
+        margin: 0 auto;
+        padding: 28px 0 72px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: var(--radius-xl);
+        background:
+          linear-gradient(135deg, rgba(255, 250, 243, 0.92), rgba(248, 241, 233, 0.94)),
+          var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -8% -40% auto;
+        width: 20rem;
+        height: 20rem;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(15, 103, 97, 0.14), transparent 70%);
+        pointer-events: none;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family:
+          "Iowan Old Style",
+          "Palatino Linotype",
+          "Noto Serif SC",
+          "Source Han Serif SC",
+          serif;
+        letter-spacing: -0.03em;
+      }
+
+      h1 {
+        font-size: clamp(2.4rem, 5vw, 4.8rem);
+        line-height: 0.96;
+        max-width: 12ch;
+      }
+
+      .hero-grid {
+        display: grid;
+        gap: 28px;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+        align-items: end;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 14px;
+      }
+
+      .hero-copy p {
+        margin: 0;
+        max-width: 58ch;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 4px;
+      }
+
+      .chip-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+        text-decoration: none;
+      }
+
+      .chip-link.primary {
+        color: #fff7f4;
+        background: linear-gradient(180deg, #ae5949, #8f3f32);
+        border-color: transparent;
+      }
+
+      .hero-meta {
+        display: grid;
+        gap: 12px;
+      }
+
+      .meta-card {
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .meta-card dt {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .meta-card dd {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .toc {
+        position: sticky;
+        top: 18px;
+        z-index: 10;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px;
+        margin: 18px 0 26px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 999px;
+        background: rgba(251, 246, 239, 0.82);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 12px 28px rgba(31, 26, 22, 0.06);
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        color: var(--ink);
+        border-color: var(--line);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .summary-grid,
+      .flow-grid,
+      .state-grid,
+      .gap-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 20px;
+      }
+
+      .card {
+        padding: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: var(--radius-lg);
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .card.kicker-accent {
+        background:
+          linear-gradient(180deg, rgba(166, 74, 59, 0.06), rgba(255, 251, 245, 0.95)),
+          var(--paper);
+      }
+
+      .card.kicker-teal {
+        background:
+          linear-gradient(180deg, rgba(15, 103, 97, 0.06), rgba(255, 251, 245, 0.95)),
+          var(--paper);
+      }
+
+      .card.kicker-gold {
+        background:
+          linear-gradient(180deg, rgba(154, 107, 46, 0.06), rgba(255, 251, 245, 0.95)),
+          var(--paper);
+      }
+
+      .card .kicker {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .kicker.accent {
+        color: var(--accent);
+      }
+
+      .kicker.teal {
+        color: var(--teal);
+      }
+
+      .kicker.gold {
+        color: var(--gold);
+      }
+
+      .card h3 {
+        font-size: 1.35rem;
+        line-height: 1.1;
+        margin-bottom: 10px;
+      }
+
+      .card p,
+      .card li {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .card ul {
+        margin: 12px 0 0;
+        padding-left: 18px;
+      }
+
+      .section {
+        margin-top: 24px;
+      }
+
+      .section-shell {
+        padding: 26px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: var(--radius-xl);
+        background: rgba(255, 252, 247, 0.78);
+        box-shadow: var(--shadow);
+      }
+
+      .section-head {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .section-head p {
+        margin: 0;
+        max-width: 66ch;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      h2 {
+        font-size: clamp(1.8rem, 3vw, 2.7rem);
+        line-height: 1.02;
+      }
+
+      .mermaid-frame {
+        overflow: hidden;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--paper-strong);
+      }
+
+      .flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .path-card {
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .path-card h3 {
+        margin-bottom: 8px;
+        font-size: 1.3rem;
+      }
+
+      .code-flow {
+        margin: 12px 0 0;
+        padding: 14px;
+        border-radius: 16px;
+        background: #222730;
+        color: #edf2f7;
+        font-family:
+          "SFMono-Regular",
+          "JetBrains Mono",
+          "Menlo",
+          monospace;
+        font-size: 13px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+      }
+
+      .state-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .state-block {
+        padding: 20px;
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid var(--line);
+      }
+
+      .state-block h3 {
+        margin-bottom: 12px;
+      }
+
+      .state-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .pill.teal {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .pill.gold {
+        background: rgba(154, 107, 46, 0.1);
+        color: var(--gold);
+      }
+
+      .gap-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .quote {
+        padding: 22px 24px;
+        border-left: 4px solid var(--accent);
+        border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+        background: rgba(255, 255, 255, 0.8);
+        color: var(--ink);
+        font-size: 17px;
+        line-height: 1.8;
+      }
+
+      .source-list {
+        display: grid;
+        gap: 10px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .source-list li {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+        font-family:
+          "SFMono-Regular",
+          "JetBrains Mono",
+          "Menlo",
+          monospace;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .footer-note {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .summary-grid,
+        .flow-grid,
+        .state-grid,
+        .gap-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero,
+        .section-shell {
+          padding: 22px;
+        }
+
+        .toc {
+          position: static;
+          border-radius: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Interaction Blueprint</p>
+            <h1>名人堂当前交互流程图</h1>
+            <p>
+              这是一份面向需求讨论与实现对齐的 HTML 预览稿，专门把当前
+              Hall of Fame 的真实交互流转拆清楚。重点不是目标愿景，而是
+              “现在代码里真正已经形成的闭环是什么”。
+            </p>
+            <div class="hero-actions">
+              <a class="chip-link primary" href="./current-interaction-flow.md">查看 Markdown 原文</a>
+              <a class="chip-link" href="#runtime-flow">跳到运行时交互图</a>
+              <a class="chip-link" href="#real-paths">跳到 4 条用户端链路</a>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <dl class="meta-card">
+              <dt>当前结论</dt>
+              <dd>真实交互主线已跑通，但主要存在于 `.worktrees/task1-bootstrap` 的 H5 shell。</dd>
+            </dl>
+            <dl class="meta-card">
+              <dt>当前前端形态</dt>
+              <dd>Fastify 渲染 H5，不是最终的 Taro 双端运行时。</dd>
+            </dl>
+            <dl class="meta-card">
+              <dt>当前最稳的业务约束</dt>
+              <dd>分享、预览、聊天围绕 `persona_version` 展开；审核工作台已移出当前用户端范围。</dd>
+            </dl>
+          </div>
+        </div>
+
+        <section class="summary-grid" aria-label="核心摘要">
+          <article class="card kicker-accent">
+            <p class="kicker accent">用户主入口</p>
+            <h3>官方人物馆先吸引，再进入 Persona 聊天</h3>
+            <p>首页不是工具台，而是精选人物馆；点进人物卡后直接进入聊天状态。</p>
+          </article>
+          <article class="card kicker-teal">
+            <p class="kicker teal">创作主闭环</p>
+            <h3>创建对象，补资料，蒸馏后进入预览</h3>
+            <p>当前用户端先聚焦创建、预览和聊天，审核工作台后续交给独立 admin 项目。</p>
+          </article>
+          <article class="card kicker-gold">
+            <p class="kicker gold">传播主单位</p>
+            <h3>对外传播的不是 Persona，而是版本级分享身份</h3>
+            <p>分享链接固定绑定到 `persona_version`，旧分享不能被后续编辑漂移掉。</p>
+          </article>
+        </section>
+      </header>
+
+      <nav class="toc" aria-label="目录">
+        <a href="#page-flow">页面与跳转图</a>
+        <a href="#business-flow">业务闭环图</a>
+        <a href="#runtime-flow">运行时交互图</a>
+        <a href="#real-paths">4 条用户端链路</a>
+        <a href="#state-machines">状态机</a>
+        <a href="#gaps">当前差距</a>
+        <a href="#handoff">交付话术</a>
+      </nav>
+
+      <section class="section" id="page-flow">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">01</p>
+            <h2>当前页面与跳转图</h2>
+            <p>
+              先看页面层面的关系。这里强调的是用户在 H5 中怎么移动，而不是系统内部怎么协作。
+            </p>
+          </div>
+          <div class="mermaid-frame">
+            <pre class="mermaid">
+flowchart TD
+  Home["首页 /<br/>精选人物馆"] --> Persona["Persona 页 /persona/:personaId<br/>直接进入聊天"]
+  Home --> Create["创建页 /create<br/>创建对象并加资料"]
+  Home --> Mine["我的 /mine<br/>个人对象与身份信息"]
+
+  Share["分享页 /share/:shareSlug<br/>直接承接聊天"] --> Chat["聊天动作<br/>创建 chat session + 发消息"]
+  Persona --> Chat
+
+  Create --> SourceText["添加文本资料"]
+  Create --> SourceUrl["添加 URL 资料"]
+  SourceText --> Create
+  SourceUrl --> Create
+  Create --> Preview["预览页 /preview/:personaVersionId<br/>试聊 + 查看候选版本"]
+  Mine --> Create
+
+  Preview -. 后续 admin 项目 .-> AdminReview["审核/发布工作台<br/>独立 admin 项目"]
+  AdminReview -. 通过后 .-> ShareLink["生成 share_slug / canonical_url"]
+  ShareLink -. 回流用户端 .-> Share
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="business-flow">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">02</p>
+            <h2>当前主业务闭环图</h2>
+            <p>
+              这张图更接近产品视角：用户从哪里进入，怎么体验，创作者怎么产出对象，平台怎么把对象推到可分享状态。
+            </p>
+          </div>
+          <div class="mermaid-frame">
+            <pre class="mermaid">
+flowchart LR
+  Visitor["访客 / 普通用户"] --> Hall["官方人物馆"]
+  Hall --> OfficialChat["官方 Persona 聊天"]
+  OfficialChat --> ShareOut["分享对象"]
+  ShareOut --> SharedVisitor["被分享用户"]
+  SharedVisitor --> ShareLanding["分享落地页"]
+  ShareLanding --> ContinueChat["继续聊天"]
+
+  Visitor --> Builder["创建者进入 /create"]
+  Builder --> CreatePersona["创建 persona"]
+  CreatePersona --> AddSources["添加文本 / URL 资料"]
+  AddSources --> Distill["触发蒸馏"]
+  Distill --> PreviewChat["预览页试聊"]
+  PreviewChat --> Mine["我的"]
+
+  PreviewChat -. 后续 admin 审核/发布 .-> ShareIdentity["生成版本级分享身份"]
+  ShareIdentity -. 回到用户端分享 .-> ShareLanding
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="runtime-flow">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">03</p>
+            <h2>当前运行时交互图</h2>
+            <p>
+              这张图描述 H5、API、Worker 和 DeepSeek 之间的真实协作方式。它对应的是当前 bootstrap 代码态，而不是未来理想架构。
+            </p>
+          </div>
+          <div class="mermaid-frame">
+            <pre class="mermaid">
+sequenceDiagram
+  participant U as 用户
+  participant H5 as H5 Shell
+  participant API as apps/api
+  participant Store as persona-store/chat-store/auth-store
+  participant Worker as apps/worker
+  participant DS as DeepSeek
+
+  U->>H5: 打开首页 / persona / share / create / mine
+  H5->>API: 调用 /v1/... 业务接口
+  API->>Store: 读取 session / persona / version / source / chat
+
+  alt 官方 Persona 聊天
+    H5->>API: POST /v1/chats
+    H5->>API: POST /v1/chats/:chatId/messages
+    API->>Store: 解析 chat target
+    API->>DS: chat workflow
+    DS-->>API: 结构化回答
+    API->>Store: 保存 user + assistant message
+    API-->>H5: answer + basisSummary
+  end
+
+  alt 用户创建对象
+    H5->>API: POST /v1/personae
+    H5->>API: POST /v1/personae/:id/sources/text 或 /sources/url
+    API->>Store: 写入 pending source
+    API->>Worker: URL source ingest
+    Worker-->>API: 规范化快照
+    API->>Store: 持久化 source document / evidence
+    H5->>API: POST /v1/personae/:id/distill
+    API->>Store: 收集当前可用 sources
+    API->>Worker: distill
+    Worker->>DS: deepseek-reasoner
+    DS-->>Worker: profile + preview + scores
+    Worker-->>API: distilled result
+    API->>Store: 写入 candidate persona_version
+    API-->>H5: personaVersionId
+  end
+
+  opt 后续 admin 项目承接的审核/发布
+    API->>Store: 未来可接 review / publish 状态流转
+    API->>Store: 审批通过后生成 share link
+    API-->>H5: canonicalUrl + shareSlug
+  end
+            </pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="real-paths">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">04</p>
+            <h2>当前 4 条用户端链路</h2>
+            <p>
+              这里把现在仍属于当前用户端范围的交互拆成 4 条路径，审核与发布工作台不再算进主产品链路。
+            </p>
+          </div>
+
+          <div class="flow-grid">
+            <article class="path-card">
+              <p class="kicker accent">01 官方体验链路</p>
+              <h3>首页精选 -> Persona 聊天</h3>
+              <div class="code-flow">首页精选 -> 点击人物卡 -> Persona 页 -> 首屏看到 persona 先说一句 ->
+用户输入 -> 创建 chat session -> 发消息 -> 返回回答 -> 可展开“这句话怎么来的”</div>
+              <ul>
+                <li>首页入口是人物馆，不是工具台。</li>
+                <li>Persona 页首屏直接进入聊天状态。</li>
+                <li>回答解释层默认折叠，用户主动展开。</li>
+              </ul>
+            </article>
+
+            <article class="path-card">
+              <p class="kicker teal">02 分享承接链路</p>
+              <h3>外部分享 -> 分享页 -> 继续聊天</h3>
+              <div class="code-flow">外部分享链接 -> /share/:shareSlug -> 直接进入聊天页壳 ->
+创建 share_link 类型 chat session -> 继续对话</div>
+              <ul>
+                <li>分享承接的是 `persona_version`。</li>
+                <li>分享页复用 Persona 页的聊天语言。</li>
+                <li>分享落地页首屏就能开聊。</li>
+              </ul>
+            </article>
+
+            <article class="path-card">
+              <p class="kicker gold">03 创建链路</p>
+              <h3>创建 Persona -> 加资料 -> 蒸馏</h3>
+              <div class="code-flow">/create -> ensureAnonymousSession ->
+创建 persona -> 添加文本/URL 资料 -> 刷新资料列表 ->
+点击“蒸馏并进入预览页”</div>
+              <ul>
+                <li>当前创建页支持匿名 session 起步。</li>
+                <li>文本和 URL 资料是平级入口。</li>
+                <li>手机号升级路径已接简化版 H5 登录。</li>
+              </ul>
+            </article>
+
+            <article class="path-card">
+              <p class="kicker accent">04 蒸馏与预览链路</p>
+              <h3>distill -> candidate version -> preview chat</h3>
+              <div class="code-flow">添加资料 -> POST /distill ->
+worker distill -> 生成 candidate persona_version ->
+/preview/:personaVersionId -> 试聊 -> 返回“我的”或等待后续发布链路</div>
+              <ul>
+                <li>预览聊天命中 `draft_version_preview`。</li>
+                <li>预览访问当前以创建者为中心。</li>
+                <li>“是否公开分享”后续由独立 admin 项目承接。</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="state-machines">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">05</p>
+            <h2>当前关键状态机</h2>
+            <p>这里不是完整数据库状态定义，而是当前最值得需求侧牢牢记住的业务状态面。</p>
+          </div>
+
+          <div class="state-grid">
+            <article class="state-block">
+              <p class="kicker accent">角色</p>
+              <h3>Actor Roles</h3>
+              <div class="state-list">
+                <span class="pill">ANONYMOUS</span>
+                <span class="pill teal">USER</span>
+                <span class="pill gold">REVIEWER</span>
+              </div>
+              <ul>
+                <li>`ANONYMOUS` 可以开始体验和创建。</li>
+                <li>`USER` 是正式手机号或微信身份。</li>
+                <li>`REVIEWER` 只保留给后续 admin 项目。</li>
+              </ul>
+            </article>
+
+            <article class="state-block">
+              <p class="kicker teal">Persona 状态</p>
+              <h3>Persona Container</h3>
+              <div class="code-flow">DRAFT -> PROCESSING -> READY -> PUBLISHED
+                           \-> REJECTED</div>
+              <ul>
+                <li>`persona` 更像容器或归属单位。</li>
+                <li>当前真正参与聊天、审核、分享的是 `persona_version`。</li>
+              </ul>
+            </article>
+
+            <article class="state-block">
+              <p class="kicker gold">Version 状态</p>
+              <h3>Persona Version</h3>
+              <div class="code-flow">DRAFT -> CANDIDATE -> PENDING_PUBLISH_REVIEW -> PUBLISHED
+                    \-> REJECTED
+                    \-> SUPERSEDED</div>
+              <ul>
+                <li>发布和分享都绑定版本，而不是绑定可变 persona。</li>
+                <li>审核相关状态属于后续 admin 项目衔接范围。</li>
+              </ul>
+            </article>
+
+            <article class="state-block">
+              <p class="kicker accent">Chat Target</p>
+              <h3>聊天目标三种模式</h3>
+              <div class="state-list">
+                <span class="pill">published_persona</span>
+                <span class="pill teal">draft_version_preview</span>
+                <span class="pill gold">share_link</span>
+              </div>
+              <ul>
+                <li>官方聊的是 `published_persona`。</li>
+                <li>预览聊的是 `draft_version_preview`。</li>
+                <li>分享进来聊的是 `share_link`。</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="gaps">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">06</p>
+            <h2>当前实现与目标产品之间的差距</h2>
+            <p>
+              需求讨论最容易混淆的地方在这里：产品目标已经比较完整，但当前代码态仍然是 bootstrap。后续实现窗口必须明确自己在补哪一层。
+            </p>
+          </div>
+
+          <div class="gap-grid">
+            <article class="card kicker-teal">
+              <p class="kicker teal">已经基本成型</p>
+              <ul>
+                <li>官方人物馆 -> Persona 聊天</li>
+                <li>分享落地 -> 继续聊天</li>
+                <li>创建 -> 资料 -> 蒸馏 -> 预览</li>
+                <li>分享身份绑定 `persona_version`</li>
+                <li>回答解释层 `basisSummary`</li>
+              </ul>
+            </article>
+
+            <article class="card kicker-accent">
+              <p class="kicker accent">还明显是 bootstrap</p>
+              <ul>
+                <li>真实前端仍是 H5 Fastify shell，不是最终 Taro 双端运行态。</li>
+                <li>微信小程序还没有真实页面流，只是 scaffold 占位。</li>
+                <li>“我的”入口当前不是完整个人中心，底部导航还需要正式收敛成 `聊天 / 创建 / 我的`。</li>
+                <li>`/v1/feedback` 已存在，但主交互里还没挂完整纠偏反馈。</li>
+                <li>bootstrap 里仍有 `/review` 残留，但它不属于当前用户端产品态。</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="handoff">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">07</p>
+            <h2>可直接给实现窗口的总述</h2>
+            <p>如果你要把这份文档转给其他窗口，下面这段话可以直接复用。</p>
+          </div>
+
+          <div class="quote">
+            当前 Hall of Fame 的用户端真实交互闭环已经确定为：官方人物馆吸引进入，Persona 页与分享页都直接承接聊天；用户可在创建页用公开资料创建 persona，并进入 distill 与预览链路；底部导航收敛为
+            <code>聊天 / 创建 / 我的</code>
+            。审核与发布工作台不再属于当前用户端范围，后续由独立 admin 项目承接；而以
+            <code>persona_version</code>
+            为中心的分享与聊天链路继续承接。
+          </div>
+
+          <ul class="source-list">
+            <li>docs/current-interaction-flow.md</li>
+            <li>.worktrees/task1-bootstrap/apps/client/src/h5-app.ts</li>
+            <li>.worktrees/task1-bootstrap/apps/api/src/routes/chats.ts</li>
+            <li>.worktrees/task1-bootstrap/apps/api/src/routes/personae/manage.ts</li>
+            <li>.worktrees/task1-bootstrap/apps/api/src/routes/persona-versions.ts</li>
+          </ul>
+
+          <p class="footer-note">
+            说明：本页中的 Mermaid 图依赖在线脚本渲染。若本地网络被限制，图可能只显示原始代码块，其余内容仍可正常阅读。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: "base",
+          securityLevel: "loose",
+          themeVariables: {
+            background: "#fffdf8",
+            primaryColor: "#f4d8d2",
+            primaryBorderColor: "#a64a3b",
+            primaryTextColor: "#1d2628",
+            secondaryColor: "#dff0ee",
+            secondaryBorderColor: "#0f6761",
+            tertiaryColor: "#f0e6d4",
+            tertiaryBorderColor: "#9a6b2e",
+            lineColor: "#5c666a",
+            textColor: "#1d2628",
+            fontFamily:
+              '"Avenir Next","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif',
+          },
+          flowchart: {
+            curve: "basis",
+          },
+          sequence: {
+            actorMargin: 40,
+            boxMargin: 12,
+            noteMargin: 12,
+            messageMargin: 18,
+          },
+        });
+      }
+    </script>
+  </body>
+</html>

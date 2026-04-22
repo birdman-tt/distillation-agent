@@ -205,21 +205,20 @@
 - [ ] 约定微信内打开的跳转策略
 - [ ] 前端分享 adapter 统一消费版本级分享元数据
 
-### Task 5: 审核能力与运营工具 `[P0]`
+### Task 5: 审核能力与运营工具（移至独立 admin 项目） `[Deferred]`
 
-**目的：** 让“半自动抓取 + 人工审核”真正可执行，而不只是状态字段停在文档里。
+**目的：** 记录边界变更。审核能力仍然保留，但不再属于当前用户端项目范围，后续放到独立 `admin` 项目承接。
 
 **预计产出：**
 
-- 资料审核 API
-- 发布审核 API
-- 审核记录与操作日志
-- 最小运营审核页面
+- 一份清晰的 `admin` 项目职责边界
+- 与当前用户端共享的数据/接口契约说明
+- 后续 reviewer 工作台的单独实现计划
 
 **建议责任人：**
 
 - 后端 1 人
-- 前端/运营工具 1 人
+- admin 前端/运营工具 1 人
 
 **依赖：**
 
@@ -227,22 +226,16 @@
 
 **可并行性：**
 
-- 中
+- 当前用户端阶段不执行
 
 **Files:**
-- Create: `apps/api/src/routes/reviews/*`
-- Create: `apps/api/src/services/reviews/*`
-- Create: `apps/client/src/pages/review/index.tsx`
-- Create: `apps/client/src/features/review/*`
-- Create: `packages/contracts/src/reviews.ts`
-- Modify: `packages/domain/src/source.ts`
-- Modify: `packages/domain/src/persona.ts`
+- Future admin project: reviewer workbench
+- Shared boundary: `packages/contracts/*`, `packages/domain/*`
 
-- [ ] 提供待审核资料列表和查询接口
-- [ ] 提供 `APPROVED` / `REJECTED` 状态流转接口，并记录操作人、时间、原因
-- [ ] 提供基于 `personaVersionId` 的发布审核入口，不再按裸 `personaId` 审核
-- [ ] 支持官方对象人工上架和用户公开对象抽检
-- [ ] 明确审核员权限边界和最小审计字段
+- [ ] 当前用户端不实现 `apps/client/src/pages/review/*`
+- [ ] 当前用户端不暴露 reviewer 导航入口
+- [ ] 后续在独立 `admin` 项目中承接资料审核、发布审核、操作日志
+- [ ] 若未来恢复审核链路，继续以 `personaVersionId` 作为发布审核主键
 
 ### Task 6: 登录与会话 `[P1]`
 

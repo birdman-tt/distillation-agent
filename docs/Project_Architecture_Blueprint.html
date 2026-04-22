@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Project Architecture Blueprint</title>
+    <meta
+      name="description"
+      content="Hall of Fame 当前实现架构与目标需求架构的蓝图预览页。"
+    />
+    <style>
+      :root {
+        --bg: #f3efe8;
+        --paper: rgba(255, 252, 246, 0.88);
+        --paper-strong: #fffdf9;
+        --ink: #172126;
+        --muted: #59666d;
+        --line: rgba(30, 43, 49, 0.12);
+        --line-strong: rgba(30, 43, 49, 0.22);
+        --accent: #8e3f38;
+        --accent-soft: rgba(142, 63, 56, 0.1);
+        --blue: #245173;
+        --blue-soft: rgba(36, 81, 115, 0.1);
+        --green: #305c44;
+        --green-soft: rgba(48, 92, 68, 0.1);
+        --gold: #8e6a2a;
+        --gold-soft: rgba(142, 106, 42, 0.1);
+        --shadow: 0 22px 56px rgba(27, 24, 20, 0.08);
+        --radius-xl: 30px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --shell: 1280px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family:
+          "Avenir Next",
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Noto Sans SC",
+          sans-serif;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(36, 81, 115, 0.11), transparent 24rem),
+          radial-gradient(circle at 100% 10%, rgba(142, 63, 56, 0.11), transparent 24rem),
+          linear-gradient(180deg, #efe9e0 0%, var(--bg) 42%, #eee9e3 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      code {
+        padding: 0.1em 0.35em;
+        border-radius: 8px;
+        background: rgba(23, 33, 38, 0.06);
+        font-family:
+          "SFMono-Regular",
+          "JetBrains Mono",
+          "Menlo",
+          monospace;
+        font-size: 0.92em;
+      }
+
+      .shell {
+        width: min(calc(100% - 32px), var(--shell));
+        margin: 0 auto;
+        padding: 30px 0 72px;
+      }
+
+      .hero {
+        padding: 38px;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: var(--radius-xl);
+        background:
+          linear-gradient(135deg, rgba(255, 250, 242, 0.92), rgba(247, 243, 235, 0.96)),
+          var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+        gap: 28px;
+        align-items: end;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family:
+          "Iowan Old Style",
+          "Palatino Linotype",
+          "Noto Serif SC",
+          "Source Han Serif SC",
+          serif;
+        letter-spacing: -0.03em;
+      }
+
+      h1 {
+        font-size: clamp(2.5rem, 5vw, 4.8rem);
+        line-height: 0.96;
+        max-width: 11ch;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 14px;
+      }
+
+      .hero-copy p {
+        margin: 0;
+        max-width: 62ch;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 4px;
+      }
+
+      .button-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 42px;
+        padding: 0 15px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.8);
+        text-decoration: none;
+      }
+
+      .button-link.primary {
+        color: #fff8f6;
+        background: linear-gradient(180deg, #9f4e45, #7e352f);
+        border-color: transparent;
+      }
+
+      .hero-meta {
+        display: grid;
+        gap: 12px;
+      }
+
+      .meta-card,
+      .card,
+      .section-shell,
+      .diagram-frame,
+      .component-card,
+      .rule-card,
+      .judgment {
+        border: 1px solid rgba(255, 255, 255, 0.74);
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .meta-card {
+        padding: 16px 18px;
+        border-radius: var(--radius-lg);
+      }
+
+      .meta-card h3 {
+        margin-bottom: 8px;
+        font-size: 1.15rem;
+      }
+
+      .meta-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .sticky-nav {
+        position: sticky;
+        top: 18px;
+        z-index: 12;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px;
+        margin: 18px 0 24px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 999px;
+        background: rgba(251, 246, 238, 0.82);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 12px 28px rgba(27, 24, 20, 0.06);
+      }
+
+      .sticky-nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 14px;
+        border-radius: 999px;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .sticky-nav a:hover {
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.7);
+        border-color: var(--line);
+      }
+
+      .summary-grid,
+      .diagram-grid,
+      .component-grid,
+      .rule-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 22px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: var(--radius-lg);
+      }
+
+      .card .kicker {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .kicker.accent {
+        color: var(--accent);
+      }
+
+      .kicker.blue {
+        color: var(--blue);
+      }
+
+      .kicker.green {
+        color: var(--green);
+      }
+
+      .card h3 {
+        font-size: 1.3rem;
+        line-height: 1.1;
+        margin-bottom: 10px;
+      }
+
+      .card p,
+      .card li,
+      .section-head p,
+      .component-card p,
+      .component-card li,
+      .rule-card li {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.75;
+      }
+
+      .card ul,
+      .component-card ul,
+      .rule-card ul {
+        margin: 12px 0 0;
+        padding-left: 18px;
+      }
+
+      .section {
+        margin-top: 24px;
+      }
+
+      .section-shell {
+        padding: 28px;
+        border-radius: var(--radius-xl);
+      }
+
+      .section-head {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      h2 {
+        font-size: clamp(1.9rem, 3vw, 2.8rem);
+        line-height: 1.02;
+      }
+
+      .diagram-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .diagram-frame {
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+      }
+
+      .component-grid,
+      .rule-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .component-card,
+      .rule-card {
+        padding: 22px;
+        border-radius: var(--radius-lg);
+      }
+
+      .component-card h3,
+      .rule-card h3 {
+        margin-bottom: 10px;
+        font-size: 1.28rem;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .pill.accent {
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .pill.blue {
+        color: var(--blue);
+        background: var(--blue-soft);
+      }
+
+      .pill.green {
+        color: var(--green);
+        background: var(--green-soft);
+      }
+
+      .pill.gold {
+        color: var(--gold);
+        background: var(--gold-soft);
+      }
+
+      .judgment {
+        padding: 24px;
+        border-radius: var(--radius-lg);
+        border-left: 4px solid var(--accent);
+        background:
+          linear-gradient(180deg, rgba(142, 63, 56, 0.04), rgba(255, 252, 246, 0.96)),
+          var(--paper);
+      }
+
+      .judgment p {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.85;
+      }
+
+      .source-list {
+        display: grid;
+        gap: 10px;
+        padding: 0;
+        margin: 16px 0 0;
+        list-style: none;
+      }
+
+      .source-list li {
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        font-family:
+          "SFMono-Regular",
+          "JetBrains Mono",
+          "Menlo",
+          monospace;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .footer-note {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .summary-grid,
+        .component-grid,
+        .rule-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero,
+        .section-shell {
+          padding: 22px;
+        }
+
+        .sticky-nav {
+          position: static;
+          border-radius: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Architecture Blueprint</p>
+            <h1>Hall of Fame 架构蓝图</h1>
+            <p>
+              这份页面不是交互流程说明，而是按
+              <code>architecture-blueprint-generator</code>
+              的思路整理的架构蓝图。核心不是只画页面，而是识别当前代码里的真实架构边界、目标需求架构，以及两者之间的迁移关系。
+            </p>
+            <div class="hero-actions">
+              <a class="button-link primary" href="./Project_Architecture_Blueprint.md">查看 Markdown 蓝图</a>
+              <a class="button-link" href="#topology">跳到系统拓扑</a>
+              <a class="button-link" href="#judgment">跳到最终判断</a>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <article class="meta-card">
+              <h3>检测出的技术栈</h3>
+              <p>Node.js、TypeScript、pnpm workspace、Fastify、Zod、DeepSeek，以及目标态的 Taro + React。</p>
+            </article>
+            <article class="meta-card">
+              <h3>当前架构模式</h3>
+              <p>Layered monorepo + single business API + internal worker + shared package boundaries。</p>
+            </article>
+            <article class="meta-card">
+              <h3>最重要的架构事实</h3>
+              <p>这个项目必须同时画出“当前实现架构”和“目标需求架构”，否则图会天然失真。</p>
+            </article>
+          </div>
+        </div>
+
+        <section class="summary-grid">
+          <article class="card">
+            <p class="kicker accent">Current Truth</p>
+            <h3>H5 bootstrap 已经成型</h3>
+            <p>当前真正跑起来的是 H5 Fastify shell + API + worker，而不是最终双端 Taro client。</p>
+          </article>
+          <article class="card">
+            <p class="kicker blue">Target Truth</p>
+            <h3>目标是共享业务前端</h3>
+            <p>目标态是一套 Taro + React 代码编译到 h5 和 weapp，平台差异只放进 adapters。</p>
+          </article>
+          <article class="card">
+            <p class="kicker green">Core Invariant</p>
+            <h3><code>persona_version</code> 是公开单元</h3>
+            <p>publish、review、share、preview、chat 全部围绕不可变版本展开，而不是围绕裸 persona。</p>
+          </article>
+        </section>
+      </header>
+
+      <nav class="sticky-nav" aria-label="目录">
+        <a href="#overview">架构总览</a>
+        <a href="#topology">系统拓扑</a>
+        <a href="#components">核心组件</a>
+        <a href="#data">数据架构</a>
+        <a href="#cross-cutting">横切关注点</a>
+        <a href="#governance">治理与扩展</a>
+        <a href="#judgment">最终判断</a>
+      </nav>
+
+      <section class="section" id="overview">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">01</p>
+            <h2>架构总览</h2>
+            <p>
+              对 Hall of Fame 来说，正确的架构图不是单一快照，而是双层视图：一层是现在真正落在代码里的 bootstrap 架构，一层是已经在需求和技术文档中锁定的目标架构。
+            </p>
+          </div>
+          <div class="judgment">
+            <p>
+              如果只画目标态，会掩盖当前 H5 bootstrap、内存态存储和 internal worker 的真实边界；如果只画当前态，又会把 Taro 双 target、PostgreSQL、Redis、MinIO 和 adapter 分层这些已锁定的需求方向抹掉。这个项目的架构蓝图必须明确表达这两层事实。
+            </p>
+          </div>
+          <div class="pill-row">
+            <span class="pill accent">Layered monorepo</span>
+            <span class="pill blue">Single API + worker</span>
+            <span class="pill green">Shared contracts/domain</span>
+            <span class="pill gold">Workflow-first LLM runtime</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="topology">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">02</p>
+            <h2>系统拓扑与架构图</h2>
+            <p>下面三张图分别对应：顶层系统上下文、当前实现组件图、目标需求架构图。</p>
+          </div>
+
+          <div class="diagram-grid">
+            <div class="diagram-frame">
+              <pre class="mermaid">
+flowchart LR
+  classDef current fill:#1e3347,stroke:#7db4ff,color:#eef6ff;
+  classDef target fill:#3c2c38,stroke:#e39ab7,color:#fff5f8,stroke-dasharray: 5 5;
+  classDef external fill:#243528,stroke:#7ed09a,color:#f0fff3;
+  classDef data fill:#3a3322,stroke:#e0b767,color:#fff9ee;
+
+  USER["End User"]
+  REVIEWER["Reviewer / Operator"]
+
+  H5["Current H5 Shell<br/>apps/client Fastify"]
+  TARGET_CLIENT["Target Shared Client<br/>Taro + React -> h5 / weapp"]
+  ADMIN["Future Admin Project<br/>review console"]
+
+  API["Unified Business API<br/>apps/api"]
+  WORKER["Internal Worker<br/>apps/worker"]
+
+  DEEPSEEK["DeepSeek API"]
+  PG["PostgreSQL"]
+  REDIS["Redis / Queue"]
+  MINIO["MinIO / Object Storage"]
+
+  USER --> H5
+  USER -. target .-> TARGET_CLIENT
+  REVIEWER -. future admin .-> ADMIN
+
+  H5 --> API
+  TARGET_CLIENT -. target .-> API
+  ADMIN -. future .-> API
+
+  API --> WORKER
+  API --> DEEPSEEK
+  WORKER --> DEEPSEEK
+
+  API -. target .-> PG
+  API -. target .-> REDIS
+  WORKER -. target .-> REDIS
+  WORKER -. target .-> MINIO
+  API -. target .-> MINIO
+              </pre>
+            </div>
+
+            <div class="diagram-frame">
+              <pre class="mermaid">
+flowchart TB
+  subgraph CLIENT["apps/client"]
+    H5_BOOT["dev-h5.ts"]
+    H5_APP["h5-app.ts"]
+    PAGES["home / persona / share / create / preview / mine"]
+    INLINE["inline browser scripts"]
+    PRESENT["chat-presentation.ts"]
+  end
+
+  REVIEW_BOOT["bootstrap /review route<br/>current artifact only"]
+
+  subgraph API["apps/api"]
+    API_BOOT["app.ts / server.ts"]
+    ROUTES["routes"]
+    AUTH["auth-store"]
+    PERSONA["persona-store"]
+    CHAT["chat-store"]
+    CHAT_WF["chat workflow"]
+    WORKER_CLIENT["worker-client"]
+  end
+
+  subgraph WORKER["apps/worker"]
+    WORKER_BOOT["app.ts / index.ts"]
+    INGEST["source-ingest"]
+    DISTILL["distill"]
+    FALLBACK["deterministic workflows"]
+  end
+
+  CONTRACTS["contracts"]
+  DOMAIN["domain"]
+  API_CLIENT["api-client"]
+  PROMPT["prompt-kit"]
+  DS_CLIENT["deepseek-client"]
+  TOKENS["ui-tokens"]
+  ENV["runtime-env"]
+  MEMORY["runtime state in memory"]
+
+  H5_BOOT --> H5_APP
+  H5_APP --> PAGES
+  PAGES --> INLINE
+  H5_APP --> PRESENT
+  H5_APP -. artifact .-> REVIEW_BOOT
+  INLINE --> API_CLIENT
+  H5_APP --> TOKENS
+
+  API_CLIENT --> ROUTES
+  API_BOOT --> ROUTES
+  ROUTES --> AUTH
+  ROUTES --> PERSONA
+  ROUTES --> CHAT
+  ROUTES --> CHAT_WF
+  ROUTES --> WORKER_CLIENT
+  PERSONA --> MEMORY
+  AUTH --> MEMORY
+  CHAT --> MEMORY
+
+  WORKER_CLIENT --> WORKER_BOOT
+  WORKER_BOOT --> INGEST
+  WORKER_BOOT --> DISTILL
+  DISTILL --> PROMPT
+  DISTILL --> DS_CLIENT
+  DISTILL --> FALLBACK
+  INGEST --> DOMAIN
+  ROUTES --> CONTRACTS
+  PERSONA --> DOMAIN
+  H5_BOOT --> ENV
+  API_BOOT --> ENV
+  WORKER_BOOT --> ENV
+              </pre>
+            </div>
+
+            <div class="diagram-frame">
+              <pre class="mermaid">
+flowchart LR
+  H5["H5 target"]
+  WEAPP["WeChat Mini Program target"]
+
+  subgraph CLIENT["apps/client"]
+    APP["app shell"]
+    PAGES["pages"]
+    FEATURES["features<br/>hall / persona / chat / creation / share / mine"]
+    SERVICES["services"]
+    ADAPTERS["adapters"]
+  end
+
+  ADMIN["future admin project<br/>review console"]
+
+  API_CLIENT["packages/api-client"]
+  API["apps/api"]
+  WORKER["apps/worker"]
+  PG["PostgreSQL"]
+  REDIS["Redis + queue"]
+  MINIO["Object storage"]
+
+  H5 --> APP
+  WEAPP --> APP
+  APP --> PAGES
+  PAGES --> FEATURES
+  FEATURES --> SERVICES
+  APP --> ADAPTERS
+  SERVICES --> API_CLIENT
+  API_CLIENT --> API
+  ADMIN -. future .-> API
+  API --> WORKER
+  API --> PG
+  API --> REDIS
+  API --> MINIO
+  WORKER --> REDIS
+  WORKER --> PG
+  WORKER --> MINIO
+              </pre>
+            </div>
+
+            <div class="diagram-frame">
+              <pre class="mermaid">
+flowchart TD
+  A["User submits source"] --> B["API validates request"]
+  B --> C["persona-store writes pending source"]
+  C --> D["worker source-ingest normalizes URL / snapshot"]
+  D --> E["source document / evidence persisted"]
+  E --> G["distill request"]
+  G --> H["worker distill -> profile + preview + scores"]
+  H --> I["candidate persona_version created"]
+  I --> J["preview chat against version"]
+  J -. future admin review/publish .-> M["primary share created"]
+  M --> N["public share/chat resolve against persona_version"]
+              </pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="components">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">03</p>
+            <h2>核心架构组件</h2>
+            <p>这里按蓝图视角说明每个核心组件的职责、边界和演进方向。</p>
+          </div>
+
+          <div class="component-grid">
+            <article class="component-card">
+              <h3><code>apps/client</code></h3>
+              <p>当前是 H5 Fastify shell，负责页面壳、内联脚本和请求承接；目标是共享的 Taro 双 target client，且用户端不再承接 reviewer 工作台。</p>
+              <ul>
+                <li>当前实现边界：H5 页面路由、布局、请求触发。</li>
+                <li>目标边界：<code>pages / features / services / adapters</code>。</li>
+                <li>关键要求：平台差异放进 adapters，不扩散到业务层。</li>
+              </ul>
+            </article>
+
+            <article class="component-card">
+              <h3><code>apps/api</code></h3>
+              <p>统一业务 API，是 publish、share、chat 和 persona lifecycle 的真相持有者；review 只保留为后续 admin 项目的后端能力。</p>
+              <ul>
+                <li>route 负责输入输出边界。</li>
+                <li>store / workflow 负责业务编排。</li>
+                <li>worker 只是计算依赖，不是业务状态拥有者。</li>
+              </ul>
+            </article>
+
+            <article class="component-card">
+              <h3><code>apps/worker</code></h3>
+              <p>负责 source-ingest 和 distill 这两类 pipeline-like 任务，当前通过 internal HTTP 被 API 调用。</p>
+              <ul>
+                <li>当前：internal HTTP service。</li>
+                <li>目标：queue-backed worker。</li>
+                <li>不应在 worker 内持有业务真相。</li>
+              </ul>
+            </article>
+
+            <article class="component-card">
+              <h3>Shared Packages</h3>
+              <p>整个项目最重要的架构稳定器是 shared packages，而不是某一个 runtime app。</p>
+              <ul>
+                <li><code>contracts</code>：传输边界</li>
+                <li><code>domain</code>：状态机和业务词汇</li>
+                <li><code>prompt-kit</code>：prompt 和 output schema</li>
+                <li><code>deepseek-client</code>：模型 provider 适配</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="data">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">04</p>
+            <h2>数据架构与核心不变量</h2>
+            <p>这个项目的数据设计中心不是 chat，也不是 source，而是 <code>persona_version</code>。</p>
+          </div>
+
+          <div class="diagram-frame">
+            <pre class="mermaid">
+erDiagram
+  PERSONAE ||--o{ PERSONA_VERSIONS : has
+  PERSONAE ||--o{ PERSONA_SOURCES : has
+  PERSONA_SOURCES ||--o{ SOURCE_DOCUMENTS : materializes
+  SOURCE_DOCUMENTS ||--o{ EVIDENCE_SPANS : yields
+  SOURCE_DOCUMENTS ||--o{ PERSONA_CHUNKS : indexed_as
+  PERSONA_VERSIONS ||--o{ SHARE_LINKS : publishes
+  PERSONA_VERSIONS ||--o{ CHATS : targets
+  CHATS ||--o{ CHAT_MESSAGES : contains
+  PERSONA_SOURCES ||--o{ SOURCE_REVIEWS : reviewed_by
+  PERSONA_VERSIONS ||--o{ PUBLISH_REVIEWS : approved_by
+            </pre>
+          </div>
+
+          <div class="rule-grid" style="margin-top: 16px">
+            <article class="rule-card">
+              <h3>当前数据真相</h3>
+              <ul>
+                <li>schema 和 repository 方向已经存在。</li>
+                <li>bootstrap 运行时仍有明显 in-memory 成分。</li>
+                <li>这不是文档错误，而是当前过渡态事实。</li>
+              </ul>
+            </article>
+            <article class="rule-card">
+              <h3>最关键的不变量</h3>
+              <ul>
+                <li>share 绑定 <code>persona_version</code></li>
+                <li>publish review 绑定 <code>persona_version</code></li>
+                <li>preview 绑定 <code>persona_version</code></li>
+                <li>chat resolve 绑定 <code>persona_version</code></li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="cross-cutting">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">05</p>
+            <h2>横切关注点</h2>
+            <p>这些内容决定架构是否稳定，而不是只是决定某个页面是否能跑。</p>
+          </div>
+
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>认证与鉴权</h3>
+              <ul>
+                <li>角色：<code>ANONYMOUS</code> / <code>USER</code> / <code>REVIEWER</code></li>
+                <li>平台登录入口不同，业务会话体系统一。</li>
+                <li>reviewer-only route 在业务后端保护，reviewer UI 后续放到独立 admin 项目。</li>
+              </ul>
+            </article>
+
+            <article class="rule-card">
+              <h3>验证与边界</h3>
+              <ul>
+                <li>transport validation 在 <code>packages/contracts</code></li>
+                <li>LLM output validation 在 <code>packages/prompt-kit</code></li>
+                <li>business vocabulary 在 <code>packages/domain</code></li>
+              </ul>
+            </article>
+
+            <article class="rule-card">
+              <h3>弹性与回退</h3>
+              <ul>
+                <li>DeepSeek 失败时有 deterministic fallback。</li>
+                <li>chat 和 feedback 有 rate limit。</li>
+                <li>URL ingest 有 guardrails，但还不是最终生产级抓取链路。</li>
+              </ul>
+            </article>
+
+            <article class="rule-card">
+              <h3>服务通信模式</h3>
+              <ul>
+                <li>client -> API：同步 JSON</li>
+                <li>API -> worker：当前 internal HTTP</li>
+                <li>API/worker -> DeepSeek：structured JSON request</li>
+                <li>目标：ingest/distill 迁移到 queue-backed worker</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="governance">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">06</p>
+            <h2>治理、扩展与新开发蓝图</h2>
+            <p>后续扩展应该遵循固定的放置规则，否则很快会把 monorepo 的边界打穿。</p>
+          </div>
+
+          <div class="rule-grid">
+            <article class="rule-card">
+              <h3>新增功能的安全顺序</h3>
+              <ul>
+                <li>先锁 contract，再锁 domain invariant。</li>
+                <li>再决定放在 API 同步链路还是 worker 异步链路。</li>
+                <li>新 prompt 和 schema 放进 <code>prompt-kit</code>。</li>
+                <li>provider 访问只放进 <code>deepseek-client</code>。</li>
+              </ul>
+            </article>
+
+            <article class="rule-card">
+              <h3>后续主要迁移方向</h3>
+              <ul>
+                <li>store 从 in-memory 迁到 PostgreSQL-backed repositories。</li>
+                <li>worker 从 internal HTTP 迁到 queue-backed execution。</li>
+                <li>H5 shell 向共享 Taro client 收敛。</li>
+                <li>source ingest 从 placeholder snapshot 升级到真实内容提纯。</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="judgment">
+        <div class="section-shell">
+          <div class="section-head">
+            <p class="eyebrow">07</p>
+            <h2>最终架构判断</h2>
+            <p>这部分是给后续实现窗口和评审窗口直接复用的总结。</p>
+          </div>
+
+          <div class="judgment">
+            <p>
+              Hall of Fame 的正确架构解释是：<strong>今天</strong>它是一个 layered Node.js monorepo，带有 H5 bootstrap、unified API、internal worker、strong shared package boundaries 和 transitional persistence；<strong>目标</strong>它是一套 shared Taro dual-target client、PostgreSQL-backed business truth、queue-backed worker execution，以及 version-first persona publishing model。这个“双真相模型”不是文档噪音，而是这个项目最核心的架构现实；对应的产品边界也已经收紧为用户端只保留 <code>聊天 / 创建 / 我的</code>，review 工作台后续独立到 admin 项目。
+            </p>
+          </div>
+
+          <ul class="source-list">
+            <li>docs/Project_Architecture_Blueprint.md</li>
+            <li>docs/technical-architecture.md</li>
+            <li>docs/frontend-backend-architecture-blueprint.md</li>
+            <li>.worktrees/task1-bootstrap/docs/Project_Architecture_Blueprint.md</li>
+            <li>.worktrees/task1-bootstrap/apps/client/src/h5-app.ts</li>
+            <li>.worktrees/task1-bootstrap/apps/api/src/app.ts</li>
+            <li>.worktrees/task1-bootstrap/apps/worker/src/app.ts</li>
+          </ul>
+
+          <p class="footer-note">
+            说明：本页 Mermaid 图依赖在线脚本渲染。本地若无外网，图可能退回为代码块，但文档正文仍可直接阅读。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: "base",
+          securityLevel: "loose",
+          themeVariables: {
+            background: "#fffdf9",
+            primaryColor: "#ead7d1",
+            primaryBorderColor: "#8e3f38",
+            primaryTextColor: "#172126",
+            secondaryColor: "#d9e7f0",
+            secondaryBorderColor: "#245173",
+            tertiaryColor: "#dce9df",
+            tertiaryBorderColor: "#305c44",
+            lineColor: "#59666d",
+            textColor: "#172126",
+            fontFamily:
+              '"Avenir Next","PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif',
+          },
+          flowchart: {
+            curve: "basis",
+          },
+        });
+      }
+    </script>
+  </body>
+</html>

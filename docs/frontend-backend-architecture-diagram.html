@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hall of Fame Miniapp Frontend / Backend Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #020617;
+      --panel: rgba(15, 23, 42, 0.68);
+      --panel-line: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --muted-2: #64748b;
+      --frontend-fill: rgba(8, 51, 68, 0.4);
+      --frontend-stroke: #22d3ee;
+      --backend-fill: rgba(6, 78, 59, 0.4);
+      --backend-stroke: #34d399;
+      --database-fill: rgba(76, 29, 149, 0.4);
+      --database-stroke: #a78bfa;
+      --cloud-fill: rgba(120, 53, 15, 0.3);
+      --cloud-stroke: #fbbf24;
+      --security-fill: rgba(136, 19, 55, 0.12);
+      --security-stroke: #fb7185;
+      --external-fill: rgba(30, 41, 59, 0.5);
+      --external-stroke: #94a3b8;
+      --bus-fill: rgba(251, 146, 60, 0.3);
+      --bus-stroke: #fb923c;
+      --mask: #0f172a;
+    }
+
+    body {
+      font-family: "JetBrains Mono", monospace;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.08), transparent 24rem),
+        radial-gradient(circle at 88% 0%, rgba(52, 211, 153, 0.08), transparent 26rem),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--frontend-stroke);
+      box-shadow: 0 0 16px rgba(34, 211, 238, 0.5);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.92); }
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-left: 26px;
+      max-width: 980px;
+      line-height: 1.7;
+    }
+
+    .section {
+      margin-top: 22px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .section-note {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .diagram-container {
+      background: var(--panel);
+      border: 1px solid var(--panel-line);
+      border-radius: 18px;
+      padding: 18px;
+      overflow-x: auto;
+      box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.04);
+    }
+
+    svg {
+      width: 100%;
+      min-width: 1180px;
+      display: block;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--panel-line);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .card-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+    }
+
+    .card-dot.cyan { background: var(--frontend-stroke); }
+    .card-dot.emerald { background: var(--backend-stroke); }
+    .card-dot.violet { background: var(--database-stroke); }
+    .card-dot.amber { background: var(--cloud-stroke); }
+
+    .card h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+    }
+
+    .card ul {
+      list-style: none;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.8;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 22px;
+      color: var(--muted-2);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>Hall of Fame Miniapp Architecture</h1>
+      </div>
+      <p class="subtitle">
+        Separate frontend and backend architecture views for the Hall of Fame miniapp. The diagrams combine the locked target design in
+        <code>docs/technical-architecture.md</code> with the current engineering bootstrap in <code>.worktrees/task1-bootstrap</code>.
+      </p>
+    </div>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Frontend Architecture</div>
+        <div class="section-note">One business frontend, two runtime targets</div>
+      </div>
+      <div class="diagram-container">
+        <svg viewBox="0 0 1240 760" role="img" aria-label="Frontend architecture diagram">
+          <defs>
+            <marker id="arrowhead-frontend" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"></polygon>
+            </marker>
+            <pattern id="grid-frontend" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"></path>
+            </pattern>
+          </defs>
+
+          <rect width="1240" height="760" fill="url(#grid-frontend)"></rect>
+
+          <line x1="150" y1="170" x2="262" y2="170" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="150" y1="270" x2="262" y2="270" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="458" y1="220" x2="560" y2="220" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="735" y1="220" x2="860" y2="220" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="735" y1="470" x2="860" y2="470" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="1020" y1="345" x2="1095" y2="345" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="360" y1="305" x2="360" y2="388" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-frontend)"></line>
+          <line x1="640" y1="305" x2="640" y2="388" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-frontend)"></line>
+
+          <text x="205" y="158" fill="#94a3b8" font-size="9" text-anchor="middle">render target</text>
+          <text x="205" y="258" fill="#94a3b8" font-size="9" text-anchor="middle">render target</text>
+          <text x="509" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">route composition</text>
+          <text x="797" y="208" fill="#94a3b8" font-size="9" text-anchor="middle">use cases</text>
+          <text x="797" y="458" fill="#94a3b8" font-size="9" text-anchor="middle">platform bridge</text>
+          <text x="1058" y="333" fill="#94a3b8" font-size="9" text-anchor="middle">HTTP / JSON</text>
+          <text x="374" y="355" fill="#22d3ee" font-size="8">target-runtime differences</text>
+          <text x="654" y="355" fill="#22d3ee" font-size="8">adapter capabilities</text>
+
+          <rect x="260" y="70" width="760" height="560" rx="12" fill="rgba(34, 211, 238, 0.05)" stroke="#22d3ee" stroke-width="1" stroke-dasharray="8,4"></rect>
+          <text x="278" y="92" fill="#22d3ee" font-size="10" font-weight="600">apps/client</text>
+
+          <rect x="40" y="140" width="110" height="60" rx="6" fill="#0f172a"></rect>
+          <rect x="40" y="140" width="110" height="60" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="95" y="164" fill="white" font-size="12" font-weight="600" text-anchor="middle">H5</text>
+          <text x="95" y="180" fill="#94a3b8" font-size="9" text-anchor="middle">browser target</text>
+
+          <rect x="40" y="240" width="110" height="60" rx="6" fill="#0f172a"></rect>
+          <rect x="40" y="240" width="110" height="60" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="95" y="264" fill="white" font-size="12" font-weight="600" text-anchor="middle">WeApp</text>
+          <text x="95" y="280" fill="#94a3b8" font-size="9" text-anchor="middle">wx miniapp target</text>
+
+          <rect x="280" y="185" width="180" height="70" rx="6" fill="#0f172a"></rect>
+          <rect x="280" y="185" width="180" height="70" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="370" y="210" fill="white" font-size="12" font-weight="600" text-anchor="middle">App Shell</text>
+          <text x="370" y="228" fill="#94a3b8" font-size="9" text-anchor="middle">bootstrap / route host</text>
+          <text x="370" y="242" fill="#94a3b8" font-size="9" text-anchor="middle">current: h5-app + dev entries</text>
+
+          <rect x="560" y="185" width="180" height="70" rx="6" fill="#0f172a"></rect>
+          <rect x="560" y="185" width="180" height="70" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="650" y="210" fill="white" font-size="12" font-weight="600" text-anchor="middle">pages</text>
+          <text x="650" y="228" fill="#94a3b8" font-size="9" text-anchor="middle">route-level composition</text>
+          <text x="650" y="242" fill="#94a3b8" font-size="9" text-anchor="middle">target structure</text>
+
+          <rect x="860" y="130" width="160" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="860" y="130" width="160" height="90" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="940" y="154" fill="white" font-size="12" font-weight="600" text-anchor="middle">features</text>
+          <text x="940" y="172" fill="#94a3b8" font-size="9" text-anchor="middle">hall / persona / chat</text>
+          <text x="940" y="186" fill="#94a3b8" font-size="9" text-anchor="middle">creation / share</text>
+          <text x="940" y="200" fill="#94a3b8" font-size="9" text-anchor="middle">shared business UI</text>
+
+          <rect x="860" y="300" width="160" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="860" y="300" width="160" height="90" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="940" y="324" fill="white" font-size="12" font-weight="600" text-anchor="middle">services</text>
+          <text x="940" y="342" fill="#94a3b8" font-size="9" text-anchor="middle">auth / personae / chat</text>
+          <text x="940" y="356" fill="#94a3b8" font-size="9" text-anchor="middle">shares / feedback</text>
+          <text x="940" y="370" fill="#94a3b8" font-size="9" text-anchor="middle">API-oriented use cases</text>
+
+          <rect x="560" y="420" width="180" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="560" y="420" width="180" height="90" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="650" y="444" fill="white" font-size="12" font-weight="600" text-anchor="middle">adapters</text>
+          <text x="650" y="462" fill="#94a3b8" font-size="9" text-anchor="middle">auth / share / upload</text>
+          <text x="650" y="476" fill="#94a3b8" font-size="9" text-anchor="middle">storage / router lifecycle</text>
+          <text x="650" y="490" fill="#94a3b8" font-size="9" text-anchor="middle">platform-only divergence</text>
+
+          <rect x="280" y="420" width="180" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="280" y="420" width="180" height="90" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="370" y="444" fill="white" font-size="12" font-weight="600" text-anchor="middle">ui-tokens</text>
+          <text x="370" y="462" fill="#94a3b8" font-size="9" text-anchor="middle">layout / color / motion</text>
+          <text x="370" y="476" fill="#94a3b8" font-size="9" text-anchor="middle">shared visual language</text>
+          <text x="370" y="490" fill="#94a3b8" font-size="9" text-anchor="middle">bootstrap package already present</text>
+
+          <rect x="860" y="430" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="860" y="430" width="160" height="80" rx="6" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"></rect>
+          <text x="940" y="454" fill="white" font-size="12" font-weight="600" text-anchor="middle">api-client</text>
+          <text x="940" y="472" fill="#94a3b8" font-size="9" text-anchor="middle">shared fetch wrapper</text>
+          <text x="940" y="486" fill="#94a3b8" font-size="9" text-anchor="middle">/v1 contract surface</text>
+
+          <rect x="560" y="540" width="180" height="70" rx="6" fill="#0f172a"></rect>
+          <rect x="560" y="540" width="180" height="70" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="650" y="565" fill="white" font-size="12" font-weight="600" text-anchor="middle">runtime-env</text>
+          <text x="650" y="583" fill="#94a3b8" font-size="9" text-anchor="middle">local env discovery</text>
+
+          <rect x="1095" y="305" width="110" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="1095" y="305" width="110" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="1150" y="330" fill="white" font-size="12" font-weight="600" text-anchor="middle">apps/api</text>
+          <text x="1150" y="348" fill="#94a3b8" font-size="9" text-anchor="middle">unified business API</text>
+          <text x="1150" y="362" fill="#94a3b8" font-size="9" text-anchor="middle">H5 + WeApp shared</text>
+
+          <text x="910" y="660" fill="white" font-size="10" font-weight="600">Legend</text>
+          <rect x="910" y="675" width="18" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"></rect>
+          <text x="935" y="683" fill="#94a3b8" font-size="8">frontend layer</text>
+          <rect x="910" y="692" width="18" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"></rect>
+          <text x="935" y="700" fill="#94a3b8" font-size="8">backend dependency</text>
+          <rect x="910" y="709" width="18" height="10" rx="2" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1"></rect>
+          <text x="935" y="717" fill="#94a3b8" font-size="8">runtime / external</text>
+        </svg>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-dot cyan"></div>
+            <h3>Frontend Boundary</h3>
+          </div>
+          <ul>
+            <li>One business frontend codebase, not separate H5 and WeApp logic trees.</li>
+            <li>Platform divergence is isolated in adapters.</li>
+            <li>API access stays behind services and api-client.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-dot cyan"></div>
+            <h3>Bootstrap Reality</h3>
+          </div>
+          <ul>
+            <li>Current worktree already has client entrypoints, ui-tokens, api-client, and env loading.</li>
+            <li>The full Taro pages/features layout is target-state, not fully scaffolded yet.</li>
+            <li>The package split is already pointing in the right direction.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">Backend Architecture</div>
+        <div class="section-note">Unified API plane + bounded worker compute plane</div>
+      </div>
+      <div class="diagram-container">
+        <svg viewBox="0 0 1240 980" role="img" aria-label="Backend architecture diagram">
+          <defs>
+            <marker id="arrowhead-backend" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"></polygon>
+            </marker>
+            <pattern id="grid-backend" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"></path>
+            </pattern>
+          </defs>
+
+          <rect width="1240" height="980" fill="url(#grid-backend)"></rect>
+
+          <line x1="145" y1="320" x2="250" y2="320" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="450" y1="235" x2="570" y2="235" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="450" y1="315" x2="570" y2="315" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="450" y1="395" x2="570" y2="395" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="450" y1="475" x2="570" y2="475" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="450" y1="555" x2="570" y2="555" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="790" y1="395" x2="895" y2="395" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="790" y1="555" x2="895" y2="555" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="790" y1="235" x2="895" y2="235" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="790" y1="315" x2="895" y2="315" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="1035" y1="235" x2="1130" y2="235" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="1035" y1="315" x2="1130" y2="315" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="1035" y1="395" x2="1130" y2="395" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="1035" y1="555" x2="1130" y2="555" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="1035" y1="635" x2="1130" y2="635" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="650" y1="665" x2="650" y2="760" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="940" y1="665" x2="940" y2="760" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="700" y1="840" x2="795" y2="840" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+          <line x1="980" y1="840" x2="1130" y2="840" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead-backend)"></line>
+
+          <path d="M 360 612 L 360 700 Q 360 725 385 725 L 560 725" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-backend)"></path>
+          <path d="M 1005 585 L 1080 585 Q 1105 585 1105 610 L 1105 760" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowhead-backend)"></path>
+
+          <text x="198" y="308" fill="#94a3b8" font-size="9" text-anchor="middle">shared /v1 API</text>
+          <text x="510" y="223" fill="#34d399" font-size="8" text-anchor="middle">validate + authorize</text>
+          <text x="510" y="303" fill="#34d399" font-size="8" text-anchor="middle">session mapping</text>
+          <text x="510" y="383" fill="#34d399" font-size="8" text-anchor="middle">chat orchestration</text>
+          <text x="510" y="463" fill="#34d399" font-size="8" text-anchor="middle">persona lifecycle</text>
+          <text x="510" y="543" fill="#34d399" font-size="8" text-anchor="middle">internal job dispatch</text>
+          <text x="842" y="383" fill="#34d399" font-size="8" text-anchor="middle">persistence</text>
+          <text x="842" y="543" fill="#34d399" font-size="8" text-anchor="middle">approved source / distill jobs</text>
+          <text x="842" y="223" fill="#a78bfa" font-size="8" text-anchor="middle">shared API schemas</text>
+          <text x="842" y="303" fill="#a78bfa" font-size="8" text-anchor="middle">domain enums / risk vocabulary</text>
+          <text x="1082" y="223" fill="#a78bfa" font-size="8" text-anchor="middle">system of record</text>
+          <text x="1082" y="623" fill="#fbbf24" font-size="8" text-anchor="middle">structured model call</text>
+          <text x="424" y="697" fill="#fb7185" font-size="8">platform login split, business API unified</text>
+
+          <rect x="250" y="110" width="540" height="560" rx="12" fill="rgba(52, 211, 153, 0.05)" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"></rect>
+          <text x="270" y="132" fill="#34d399" font-size="10" font-weight="600">apps/api</text>
+
+          <rect x="560" y="700" width="420" height="190" rx="12" fill="rgba(52, 211, 153, 0.05)" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"></rect>
+          <text x="580" y="722" fill="#34d399" font-size="10" font-weight="600">apps/worker</text>
+
+          <rect x="30" y="280" width="115" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="30" y="280" width="115" height="80" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="87.5" y="306" fill="white" font-size="12" font-weight="600" text-anchor="middle">Clients</text>
+          <text x="87.5" y="324" fill="#94a3b8" font-size="9" text-anchor="middle">H5 + WeApp</text>
+          <text x="87.5" y="338" fill="#94a3b8" font-size="9" text-anchor="middle">same business API</text>
+
+          <rect x="290" y="195" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="290" y="195" width="160" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="370" y="220" fill="white" font-size="12" font-weight="600" text-anchor="middle">Fastify routes</text>
+          <text x="370" y="238" fill="#94a3b8" font-size="9" text-anchor="middle">auth / personae / versions</text>
+          <text x="370" y="252" fill="#94a3b8" font-size="9" text-anchor="middle">chats / shares / reviews</text>
+
+          <rect x="290" y="275" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="290" y="275" width="160" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="370" y="300" fill="white" font-size="12" font-weight="600" text-anchor="middle">auth-store</text>
+          <text x="370" y="318" fill="#94a3b8" font-size="9" text-anchor="middle">anonymous / sms / wechat</text>
+          <text x="370" y="332" fill="#94a3b8" font-size="9" text-anchor="middle">current bootstrap: in-memory</text>
+
+          <rect x="290" y="355" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="290" y="355" width="160" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="370" y="380" fill="white" font-size="12" font-weight="600" text-anchor="middle">chat workflow</text>
+          <text x="370" y="398" fill="#94a3b8" font-size="9" text-anchor="middle">classify + prompt + fallback</text>
+          <text x="370" y="412" fill="#94a3b8" font-size="9" text-anchor="middle">DeepSeek structured JSON</text>
+
+          <rect x="290" y="435" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="290" y="435" width="160" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="370" y="460" fill="white" font-size="12" font-weight="600" text-anchor="middle">persona-store</text>
+          <text x="370" y="478" fill="#94a3b8" font-size="9" text-anchor="middle">review / publish / share</text>
+          <text x="370" y="492" fill="#94a3b8" font-size="9" text-anchor="middle">seed + dynamic merge</text>
+
+          <rect x="290" y="515" width="160" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="290" y="515" width="160" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="370" y="540" fill="white" font-size="12" font-weight="600" text-anchor="middle">worker-client</text>
+          <text x="370" y="558" fill="#94a3b8" font-size="9" text-anchor="middle">internal source-ingest</text>
+          <text x="370" y="572" fill="#94a3b8" font-size="9" text-anchor="middle">internal distill</text>
+
+          <rect x="570" y="195" width="220" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="570" y="195" width="220" height="80" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"></rect>
+          <text x="680" y="220" fill="white" font-size="12" font-weight="600" text-anchor="middle">packages/contracts</text>
+          <text x="680" y="238" fill="#94a3b8" font-size="9" text-anchor="middle">API + worker payload schemas</text>
+          <text x="680" y="252" fill="#94a3b8" font-size="9" text-anchor="middle">frontend / api / worker shared</text>
+
+          <rect x="570" y="275" width="220" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="570" y="275" width="220" height="80" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"></rect>
+          <text x="680" y="300" fill="white" font-size="12" font-weight="600" text-anchor="middle">packages/domain</text>
+          <text x="680" y="318" fill="#94a3b8" font-size="9" text-anchor="middle">state vocabulary / risk rules</text>
+          <text x="680" y="332" fill="#94a3b8" font-size="9" text-anchor="middle">profile / url / review enums</text>
+
+          <rect x="570" y="355" width="220" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="570" y="355" width="220" height="80" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="680" y="380" fill="white" font-size="12" font-weight="600" text-anchor="middle">db repositories</text>
+          <text x="680" y="398" fill="#94a3b8" font-size="9" text-anchor="middle">chat / personae / sources</text>
+          <text x="680" y="412" fill="#94a3b8" font-size="9" text-anchor="middle">versions / reviews / shares</text>
+
+          <rect x="570" y="515" width="220" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="570" y="515" width="220" height="80" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="680" y="540" fill="white" font-size="12" font-weight="600" text-anchor="middle">official-personae seed</text>
+          <text x="680" y="558" fill="#94a3b8" font-size="9" text-anchor="middle">official hall content</text>
+          <text x="680" y="572" fill="#94a3b8" font-size="9" text-anchor="middle">bootstrap source of truth</text>
+
+          <rect x="895" y="195" width="140" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="895" y="195" width="140" height="80" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"></rect>
+          <text x="965" y="220" fill="white" font-size="12" font-weight="600" text-anchor="middle">PostgreSQL</text>
+          <text x="965" y="238" fill="#94a3b8" font-size="9" text-anchor="middle">personae / versions</text>
+          <text x="965" y="252" fill="#94a3b8" font-size="9" text-anchor="middle">sources / chats / reviews</text>
+
+          <rect x="895" y="275" width="140" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="895" y="275" width="140" height="80" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="965" y="300" fill="white" font-size="12" font-weight="600" text-anchor="middle">prompt-kit</text>
+          <text x="965" y="318" fill="#94a3b8" font-size="9" text-anchor="middle">chat / distill prompts</text>
+          <text x="965" y="332" fill="#94a3b8" font-size="9" text-anchor="middle">structured output schema</text>
+
+          <rect x="895" y="355" width="140" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="895" y="355" width="140" height="80" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="965" y="380" fill="white" font-size="12" font-weight="600" text-anchor="middle">runtime-env</text>
+          <text x="965" y="398" fill="#94a3b8" font-size="9" text-anchor="middle">local env discovery</text>
+          <text x="965" y="412" fill="#94a3b8" font-size="9" text-anchor="middle">api + worker boot</text>
+
+          <rect x="895" y="515" width="140" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="895" y="515" width="140" height="80" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="965" y="540" fill="white" font-size="12" font-weight="600" text-anchor="middle">deepseek-client</text>
+          <text x="965" y="558" fill="#94a3b8" font-size="9" text-anchor="middle">structured JSON caller</text>
+          <text x="965" y="572" fill="#94a3b8" font-size="9" text-anchor="middle">chat + distill shared</text>
+
+          <rect x="1130" y="195" width="80" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="1130" y="195" width="80" height="80" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"></rect>
+          <text x="1170" y="222" fill="white" font-size="11" font-weight="600" text-anchor="middle">DB</text>
+          <text x="1170" y="240" fill="#94a3b8" font-size="8" text-anchor="middle">schema.sql</text>
+
+          <rect x="1130" y="515" width="80" height="80" rx="6" fill="#0f172a"></rect>
+          <rect x="1130" y="515" width="80" height="80" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"></rect>
+          <text x="1170" y="542" fill="white" font-size="11" font-weight="600" text-anchor="middle">DeepSeek</text>
+          <text x="1170" y="560" fill="#94a3b8" font-size="8" text-anchor="middle">chat / reasoner</text>
+
+          <rect x="570" y="760" width="160" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="570" y="760" width="160" height="90" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="650" y="785" fill="white" font-size="12" font-weight="600" text-anchor="middle">source-ingest job</text>
+          <text x="650" y="803" fill="#94a3b8" font-size="9" text-anchor="middle">URL normalize + snapshot</text>
+          <text x="650" y="817" fill="#94a3b8" font-size="9" text-anchor="middle">private-network guardrail</text>
+
+          <rect x="820" y="760" width="160" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="820" y="760" width="160" height="90" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"></rect>
+          <text x="900" y="785" fill="white" font-size="12" font-weight="600" text-anchor="middle">distill job</text>
+          <text x="900" y="803" fill="#94a3b8" font-size="9" text-anchor="middle">prompt-kit + DeepSeek</text>
+          <text x="900" y="817" fill="#94a3b8" font-size="9" text-anchor="middle">candidate version artifact</text>
+
+          <rect x="1130" y="760" width="80" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="1130" y="760" width="80" height="90" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="1170" y="785" fill="white" font-size="11" font-weight="600" text-anchor="middle">fallback</text>
+          <text x="1170" y="803" fill="#94a3b8" font-size="8" text-anchor="middle">deterministic</text>
+          <text x="1170" y="817" fill="#94a3b8" font-size="8" text-anchor="middle">distill/chat paths</text>
+
+          <rect x="1030" y="760" width="80" height="90" rx="6" fill="#0f172a"></rect>
+          <rect x="1030" y="760" width="80" height="90" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"></rect>
+          <text x="1070" y="785" fill="white" font-size="11" font-weight="600" text-anchor="middle">events</text>
+          <text x="1070" y="803" fill="#94a3b8" font-size="8" text-anchor="middle">workflow logs</text>
+          <text x="1070" y="817" fill="#94a3b8" font-size="8" text-anchor="middle">observability</text>
+
+          <text x="900" y="930" fill="white" font-size="10" font-weight="600">Legend</text>
+          <rect x="900" y="945" width="18" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"></rect>
+          <text x="925" y="953" fill="#94a3b8" font-size="8">api / worker service</text>
+          <rect x="900" y="962" width="18" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"></rect>
+          <text x="925" y="970" fill="#94a3b8" font-size="8">data / contract core</text>
+        </svg>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-dot emerald"></div>
+            <h3>Backend Rule</h3>
+          </div>
+          <ul>
+            <li>API owns lifecycle transitions, authorization, persistence, review gating, and share issuance.</li>
+            <li>Worker owns bounded computation only: source-ingest and distill.</li>
+            <li>Contracts and domain types remain shared packages, not duplicated app-local models.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-dot violet"></div>
+            <h3>Current Bootstrap</h3>
+          </div>
+          <ul>
+            <li>PostgreSQL schema, dynamic persona repository, review flow, chat workflow, and worker split already exist.</li>
+            <li>Auth is still bootstrap-grade and in-memory.</li>
+            <li>Official personae are still seed-backed while user-created personae are DB-backed.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-dot amber"></div>
+            <h3>Critical Flows</h3>
+          </div>
+          <ul>
+            <li>Source URL import: API creates pending source, worker computes snapshot, API persists document/evidence.</li>
+            <li>Distill: API prepares approved sources, worker computes candidate output, API persists candidate version.</li>
+            <li>Publish remains reviewer-gated and share identity remains version-bound.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      Generated for Hall of Fame Miniapp on 2026-04-16. Source basis: docs/technical-architecture.md + .worktrees/task1-bootstrap.
+    </div>
+  </div>
+</body>
+</html>

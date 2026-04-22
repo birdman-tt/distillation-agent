@@ -20,6 +20,7 @@
 - [产品设计](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/product-design.md)
 - [技术方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/technical-architecture.md)
 - [实施计划](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/implementation-plan.md)
+- [部署架构方案](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/deployment-architecture.md)
 
 ## 已确定的关键决策
 
