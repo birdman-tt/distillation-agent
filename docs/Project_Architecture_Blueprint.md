@@ -6,10 +6,10 @@
 - Evidence base:
   - [technical-architecture.md](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/technical-architecture.md)
   - [frontend-backend-architecture-blueprint.md](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/frontend-backend-architecture-blueprint.md)
-  - [.worktrees/task1-bootstrap/docs/Project_Architecture_Blueprint.md](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/docs/Project_Architecture_Blueprint.md)
-  - [.worktrees/task1-bootstrap/apps/client/src/h5-app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/apps/client/src/h5-app.ts)
-  - [.worktrees/task1-bootstrap/apps/api/src/app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/apps/api/src/app.ts)
-  - [.worktrees/task1-bootstrap/apps/worker/src/app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/.worktrees/task1-bootstrap/apps/worker/src/app.ts)
+  - [docs/Project_Architecture_Blueprint.md](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/docs/Project_Architecture_Blueprint.md)
+  - [apps/client/src/h5-app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/apps/client/src/h5-app.ts)
+  - [apps/api/src/app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/apps/api/src/app.ts)
+  - [apps/worker/src/app.ts](/Users/wentao.yu/Documents/code/hall-of-fame-miniapp/apps/worker/src/app.ts)
 - Audience: requirement, architecture, and implementation windows that need one authoritative architecture view
 
 ## 1. Architecture Detection and Analysis
@@ -50,7 +50,7 @@ The architecture pattern is not a pure single-style textbook architecture. It is
 The most important architectural fact is that this project currently has two truths that must be kept separate:
 
 1. `Current implemented architecture`
-   This is the bootstrap actually visible in `.worktrees/task1-bootstrap`.
+   This is the bootstrap currently visible in the main workspace.
    It runs as:
    - H5 Fastify shell
    - unified Fastify API
