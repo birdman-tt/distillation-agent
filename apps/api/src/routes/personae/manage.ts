@@ -12,12 +12,13 @@ import type { FastifyPluginAsync } from "fastify";
 
 import { distillPersonaViaWorker, ingestUrlSourceViaWorker } from "../../services/worker-client.js";
 import {
-  canManagePersona,
-  createPersona,
-  createTextSource,
-  createUrlSource,
-  getPersonaDetail,
-  listPersonaSources,
+    canManagePersona,
+    createPersona,
+    createTextSource,
+    createUrlSource,
+    getPersonaDetail,
+    getPersonaStatus,
+    listPersonaSources,
   listPersonaVersions,
   persistDistilledVersion,
   persistUrlSourceIngestResult,
@@ -78,15 +79,15 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { personaId: string } }>("/v1/personae/:personaId/status", async (request, reply) => {
-    const detail = await getPersonaDetail(request.params.personaId);
-    if (!detail) {
+    const status = await getPersonaStatus(request.params.personaId);
+    if (!status) {
       return reply.code(404).send({ message: "Persona not found" });
     }
 
     return {
-      personaId: detail.persona.id,
-      status: detail.persona.status,
-      currentPublishedVersionId: detail.persona.currentPublishedVersionId,
+      personaId: status.personaId,
+      status: status.status,
+      currentPublishedVersionId: status.currentPublishedVersionId,
     };
   });
 

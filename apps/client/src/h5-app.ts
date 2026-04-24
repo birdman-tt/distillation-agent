@@ -38,6 +38,9 @@ const pageStyles = `
     --ink: ${uiTokens.colors.ink};
     --ink-muted: ${uiTokens.colors.inkMuted};
     --ink-soft: ${uiTokens.colors.inkSoft};
+    --history-name-ink: #11161c;
+    --history-snippet-ink: rgba(17, 22, 28, 0.72);
+    --history-time-ink: rgba(17, 22, 28, 0.42);
     --line: ${uiTokens.colors.lineLight};
     --accent: ${uiTokens.colors.signalBlue};
     --accent-deep: ${uiTokens.colors.signalBlueDeep};
@@ -76,6 +79,9 @@ const pageStyles = `
     --ink: ${uiTokens.colors.inkOnDark};
     --ink-muted: ${uiTokens.colors.inkMutedOnDark};
     --ink-soft: ${uiTokens.colors.inkSoftOnDark};
+    --history-name-ink: rgba(244, 247, 250, 0.96);
+    --history-snippet-ink: rgba(244, 247, 250, 0.74);
+    --history-time-ink: rgba(244, 247, 250, 0.46);
     --line: ${uiTokens.colors.lineDark};
     --accent: ${uiTokens.colors.voltGreen};
     --accent-deep: ${uiTokens.colors.voltGreenDeep};
@@ -149,6 +155,10 @@ const pageStyles = `
     padding: var(--shell-pad-top) 0 var(--shell-pad-bottom);
   }
 
+  .shell.chat-only {
+    --shell-pad-bottom: 20px;
+  }
+
   .page-frame,
   .page-stage,
   .stack,
@@ -162,18 +172,6 @@ const pageStyles = `
 
   .page-stage {
     padding-inline: 12px;
-  }
-
-  .session-banner {
-    width: fit-content;
-    max-width: 100%;
-    padding: 8px 12px;
-    border-radius: var(--radius-pill);
-    border: 1px solid var(--line);
-    background: var(--glass-surface);
-    color: var(--ink-soft);
-    font-size: 12px;
-    box-shadow: var(--surface-shadow);
   }
 
   .top-bar {
@@ -193,6 +191,42 @@ const pageStyles = `
     gap: 8px;
     align-items: center;
     flex-shrink: 0;
+  }
+
+  .chat-stage {
+    --chat-sticky-offset: 64px;
+  }
+
+  .chat-stage > .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    align-items: center;
+    margin-inline: -12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(circle at 92% 0%, var(--accent-glow), transparent 9rem),
+      linear-gradient(180deg, var(--page-bg), var(--page-bg-bottom));
+    backdrop-filter: blur(16px);
+  }
+
+  .chat-stage > .top-bar .page-eyebrow {
+    display: none;
+  }
+
+  .chat-stage > .top-bar .top-copy {
+    gap: 4px;
+  }
+
+  .chat-stage > .top-bar .page-title {
+    font-size: clamp(1.35rem, 5vw, 1.8rem);
+    line-height: 1;
+  }
+
+  .chat-stage > .top-bar .page-subtitle {
+    font-size: 12px;
+    line-height: 1.2;
   }
 
   .page-eyebrow,
@@ -265,6 +299,27 @@ const pageStyles = `
   .meta {
     color: var(--ink-soft);
     font-size: 13px;
+  }
+
+  .thread-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+  }
+
+  .typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .typing-indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 14px rgba(184, 255, 43, 0.34);
+    animation: typing-dot 1s ease-in-out infinite;
   }
 
   .icon-button,
@@ -507,30 +562,26 @@ const pageStyles = `
 
   .shuttle-track {
     pointer-events: auto;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     align-items: center;
-    max-width: calc(100vw - 24px);
-    overflow-x: auto;
+    width: min(calc(100vw - 24px), 430px);
     padding: 8px;
     border: 1px solid var(--line);
     border-radius: 999px;
     background: var(--glass-surface);
     box-shadow: var(--surface-shadow);
     backdrop-filter: blur(12px);
-    scrollbar-width: none;
-  }
-
-  .shuttle-track::-webkit-scrollbar {
-    display: none;
   }
 
   .shuttle-item {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
     min-height: 40px;
-    padding: 0 14px;
+    padding: 0 12px;
     border-radius: 999px;
     color: var(--ink-soft);
     white-space: nowrap;
@@ -540,6 +591,96 @@ const pageStyles = `
     background: var(--accent);
     color: var(--accent-ink);
     box-shadow: var(--button-shadow);
+  }
+
+  .history-stage {
+    min-height: calc(100vh - var(--shell-pad-top) - var(--shell-pad-bottom));
+    align-content: start;
+    gap: 18px;
+  }
+
+  .history-section,
+  .history-copy {
+    display: grid;
+    gap: 10px;
+  }
+
+  .history-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+
+  .history-item {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 24px;
+    border: 1px solid var(--line);
+    background: var(--glass-surface);
+    box-shadow: var(--surface-shadow);
+    backdrop-filter: blur(12px);
+  }
+
+  .history-main {
+    min-width: 0;
+  }
+
+  .history-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border: 1px solid var(--portrait-line);
+    background: var(--portrait-surface);
+    box-shadow: var(--surface-shadow);
+    font-family: var(--serif);
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .history-name {
+    margin: 0;
+    font-size: clamp(1.15rem, 4vw, 1.4rem);
+    font-family: var(--serif);
+    color: var(--history-name-ink);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-time {
+    color: var(--history-time-ink);
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .history-snippet {
+    margin: 0;
+    color: var(--history-snippet-ink);
+    line-height: 1.45;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .shell-panel,
@@ -688,12 +829,39 @@ const pageStyles = `
     position: sticky;
     top: 0;
     z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .thread-header-copy {
+    min-width: 0;
+  }
+
+  .thread-typing {
+    min-width: 36px;
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity 180ms ease;
+    pointer-events: none;
+  }
+
+  .thread-typing.is-visible {
+    opacity: 1;
+  }
+
+  .chat-stage .thread-header {
+    top: var(--chat-sticky-offset);
   }
 
   .message-list {
     display: grid;
     gap: 12px;
-    padding: 6px 0 2px;
+    padding: 6px 0 14px;
     min-height: 52vh;
     align-content: start;
   }
@@ -748,9 +916,27 @@ const pageStyles = `
 
   .bubble-meta-row {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
     gap: 8px;
+    min-height: 18px;
+  }
+
+  .bubble.assistant .bubble-meta-row {
+    justify-content: flex-start;
+  }
+
+  .bubble.user .bubble-meta-row {
+    justify-content: flex-end;
+  }
+
+  .bubble-timestamp {
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .bubble.user .bubble-timestamp {
+    color: rgba(17, 22, 28, 0.64);
   }
 
   .bubble-status-copy {
@@ -795,6 +981,10 @@ const pageStyles = `
     bottom: 86px;
     z-index: 3;
     padding: 10px;
+  }
+
+  .chat-stage.chat-focused .composer-shell {
+    bottom: 12px;
   }
 
   .composer {
@@ -853,6 +1043,18 @@ const pageStyles = `
     }
   }
 
+  @keyframes typing-dot {
+    0%,
+    100% {
+      transform: translateY(0) scale(0.84);
+      opacity: 0.4;
+    }
+    50% {
+      transform: translateY(-2px) scale(1.12);
+      opacity: 1;
+    }
+  }
+
   @media (min-width: 768px) {
     :root {
       --shell-pad-top: 32px;
@@ -876,6 +1078,10 @@ const baseClientScript = `
   const API_BASE_URL = ${JSON.stringify(apiBaseUrl())};
   const SESSION_KEY = "hall-of-fame-session";
   const THEME_KEY = "hall-of-fame-theme";
+  const CURRENT_PERSONA_KEY = "hall-of-fame-current-persona";
+  const CURRENT_PERSONA_NAME_KEY = "hall-of-fame-current-persona-name";
+  const CURRENT_PERSONA_POSITIONING_KEY = "hall-of-fame-current-persona-positioning";
+  const CURRENT_PERSONA_TAGS_KEY = "hall-of-fame-current-persona-tags";
 
   const escapeHtml = (value) =>
     String(value)
@@ -902,6 +1108,38 @@ const baseClientScript = `
   const clearSession = () => {
     localStorage.removeItem(SESSION_KEY);
     renderSession();
+  };
+
+  const readCurrentPersonaSelection = () => {
+    try {
+      const id = localStorage.getItem(CURRENT_PERSONA_KEY);
+      if (!id) return null;
+      const rawTags = localStorage.getItem(CURRENT_PERSONA_TAGS_KEY);
+      const tags = rawTags ? JSON.parse(rawTags) : [];
+      return {
+        id,
+        displayName: localStorage.getItem(CURRENT_PERSONA_NAME_KEY) || "",
+        positioning: localStorage.getItem(CURRENT_PERSONA_POSITIONING_KEY) || "",
+        tags: Array.isArray(tags) ? tags.filter((item) => typeof item === "string") : [],
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const writeCurrentPersonaSelection = (input) => {
+    if (!input?.id) return;
+    localStorage.setItem(CURRENT_PERSONA_KEY, input.id);
+    localStorage.setItem(CURRENT_PERSONA_NAME_KEY, input.displayName || "");
+    localStorage.setItem(CURRENT_PERSONA_POSITIONING_KEY, input.positioning || "");
+    localStorage.setItem(CURRENT_PERSONA_TAGS_KEY, JSON.stringify(Array.isArray(input.tags) ? input.tags : []));
+  };
+
+  const clearCurrentPersonaSelection = () => {
+    localStorage.removeItem(CURRENT_PERSONA_KEY);
+    localStorage.removeItem(CURRENT_PERSONA_NAME_KEY);
+    localStorage.removeItem(CURRENT_PERSONA_POSITIONING_KEY);
+    localStorage.removeItem(CURRENT_PERSONA_TAGS_KEY);
   };
 
   const readTheme = () => {
@@ -956,15 +1194,19 @@ const baseClientScript = `
     const contentType = response.headers.get("content-type") || "";
     const body = contentType.includes("application/json") ? await response.json() : await response.text();
     if (!response.ok) {
-      throw new Error(typeof body?.message === "string" ? body.message : "请求失败");
+      const error = new Error(typeof body?.message === "string" ? body.message : "请求失败");
+      error.status = response.status;
+      throw error;
     }
     return body;
   };
 
   const ensureAnonymousSession = async () => {
-    if (readSession()) {
-      return readSession();
+    const existing = readSession();
+    if (existing?.accessToken && existing.role !== "ANONYMOUS") {
+      return existing;
     }
+
     const session = await requestJson("/v1/auth/anonymous", {
       method: "POST",
       body: JSON.stringify({ deviceId: "h5-browser" }),
@@ -973,12 +1215,7 @@ const baseClientScript = `
     return session;
   };
 
-  const renderSession = () => {
-    const slot = document.querySelector("[data-session-slot]");
-    if (!slot) return;
-    const session = readSession();
-    slot.innerHTML = ${"buildSessionBannerHtml(session)"};
-  };
+  const renderSession = () => {};
 
   document.addEventListener("click", (event) => {
     const toggle = event.target.closest("[data-theme-toggle]");
@@ -999,6 +1236,9 @@ const baseClientScript = `
     readSession,
     writeSession,
     clearSession,
+    readCurrentPersonaSelection,
+    writeCurrentPersonaSelection,
+    clearCurrentPersonaSelection,
     readTheme,
     writeTheme,
     applyTheme,
@@ -1018,6 +1258,7 @@ const renderShell = (input: {
   title: string;
   body: string;
   script?: string;
+  shellClass?: string;
 }) => `<!doctype html>
 <html lang="zh-CN" data-theme="light">
   <head>
@@ -1027,9 +1268,8 @@ const renderShell = (input: {
     <style>${pageStyles}</style>
   </head>
   <body>
-    <div class="shell">
+    <div class="shell ${input.shellClass ?? ""}">
       <div class="page-frame">
-        <div data-session-slot></div>
         ${input.body}
       </div>
     </div>
@@ -1079,17 +1319,27 @@ type PersonaDetail = {
 const renderThemeToggleButton = () =>
   `<button type="button" class="icon-button" data-theme-toggle aria-label="切换亮暗模式">◐</button>`;
 
+const formatMessageClock = (value?: string | Date) =>
+  new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value ? new Date(value) : new Date());
+
 const renderPageHeader = (input: {
   eyebrow: string;
   title: string;
   subtitle?: string;
   extra?: string;
+  titleAttrs?: string;
+  subtitleAttrs?: string;
+  subtitleClass?: string;
 }) => `
   <header class="top-bar">
     <div class="top-copy">
       <div class="page-eyebrow">${escapeHtml(input.eyebrow)}</div>
-      <h1 class="page-title">${escapeHtml(input.title)}</h1>
-      ${input.subtitle ? `<p class="page-subtitle">${escapeHtml(input.subtitle)}</p>` : ""}
+      <h1 class="page-title" ${input.titleAttrs ?? ""}>${escapeHtml(input.title)}</h1>
+      ${input.subtitle ? `<p class="page-subtitle${input.subtitleClass ? ` ${input.subtitleClass}` : ""}" ${input.subtitleAttrs ?? ""}>${escapeHtml(input.subtitle)}</p>` : ""}
     </div>
     <div class="top-actions">
       ${input.extra ?? ""}
@@ -1098,34 +1348,27 @@ const renderPageHeader = (input: {
   </header>
 `;
 
-export const buildSessionBannerHtml = (session: { role?: string | null; sessionKind?: string | null; userId?: string | null } | null) => {
-  if (!session) {
-    return '<div class="session-banner">进入创建前会先分配匿名身份。</div>';
-  }
-
-  if (session.role === "REVIEWER") {
-    return '<div class="session-banner">已登录。</div>';
-  }
-
-  if (session.role === "USER") {
-    return '<div class="session-banner">已登录。</div>';
-  }
-
-  return '<div class="session-banner">已进入匿名体验。</div>';
-};
-
-const renderStaticBubble = (role: "assistant" | "user", label: string, content: string) => `
-  <div class="bubble ${role}">
-    <div class="bubble-label">${escapeHtml(label)}</div>
-    <div class="bubble-copy">${escapeHtml(content)}</div>
+const renderStaticBubble = (input: {
+  role: "assistant" | "user";
+  label?: string | null;
+  content: string;
+  timestamp?: string;
+}) => `
+  <div class="bubble ${input.role}">
+    ${input.label ? `<div class="bubble-label">${escapeHtml(input.label)}</div>` : ""}
+    <div class="bubble-copy">${escapeHtml(input.content)}</div>
+    <div class="bubble-meta-row">
+      <span class="bubble-timestamp">${escapeHtml(input.timestamp ?? formatMessageClock())}</span>
+    </div>
   </div>
 `;
 
-const renderBottomShuttle = (current: "home" | "create" | "profile") => `
+const renderBottomShuttle = (current: "home" | "history" | "create" | "profile") => `
   <nav class="bottom-shuttle" aria-label="主导航">
     <div class="shuttle-track">
       ${[
         { id: "home", label: "聊天", href: "/" },
+        { id: "history", label: "列表", href: "/history" },
         { id: "create", label: "创建", href: "/create" },
         { id: "profile", label: "我的", href: "/profile" },
       ]
@@ -1139,6 +1382,154 @@ const renderBottomShuttle = (current: "home" | "create" | "profile") => `
         .join("")}
     </div>
   </nav>
+`;
+
+type HistoryListItem = {
+  id: string;
+  displayName: string;
+  lastMessage: string;
+  updatedAtLabel: string;
+  href: string;
+};
+
+const renderHistoryItem = (item: HistoryListItem) => `
+  <li>
+    <a class="history-item" href="${item.href}">
+      <div class="history-avatar" aria-hidden="true">${escapeHtml(getPersonaMonogram(item.displayName))}</div>
+      <div class="history-main">
+        <div class="history-head">
+          <h3 class="history-name">${escapeHtml(item.displayName)}</h3>
+          <span class="history-time">${escapeHtml(item.updatedAtLabel)}</span>
+        </div>
+        <p class="history-snippet">${escapeHtml(item.lastMessage)}</p>
+      </div>
+    </a>
+  </li>
+`;
+
+const renderHistoryListScript = () => `
+  const historyList = document.querySelector("[data-history-list]");
+
+  const formatHistoryTime = (value) => {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    if (diff < 60 * 1000) {
+      return "刚刚";
+    }
+    if (diff < 60 * 60 * 1000) {
+      return Math.max(1, Math.floor(diff / (60 * 1000))) + " 分钟前";
+    }
+    if (date.toDateString() === now.toDateString()) {
+      return Math.max(1, Math.floor(diff / (60 * 60 * 1000))) + " 小时前";
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return "昨天";
+    }
+
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "numeric",
+      day: "numeric",
+    }).format(date);
+  };
+
+  const buildHistoryHref = (item) => {
+    const appendHistorySource = (href) =>
+      href + "?chatId=" + encodeURIComponent(item.id) + "&from=history";
+
+    if (item.targetType === "published_persona" && item.resumePersonaId) {
+      return appendHistorySource("/persona/" + encodeURIComponent(item.resumePersonaId));
+    }
+    if (item.targetType === "draft_version_preview") {
+      return appendHistorySource("/preview/" + encodeURIComponent(item.targetPersonaVersionId));
+    }
+    if (item.targetType === "share_link" && item.shareSlug) {
+      return appendHistorySource("/share/" + encodeURIComponent(item.shareSlug));
+    }
+    return "/";
+  };
+
+  const renderEmpty = (copy) => {
+    if (!historyList) return;
+    historyList.innerHTML =
+      "<li class='empty-state'>" +
+      HallOfFameClient.escapeHtml(copy || "还没有聊天记录。") +
+      "</li>";
+  };
+
+  const renderItems = (items) => {
+    if (!historyList) return;
+    if (!items.length) {
+      renderEmpty("还没有聊天记录。先去聊一轮。");
+      return;
+    }
+
+    historyList.innerHTML = items
+      .map((item) => {
+        return (
+          "<li>" +
+          "<a class='history-item' href='" +
+          buildHistoryHref(item) +
+          "'>" +
+          "<div class='history-avatar' aria-hidden='true'>" +
+          HallOfFameClient.escapeHtml((item.displayName || "人").trim().slice(0, 1).toUpperCase() || "人") +
+          "</div>" +
+          "<div class='history-main'>" +
+          "<div class='history-head'>" +
+          "<h3 class='history-name'>" +
+          HallOfFameClient.escapeHtml(item.displayName || "对象") +
+          "</h3>" +
+          "<span class='history-time'>" +
+          HallOfFameClient.escapeHtml(formatHistoryTime(item.updatedAt)) +
+          "</span>" +
+          "</div>" +
+          "<p class='history-snippet'>" +
+          HallOfFameClient.escapeHtml(item.latestMessage || "") +
+          "</p>" +
+          "</div>" +
+          "</a>" +
+          "</li>"
+        );
+      })
+      .join("");
+  };
+
+  const loadHistory = async () => {
+    if (!historyList) return;
+
+    try {
+      await HallOfFameClient.ensureAnonymousSession();
+      const result = await HallOfFameClient.requestJson("/v1/chats", {
+        method: "GET",
+      });
+      renderItems(result.items || []);
+    } catch (error) {
+      if (error?.status === 401 || error?.message === "Authentication required") {
+        try {
+          HallOfFameClient.clearSession();
+          await HallOfFameClient.ensureAnonymousSession();
+          const result = await HallOfFameClient.requestJson("/v1/chats", {
+            method: "GET",
+          });
+          renderItems(result.items || []);
+          return;
+        } catch {
+          renderEmpty("还没有聊天记录。先去聊一轮。");
+          return;
+        }
+      }
+      renderEmpty(error instanceof Error ? error.message : "加载聊天列表失败");
+    }
+  };
+
+  void loadHistory();
 `;
 
 const renderFeaturedCarouselScript = () => `
@@ -1297,23 +1688,49 @@ export const buildFeaturedListBody = (items: FeaturedItem[]) => `
   </div>
 `;
 
-export const buildPersonaPageBody = (detail: PersonaDetail) => `
-  <div class="page-stage chat-stage">
+export const buildHistoryPageBody = (input: {
+  items: HistoryListItem[];
+}) => `
+  <div class="page-stage history-stage">
+    ${renderPageHeader({
+      eyebrow: "List",
+      title: "聊天列表",
+      subtitle: "之前聊过的对象，都在这里。",
+    })}
+
+    <section class="history-section">
+      <ul class="history-list" data-history-list>
+        ${input.items.length ? input.items.map((item) => renderHistoryItem(item)).join("") : '<li class="empty-state">还没有聊天记录。</li>'}
+      </ul>
+    </section>
+
+    ${renderBottomShuttle("history")}
+  </div>
+`;
+
+export const buildPersonaPageBody = (
+  detail: PersonaDetail,
+  options: {
+    returnHref?: string;
+  } = {},
+) => `
+  <div class="page-stage chat-stage chat-focused">
     ${renderPageHeader({
       eyebrow: "聊天",
       title: detail.persona.displayName,
-      subtitle: "直接开聊。",
-      extra: '<a class="mini-link" href="/">返回</a>',
+      subtitle: "等你开口",
+      titleAttrs: "data-thread-name",
+      subtitleAttrs: "data-thread-status",
+      subtitleClass: "thread-status",
+      extra: `<div class="thread-typing" data-thread-typing aria-label="正在输入中"></div><a class="mini-link" href="${escapeHtml(options.returnHref ?? "/")}">返回</a>`,
     })}
     <section class="thread-screen">
-      <header class="thread-header">
-        <div>
-          <h2 class="thread-name">${escapeHtml(detail.persona.displayName)}</h2>
-          <p class="thread-status">等你开口</p>
-        </div>
-      </header>
-      <div class="message-list" data-chat-log>
-        ${renderStaticBubble("assistant", "对象", detail.version.previewIntro ?? detail.version.sampleAnswers[0] ?? "聊聊吧")}
+      <div class="message-list" data-chat-log data-chat-assistant-name="${escapeHtml(detail.persona.displayName)}">
+        ${renderStaticBubble({
+          role: "assistant",
+          label: detail.persona.displayName,
+          content: detail.version.previewIntro ?? detail.version.sampleAnswers[0] ?? "聊聊吧",
+        })}
       </div>
       <section class="composer-shell">
         <form data-chat-form class="composer">
@@ -1325,7 +1742,6 @@ export const buildPersonaPageBody = (detail: PersonaDetail) => `
         <div class="status-line" data-chat-status></div>
       </section>
     </section>
-    ${renderBottomShuttle("home")}
   </div>
 `;
 
@@ -1457,16 +1873,16 @@ export const buildCreatePageBody = () => `
           <section class="stage-card">
             <div class="mini-eyebrow">预览</div>
             <h3 class="card-title">先听它怎么开口</h3>
-            <p class="body-copy">资料够了以后，再进入预览 chat，别跳过这一层直接发。</p>
+            <p class="body-copy">资料补完后先预览，确认像它，再决定怎么使用。</p>
             <div class="actions">
               <button type="button" data-open-preview>进入预览</button>
             </div>
           </section>
 
           <section class="stage-card">
-            <div class="mini-eyebrow">发布</div>
-            <h3 class="card-title">最后才进入发布</h3>
-            <p class="body-copy">发布不是当前主动作。先补资料、再预览，通过后再去发审核。</p>
+            <div class="mini-eyebrow">使用方式</div>
+            <h3 class="card-title">预览后再决定</h3>
+            <p class="body-copy">你可以选择仅自己使用，也可以直接公开分享。</p>
           </section>
         </div>
       </div>
@@ -1539,18 +1955,16 @@ export const buildProfilePageBody = () => `
     </div>
 
     <section class="profile-card">
-      <div class="mini-eyebrow">最近对象</div>
-      <h2 class="section-title" data-profile-persona-name>还没有对象</h2>
-      <p class="summary-copy" data-profile-persona-status>这里会显示最近对象状态。</p>
-      <div class="actions">
-        <a class="utility-link" href="/create" data-profile-create-link>去创建</a>
+      <div class="mini-eyebrow">我的对象</div>
+      <div class="list-stack" data-profile-persona-list>
+        <div class="empty-state">加载中...</div>
       </div>
     </section>
 
     <section class="profile-card">
       <div class="mini-eyebrow">常用操作</div>
       <div class="list-stack">
-        <a class="utility-link" href="/create">继续编辑</a>
+        <a class="utility-link" href="/create">去创建</a>
         <a class="utility-link secondary" href="/">回到聊天</a>
       </div>
     </section>
@@ -1570,25 +1984,88 @@ const renderFeaturedList = async () => {
   });
 };
 
+const renderHistoryPage = async () => {
+  return renderShell({
+    title: "聊天列表",
+    body: buildHistoryPageBody({
+      items: [],
+    }),
+    script: renderHistoryListScript(),
+  });
+};
+
 const renderChatScript = (input: {
   targetType: "published_persona" | "draft_version_preview" | "share_link";
   targetValue: string;
+  assistantName?: string;
+  initialChatId?: string | null;
 }) => `
   const form = document.querySelector("[data-chat-form]");
   const log = document.querySelector("[data-chat-log]");
   const status = document.querySelector("[data-chat-status]");
-  let chatId = null;
+  const threadTyping = document.querySelector("[data-thread-typing]");
+  const initialChatId = ${JSON.stringify(input.initialChatId ?? null)};
+  let chatId = initialChatId;
   let chatCreation = null;
+  let pendingDeliveries = 0;
+  const assistantName = ${JSON.stringify(input.assistantName ?? null)}
+    || log?.getAttribute("data-chat-assistant-name")
+    || document.querySelector("[data-thread-name]")?.textContent?.trim()
+    || "对象";
 
   const setStatus = (content) => {
     if (status) status.textContent = content;
   };
 
-  const scrollLogToLatest = () => {
-    if (!log) return;
-    requestAnimationFrame(() => {
-      log.lastElementChild?.scrollIntoView({ block: "end", behavior: "smooth" });
+  const buildTypingIndicator = () => {
+    const indicator = document.createElement("span");
+    indicator.className = "typing-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    Array.from({ length: 3 }).forEach((_, index) => {
+      const dot = document.createElement("span");
+      dot.className = "typing-indicator-dot";
+      dot.style.animationDelay = index * 0.15 + "s";
+      indicator.appendChild(dot);
     });
+    return indicator;
+  };
+
+  const syncThreadTyping = () => {
+    if (!threadTyping) return;
+    if (pendingDeliveries > 0) {
+      threadTyping.classList.add("is-visible");
+      threadTyping.replaceChildren(buildTypingIndicator());
+      return;
+    }
+
+    threadTyping.classList.remove("is-visible");
+    threadTyping.replaceChildren();
+  };
+
+  const formatBubbleClock = (value) => {
+    const date = value ? new Date(value) : new Date();
+    if (Number.isNaN(date.getTime())) {
+      return new Intl.DateTimeFormat("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(new Date());
+    }
+
+    return new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
+  };
+
+  const scrollLogToLatest = (behavior = "auto") => {
+    if (!log) return;
+    const perform = () => {
+      log.lastElementChild?.scrollIntoView({ block: "end", behavior, inline: "nearest" });
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+    };
+    requestAnimationFrame(() => requestAnimationFrame(perform));
   };
 
   const ensureBubbleMetaRow = (bubble) => {
@@ -1599,6 +2076,13 @@ const renderChatScript = (input: {
       bubble.appendChild(row);
     }
     return row;
+  };
+
+  const buildTimestampCopy = (content) => {
+    const copy = document.createElement("span");
+    copy.className = "bubble-timestamp";
+    copy.textContent = content;
+    return copy;
   };
 
   const buildStatusCopy = (content) => {
@@ -1619,66 +2103,105 @@ const renderChatScript = (input: {
     return button;
   };
 
+  const renderBubbleMeta = (bubble, input = {}) => {
+    const row = ensureBubbleMetaRow(bubble);
+    const timestamp = bubble.getAttribute("data-message-time") || formatBubbleClock();
+    const nodes = [buildTimestampCopy(timestamp)];
+
+    if (input.statusLabel) {
+      nodes.push(buildStatusCopy(input.statusLabel));
+    }
+
+    if (input.retryContent) {
+      nodes.push(buildRetryButton(input.retryContent));
+    }
+
+    row.replaceChildren(...nodes);
+  };
+
   const setUserBubblePending = (bubble) => {
     bubble.classList.add("is-pending");
     bubble.classList.remove("is-failed");
-    const row = ensureBubbleMetaRow(bubble);
-    row.replaceChildren(buildStatusCopy("发送中"));
+    renderBubbleMeta(bubble, { statusLabel: "发送中" });
   };
 
   const setUserBubbleDelivered = (bubble) => {
     bubble.classList.remove("is-pending", "is-failed");
-    bubble.querySelector(".bubble-meta-row")?.remove();
+    renderBubbleMeta(bubble);
   };
 
   const setUserBubbleFailed = (bubble, label) => {
     bubble.classList.remove("is-pending");
     bubble.classList.add("is-failed");
-    const row = ensureBubbleMetaRow(bubble);
-    row.replaceChildren(
-      buildStatusCopy(label),
-      buildRetryButton(bubble.getAttribute("data-message-content") || ""),
-    );
+    renderBubbleMeta(bubble, {
+      statusLabel: label,
+      retryContent: bubble.getAttribute("data-message-content") || "",
+    });
   };
 
-  const buildReplyInspectorHtml = (reply) => {
-    const parts = [];
-    const summary = reply?.basisSummary?.summary?.trim?.();
-    if (summary) parts.push(summary);
-    if (reply?.conflictDetected) parts.push("已避开冲突信息。");
-    if (!parts.length) return "";
-    return '<details class="reply-inspector"><summary>回答依据</summary><div class="meta">' + HallOfFameClient.escapeHtml(parts.join(" ")) + '</div></details>';
-  };
-
-  const appendBubble = (role, content, metaHtml) => {
+  const appendBubble = (role, content, scrollBehavior = "auto", createdAt = null) => {
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (role === "ASSISTANT" ? "assistant" : "user");
     bubble.setAttribute("data-message-content", content);
-
-    const label = document.createElement("div");
-    label.className = "bubble-label";
-    label.textContent = role === "ASSISTANT" ? "对象" : "我";
+    bubble.setAttribute("data-message-time", formatBubbleClock(createdAt));
 
     const copy = document.createElement("div");
     copy.className = "bubble-copy";
     copy.textContent = content;
 
-    bubble.append(label, copy);
-
-    if (metaHtml) {
-      const meta = document.createElement("div");
-      meta.innerHTML = metaHtml;
-      bubble.append(...meta.childNodes);
+    if (role === "ASSISTANT") {
+      const label = document.createElement("div");
+      label.className = "bubble-label";
+      label.textContent = assistantName;
+      bubble.append(label);
     }
 
+    bubble.append(copy);
+    renderBubbleMeta(bubble);
+
     log.appendChild(bubble);
-    scrollLogToLatest();
+    if (scrollBehavior) {
+      scrollLogToLatest(scrollBehavior);
+    }
     return bubble;
+  };
+
+  const renderExistingMessages = (messages) => {
+    if (!log || !Array.isArray(messages) || !messages.length) {
+      return false;
+    }
+
+    log.replaceChildren();
+    messages.forEach((message) => {
+      appendBubble(message.role, message.content, null, message.createdAt || null);
+    });
+    scrollLogToLatest("auto");
+    return true;
+  };
+
+  const loadExistingChat = async () => {
+    if (!initialChatId) {
+      return;
+    }
+
+    setStatus("加载聊天记录…");
+    try {
+      await HallOfFameClient.ensureAnonymousSession();
+      const session = await HallOfFameClient.requestJson("/v1/chats/" + encodeURIComponent(initialChatId), {
+        method: "GET",
+      });
+      chatId = session.id || initialChatId;
+      setStatus(renderExistingMessages(session.messages || []) ? "已加载历史" : "还没有历史消息");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "加载聊天记录失败");
+    }
   };
 
   const ensureChatId = async () => {
     if (chatId) return chatId;
     if (chatCreation) return await chatCreation;
+
+    await HallOfFameClient.ensureAnonymousSession();
 
     const payload = ${input.targetType === "published_persona"
       ? `{ targetType: "published_persona", personaId: "${input.targetValue}" }`
@@ -1703,7 +2226,10 @@ const renderChatScript = (input: {
 
   const deliverUserBubble = async (bubble, content) => {
     let failureLabel = "发送失败";
+    bubble.setAttribute("data-message-time", formatBubbleClock());
     setUserBubblePending(bubble);
+    pendingDeliveries += 1;
+    syncThreadTyping();
     setStatus("正在回复…");
 
     try {
@@ -1714,11 +2240,14 @@ const renderChatScript = (input: {
         body: JSON.stringify({ content }),
       });
       setUserBubbleDelivered(bubble);
-      appendBubble("ASSISTANT", reply.content, buildReplyInspectorHtml(reply));
+      appendBubble("ASSISTANT", reply.content, "auto", reply.createdAt || null);
       setStatus("已回复");
     } catch (error) {
       setUserBubbleFailed(bubble, failureLabel);
       setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      pendingDeliveries = Math.max(0, pendingDeliveries - 1);
+      syncThreadTyping();
     }
   };
 
@@ -1737,13 +2266,28 @@ const renderChatScript = (input: {
     if (!input) return;
     const content = input.value.trim();
     if (!content) return;
-    const userBubble = appendBubble("USER", content);
+    const userBubble = appendBubble("USER", content, "auto");
     input.value = "";
     void deliverUserBubble(userBubble, content);
   });
+
+  void loadExistingChat();
 `;
 
-const renderPersonaPage = async (personaId: string) => {
+const getSingleQueryValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return typeof value[0] === "string" ? value[0] : null;
+  }
+  return typeof value === "string" ? value : null;
+};
+
+const renderPersonaPage = async (
+  personaId: string,
+  query: {
+    chatId?: string | string[];
+    from?: string | string[];
+  } = {},
+) => {
   const detail = await fetchJson<PersonaDetail>(`/v1/personae/${personaId}`);
 
   if (!detail) {
@@ -1753,12 +2297,18 @@ const renderPersonaPage = async (personaId: string) => {
     });
   }
 
+  const initialChatId = getSingleQueryValue(query.chatId);
+  const returnHref = getSingleQueryValue(query.from) === "history" ? "/history" : "/";
+
   return renderShell({
     title: `和${detail.persona.displayName}聊天`,
-    body: buildPersonaPageBody(detail),
+    body: buildPersonaPageBody(detail, { returnHref }),
+    shellClass: "chat-only",
     script: renderChatScript({
       targetType: "published_persona",
       targetValue: personaId,
+      assistantName: detail.persona.displayName,
+      initialChatId,
     }),
   });
 };
@@ -1789,13 +2339,18 @@ const renderSharePage = async (shareSlug: string) => {
         })}
         <section class="thread-screen">
           <header class="thread-header">
-            <div>
-              <h2 class="thread-name">${escapeHtml(landing.persona.displayName)}</h2>
-              <p class="thread-status">继续聊天</p>
+            <div class="thread-header-copy">
+              <h2 class="thread-name" data-thread-name>${escapeHtml(landing.persona.displayName)}</h2>
+              <p class="thread-status" data-thread-status>继续聊天</p>
             </div>
+            <div class="thread-typing" data-thread-typing aria-label="正在输入中"></div>
           </header>
-          <div class="message-list" data-chat-log>
-            ${renderStaticBubble("assistant", "对象", landing.version.previewIntro ?? "先聊一句")}
+          <div class="message-list" data-chat-log data-chat-assistant-name="${escapeHtml(landing.persona.displayName)}">
+            ${renderStaticBubble({
+              role: "assistant",
+              label: landing.persona.displayName,
+              content: landing.version.previewIntro ?? "先聊一句",
+            })}
           </div>
           <section class="composer-shell">
             <form data-chat-form class="composer">
@@ -1813,6 +2368,7 @@ const renderSharePage = async (shareSlug: string) => {
     script: renderChatScript({
       targetType: "share_link",
       targetValue: shareSlug,
+      assistantName: landing.persona.displayName,
     }),
   });
 };
@@ -1834,7 +2390,9 @@ const renderCreatePage = () =>
       const definitionPositioningSlot = document.querySelector("[data-definition-positioning]");
       const definitionTagsSlot = document.querySelector("[data-definition-tags]");
       const tagButtons = Array.from(document.querySelectorAll("[data-tag-value]"));
+      const initialPersonaId = new URLSearchParams(window.location.search).get("personaId");
       let personaId = null;
+      let openedFromExistingPersona = false;
 
       const collectTags = () => {
         const selected = tagButtons
@@ -1846,6 +2404,15 @@ const renderCreatePage = () =>
           .map((item) => item.trim())
           .filter(Boolean);
         return Array.from(new Set([...selected, ...custom])).slice(0, 4);
+      };
+
+      const storeCurrentPersona = (input) => {
+        HallOfFameClient.writeCurrentPersonaSelection({
+          id: input.personaId,
+          displayName: input.displayName,
+          positioning: input.positioning,
+          tags: input.tags,
+        });
       };
 
       const renderDefinitionSummary = (displayName, positioning, tags) => {
@@ -1883,7 +2450,7 @@ const renderCreatePage = () =>
                     "<li class='source-item'><strong>" +
                     HallOfFameClient.escapeHtml(item.sourceTitle || item.id) +
                     "</strong><div class='meta'>" +
-                    HallOfFameClient.escapeHtml(item.inputType + " / " + item.sourceKind + " / " + item.reviewStatus) +
+                    HallOfFameClient.escapeHtml(item.inputType + " / " + item.sourceKind + " / 可预览") +
                     "</div><p class='body-copy'>" +
                     HallOfFameClient.escapeHtml(item.sourceSummary || "") +
                     "</p></li>",
@@ -1892,6 +2459,42 @@ const renderCreatePage = () =>
             : "<li class='empty-state'>还没有资料</li>";
         } catch (error) {
           sourceList.innerHTML = "<li class='empty-state'>" + HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) + "</li>";
+        }
+      };
+
+      const loadManagedPersona = async () => {
+        if (!initialPersonaId) {
+          return;
+        }
+
+        try {
+          const dashboard = await HallOfFameClient.requestJson("/v1/me/personae", { method: "GET" });
+          const current = (dashboard.items || []).find((item) => item.personaId === initialPersonaId);
+          if (!current) {
+            if (createStatus) {
+              createStatus.textContent = "没有找到这个对象。";
+            }
+            return;
+          }
+
+          openedFromExistingPersona = true;
+          personaId = current.personaId;
+          storeCurrentPersona({
+            personaId: current.personaId,
+            displayName: current.displayName,
+            positioning: current.positioning || current.previewIntro || "",
+            tags: current.distillFocus || [],
+          });
+          renderDefinitionSummary(current.displayName, current.positioning || current.previewIntro || "继续补资料后再预览。", current.distillFocus || []);
+          showState("workbench");
+          if (sourceStatus) {
+            sourceStatus.textContent = current.currentPublishedVersionId ? "继续补资料或重新预览。" : "继续补资料。";
+          }
+          await refreshSources();
+        } catch (error) {
+          if (createStatus) {
+            createStatus.textContent = error instanceof Error ? error.message : String(error);
+          }
         }
       };
 
@@ -1937,10 +2540,13 @@ const renderCreatePage = () =>
           });
 
           personaId = result.id;
-          localStorage.setItem("hall-of-fame-current-persona", personaId);
-          localStorage.setItem("hall-of-fame-current-persona-name", displayName);
-          localStorage.setItem("hall-of-fame-current-persona-positioning", positioning);
-          localStorage.setItem("hall-of-fame-current-persona-tags", JSON.stringify(tags));
+          storeCurrentPersona({
+            personaId,
+            displayName,
+            positioning,
+            tags,
+          });
+          window.history.replaceState({}, "", "/create?personaId=" + encodeURIComponent(personaId));
           renderDefinitionSummary(displayName, positioning, tags);
           createStatus.textContent = "";
           showState("success");
@@ -1956,6 +2562,10 @@ const renderCreatePage = () =>
       });
 
       document.querySelector("[data-edit-definition]")?.addEventListener("click", () => {
+        if (openedFromExistingPersona) {
+          sourceStatus.textContent = "当前阶段先继续补资料，回改定义后续再补。";
+          return;
+        }
         showState("light-start");
       });
 
@@ -1966,7 +2576,7 @@ const renderCreatePage = () =>
           return;
         }
         const form = new FormData(event.currentTarget);
-          sourceStatus.textContent = "添加中…";
+        sourceStatus.textContent = "添加中…";
         try {
           await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/sources/text", {
             method: "POST",
@@ -1976,7 +2586,7 @@ const renderCreatePage = () =>
               content: String(form.get("content") || ""),
             }),
           });
-          sourceStatus.textContent = "已添加文本资料";
+          sourceStatus.textContent = "已添加，可用于预览。";
           event.currentTarget.reset();
           await refreshSources();
         } catch (error) {
@@ -2001,7 +2611,7 @@ const renderCreatePage = () =>
               sourceKind: String(form.get("sourceKind") || "PRIMARY"),
             }),
           });
-          sourceStatus.textContent = "链接已提交";
+          sourceStatus.textContent = "已添加，可用于预览。";
           event.currentTarget.reset();
           await refreshSources();
         } catch (error) {
@@ -2025,7 +2635,7 @@ const renderCreatePage = () =>
         }
       });
 
-      void HallOfFameClient.ensureAnonymousSession();
+      void HallOfFameClient.ensureAnonymousSession().then(loadManagedPersona);
     `,
   });
 
@@ -2049,13 +2659,18 @@ const renderPreviewPage = async (personaVersionId: string) =>
         <div class="stage-grid">
           <section class="thread-screen">
             <header class="thread-header">
-              <div>
-                <h2 class="thread-name">预览聊天</h2>
-                <p class="thread-status">先试聊，再决定是否发布。</p>
+              <div class="thread-header-copy">
+                <h2 class="thread-name" data-thread-name>预览聊天</h2>
+                <p class="thread-status" data-thread-status>先试聊，再决定是私用还是公开分享。</p>
               </div>
+              <div class="thread-typing" data-thread-typing aria-label="正在输入中"></div>
             </header>
-            <div class="message-list" data-chat-log>
-              ${renderStaticBubble("assistant", "对象", "不够像，就先别发布。")}
+            <div class="message-list" data-chat-log data-chat-assistant-name="预览对象">
+              ${renderStaticBubble({
+                role: "assistant",
+                label: "预览对象",
+                content: "不够像，就先别发布。",
+              })}
             </div>
             <section class="composer-shell">
               <form data-chat-form class="composer">
@@ -2083,12 +2698,15 @@ const renderPreviewPage = async (personaVersionId: string) =>
               <ul class="question-list" data-preview-answers><li class="empty-state">加载中...</li></ul>
             </section>
             <section class="stage-card">
-              <div class="mini-eyebrow">发布</div>
-              <h3 class="card-title">确认后再发布</h3>
+              <div class="mini-eyebrow">使用方式</div>
+              <h3 class="card-title">确认后再决定</h3>
+              <p class="body-copy">可以先仅自己使用，也可以直接公开分享。</p>
               <div class="actions">
-                <button type="button" data-submit-publish>提交发布</button>
+                <button type="button" data-publish-private>仅自己使用</button>
+                <button type="button" class="secondary" data-publish-public>公开分享</button>
               </div>
               <div class="status-line" data-preview-status></div>
+              <div class="list-stack" data-preview-result></div>
             </section>
           </div>
         </div>
@@ -2101,6 +2719,7 @@ const renderPreviewPage = async (personaVersionId: string) =>
       const questionsSlot = document.querySelector("[data-preview-questions]");
       const answersSlot = document.querySelector("[data-preview-answers]");
       const previewStatus = document.querySelector("[data-preview-status]");
+      const previewResult = document.querySelector("[data-preview-result]");
 
       const loadVersion = async () => {
         await HallOfFameClient.ensureAnonymousSession();
@@ -2120,23 +2739,56 @@ const renderPreviewPage = async (personaVersionId: string) =>
         }
       };
 
-      document.querySelector("[data-submit-publish]")?.addEventListener("click", async () => {
-        previewStatus.textContent = "提交中…";
+      const renderPublishResult = (result) => {
+        if (!previewResult) return;
+
+        if (result.share) {
+          previewResult.innerHTML =
+            "<a class='utility-link' href='/share/" +
+            encodeURIComponent(result.share.shareSlug) +
+            "'>查看分享页</a>" +
+            "<a class='utility-link secondary' href='/profile'>回到我的</a>" +
+            "<div class='meta'>" +
+            HallOfFameClient.escapeHtml(result.share.canonicalUrl) +
+            "</div>";
+          return;
+        }
+
+        previewResult.innerHTML =
+          "<a class='utility-link' href='/profile'>回到我的</a>" +
+          "<a class='utility-link secondary' href='/create'>继续编辑</a>";
+      };
+
+      const publishVersion = async (visibility) => {
+        previewStatus.textContent = visibility === "PUBLIC" ? "发布中…" : "保存中…";
+        if (previewResult) {
+          previewResult.innerHTML = "";
+        }
         try {
-          const version = await HallOfFameClient.requestJson("/v1/persona-versions/" + versionId + "/submit-publish-review", {
+          const result = await HallOfFameClient.requestJson("/v1/persona-versions/" + versionId + "/publish", {
             method: "POST",
-            body: JSON.stringify({}),
+            body: JSON.stringify({ visibility }),
           });
-          previewStatus.textContent = "已提交发布。结果会同步到“我的”。";
+          previewStatus.textContent = visibility === "PUBLIC" ? "已公开分享。" : "已保存为仅自己使用。";
+          renderPublishResult(result);
         } catch (error) {
           previewStatus.textContent = error instanceof Error ? error.message : String(error);
         }
+      };
+
+      document.querySelector("[data-publish-private]")?.addEventListener("click", async () => {
+        await publishVersion("PRIVATE");
+      });
+
+      document.querySelector("[data-publish-public]")?.addEventListener("click", async () => {
+        await publishVersion("PUBLIC");
       });
 
       void loadVersion();
     ` + renderChatScript({
       targetType: "draft_version_preview",
       targetValue: personaVersionId,
+      assistantName: "预览对象",
     }),
   });
 
@@ -2145,13 +2797,64 @@ const renderProfilePage = () =>
     title: "我的",
     body: buildProfilePageBody(),
     script: `
-      const personaNameSlot = document.querySelector("[data-profile-persona-name]");
-      const personaStatusSlot = document.querySelector("[data-profile-persona-status]");
       const draftCountSlot = document.querySelector("[data-profile-draft-count]");
       const publishedCountSlot = document.querySelector("[data-profile-published-count]");
       const sessionCopySlot = document.querySelector("[data-profile-session-copy]");
+      const personaListSlot = document.querySelector("[data-profile-persona-list]");
+      let personae = [];
+
+      const renderPersonaList = (items) => {
+        if (!personaListSlot) return;
+
+        if (!items.length) {
+          personaListSlot.innerHTML = "<div class='empty-state'>还没有对象，先去创建一个。</div>";
+          return;
+        }
+
+        personaListSlot.innerHTML = items
+          .map((item) => {
+            const statusCopy = item.status === "PUBLISHED" ? "已公开" : item.listingStatus === "PRIVATE" ? "仅自己使用" : "继续编辑中";
+            const tags = (item.distillFocus || []).length
+              ? "<div class='pill-row'>" + item.distillFocus
+                  .map((tag) => "<span class='mini-tag'>" + HallOfFameClient.escapeHtml(tag) + "</span>")
+                  .join("") + "</div>"
+              : "";
+            const primaryAction =
+              "<a class='utility-link' href='/create?personaId=" +
+              encodeURIComponent(item.personaId) +
+              "' data-profile-edit='" +
+              HallOfFameClient.escapeHtml(item.personaId) +
+              "'>继续编辑</a>";
+            const shareAction = item.primaryShareSlug
+              ? "<a class='utility-link secondary' href='/share/" +
+                encodeURIComponent(item.primaryShareSlug) +
+                "'>查看分享</a>"
+              : "";
+
+            return (
+              "<section class='summary-card'>" +
+              "<div class='mini-eyebrow'>" +
+              HallOfFameClient.escapeHtml(statusCopy) +
+              "</div>" +
+              "<strong>" +
+              HallOfFameClient.escapeHtml(item.displayName) +
+              "</strong>" +
+              "<p class='summary-copy'>" +
+              HallOfFameClient.escapeHtml(item.positioning || item.previewIntro || "继续补资料后再预览。") +
+              "</p>" +
+              tags +
+              "<div class='actions'>" +
+              primaryAction +
+              shareAction +
+              "</div>" +
+              "</section>"
+            );
+          })
+          .join("");
+      };
 
       const loadProfile = async () => {
+        await HallOfFameClient.ensureAnonymousSession();
         const session = HallOfFameClient.readSession();
         if (sessionCopySlot) {
           sessionCopySlot.textContent =
@@ -2159,39 +2862,44 @@ const renderProfilePage = () =>
               ? "已登录"
               : session?.role === "USER"
                 ? "已登录"
-                : "匿名体验";
+              : "匿名体验";
         }
-
-        const personaId = localStorage.getItem("hall-of-fame-current-persona");
-        const personaName = localStorage.getItem("hall-of-fame-current-persona-name");
-        if (!personaId) {
-          if (draftCountSlot) draftCountSlot.textContent = "0";
-          if (publishedCountSlot) publishedCountSlot.textContent = "0";
-          return;
-        }
-
-          if (personaNameSlot) {
-            personaNameSlot.textContent = personaName || "还没有对象";
-          }
 
         try {
-          const status = await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/status", {
+          const dashboard = await HallOfFameClient.requestJson("/v1/me/personae", {
             method: "GET",
           });
-          const published = status.currentPublishedVersionId ? 1 : 0;
-          if (draftCountSlot) draftCountSlot.textContent = published ? "0" : "1";
-          if (publishedCountSlot) publishedCountSlot.textContent = String(published);
-          if (personaStatusSlot) {
-            personaStatusSlot.textContent = published
-              ? "当前对象已有可发布版本，可继续编辑。"
-              : "当前对象还在草稿阶段，先继续完善。";
-          }
+          personae = dashboard.items || [];
+          if (draftCountSlot) draftCountSlot.textContent = String(dashboard.stats?.draftCount ?? 0);
+          if (publishedCountSlot) publishedCountSlot.textContent = String(dashboard.stats?.publishedCount ?? 0);
+          renderPersonaList(personae);
         } catch (error) {
-          if (personaStatusSlot) {
-            personaStatusSlot.textContent = error instanceof Error ? error.message : String(error);
+          if (draftCountSlot) draftCountSlot.textContent = "0";
+          if (publishedCountSlot) publishedCountSlot.textContent = "0";
+          if (personaListSlot) {
+            personaListSlot.innerHTML = "<div class='empty-state'>" + HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) + "</div>";
           }
         }
       };
+
+      personaListSlot?.addEventListener("click", (event) => {
+        const editLink = event.target.closest("[data-profile-edit]");
+        if (!editLink) {
+          return;
+        }
+
+        const persona = personae.find((item) => item.personaId === editLink.getAttribute("data-profile-edit"));
+        if (!persona) {
+          return;
+        }
+
+        HallOfFameClient.writeCurrentPersonaSelection({
+          id: persona.personaId,
+          displayName: persona.displayName,
+          positioning: persona.positioning || persona.previewIntro || "",
+          tags: persona.distillFocus || [],
+        });
+      });
 
       void loadProfile();
     `,
@@ -2339,8 +3047,10 @@ export const buildH5Server = () => {
   }));
 
   app.get("/", async (_request, reply) => sendHtml(reply, await renderFeaturedList()));
-  app.get<{ Params: { personaId: string } }>("/persona/:personaId", async (request, reply) =>
-    sendHtml(reply, await renderPersonaPage(request.params.personaId)),
+  app.get("/history", async (_request, reply) => sendHtml(reply, await renderHistoryPage()));
+  app.get<{ Params: { personaId: string }; Querystring: { chatId?: string; from?: string } }>(
+    "/persona/:personaId",
+    async (request, reply) => sendHtml(reply, await renderPersonaPage(request.params.personaId, request.query)),
   );
   app.get<{ Params: { shareSlug: string } }>("/share/:shareSlug", async (request, reply) =>
     sendHtml(reply, await renderSharePage(request.params.shareSlug)),
@@ -2350,7 +3060,6 @@ export const buildH5Server = () => {
     sendHtml(reply, await renderPreviewPage(request.params.personaVersionId)),
   );
   app.get("/profile", async (_request, reply) => sendHtml(reply, renderProfilePage()));
-  app.get("/review", async (_request, reply) => sendHtml(reply, renderReviewPage()));
 
   return app;
 };

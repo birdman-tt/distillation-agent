@@ -57,3 +57,18 @@ export const chatSessionSchema = z.object({
   shareSlug: z.string().nullable(),
   messages: z.array(chatMessageSchema),
 });
+
+export const chatSessionSummarySchema = z.object({
+  id: z.string().uuid(),
+  targetType: chatTargetTypeSchema,
+  resumePersonaId: z.string().uuid().nullable(),
+  targetPersonaVersionId: z.string().uuid(),
+  shareSlug: z.string().nullable(),
+  displayName: z.string(),
+  latestMessage: z.string(),
+  updatedAt: z.string(),
+});
+
+export const chatSessionSummaryListSchema = z.object({
+  items: z.array(chatSessionSummarySchema),
+});

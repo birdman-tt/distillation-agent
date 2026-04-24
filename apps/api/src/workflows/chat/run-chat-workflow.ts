@@ -1,3 +1,4 @@
+import { chatContextEnvelopeSchema } from "@hall-of-fame/contracts";
 import { DeepSeekNotConfiguredError, requestStructuredJson } from "@hall-of-fame/deepseek-client";
 import { refusalReasonSchema } from "@hall-of-fame/domain";
 import {
@@ -34,12 +35,77 @@ const chatModelReplySchema = z.object({
     mode: z.enum(["SUPPORTED", "INFERRED", "UNSUPPORTED"]),
     summary: z.string(),
   }),
-  inferenceLevel: z.string(),
+  inferenceLevel: z.union([z.string(), z.number()]),
   conflictDetected: z.boolean(),
   refusalReason: z.string().optional().nullable(),
 });
 type ChatModelReply = z.infer<typeof chatModelReplySchema>;
 type ChatStructuredRequester = (input: Parameters<typeof requestStructuredJson>[0]) => Promise<ChatModelReply>;
+type ChatContextEnvelope = z.infer<typeof chatContextEnvelopeSchema>;
+
+const normalizeComparableText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, "")
+    .trim();
+
+const commonPrefixLength = (left: string, right: string) => {
+  const max = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < max && left[index] === right[index]) {
+    index += 1;
+  }
+  return index;
+};
+
+const isTooCloseToRecentAssistantAnswer = (answer: string, previousAnswers: string[]) => {
+  const normalizedAnswer = normalizeComparableText(answer);
+  if (normalizedAnswer.length < 8) {
+    return false;
+  }
+
+  return previousAnswers.some((item) => {
+    const normalizedPrevious = normalizeComparableText(item);
+    if (normalizedPrevious.length < 8) {
+      return false;
+    }
+
+    if (normalizedAnswer === normalizedPrevious) {
+      return true;
+    }
+
+    const shorterLength = Math.min(normalizedAnswer.length, normalizedPrevious.length);
+    if (shorterLength >= 12) {
+      const shorter = normalizedAnswer.length <= normalizedPrevious.length ? normalizedAnswer : normalizedPrevious;
+      const longer = shorter === normalizedAnswer ? normalizedPrevious : normalizedAnswer;
+      if (longer.includes(shorter)) {
+        return true;
+      }
+    }
+
+    const prefixRatio = commonPrefixLength(normalizedAnswer, normalizedPrevious) / shorterLength;
+    return shorterLength >= 10 && prefixRatio >= 0.72;
+  });
+};
+
+const collectRecentAssistantAnswers = (chatContext?: ChatContextEnvelope) => {
+  if (!chatContext) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  return [...chatContext.recentTurns, ...chatContext.retrievedMemories]
+    .filter((item) => item.role === "ASSISTANT")
+    .map((item) => item.content.trim())
+    .filter((item) => item.length > 0)
+    .filter((item) => {
+      if (seen.has(item)) {
+        return false;
+      }
+      seen.add(item);
+      return true;
+    });
+};
 
 const normalizeRefusalReason = (value: string | null | undefined) => {
   const normalized = value?.trim() ?? "";
@@ -52,10 +118,20 @@ const normalizeRefusalReason = (value: string | null | undefined) => {
 };
 
 const normalizeInferenceLevel = (input: {
-  rawLevel: string;
+  rawLevel: string | number;
   classificationCategory: RuntimeClassification["category"];
   basisMode: ChatModelReply["basisSummary"]["mode"];
 }) => {
+  if (typeof input.rawLevel === "number") {
+    if (input.basisMode === "SUPPORTED" && input.classificationCategory === "THEME_ANCHORED") {
+      return "grounded";
+    }
+    if (input.basisMode === "UNSUPPORTED") {
+      return "insufficient_evidence";
+    }
+    return "inferred";
+  }
+
   const normalized = input.rawLevel.trim().toLowerCase();
   if (normalized === "grounded" || normalized === "inferred" || normalized === "insufficient_evidence") {
     if (input.classificationCategory === "THEME_ANCHORED") {
@@ -72,6 +148,15 @@ const normalizeInferenceLevel = (input: {
 };
 
 type RuntimeClassification = ReturnType<typeof classifyUserQuestion>;
+
+const readChatTemperature = () => {
+  const value = Number(process.env.DEEPSEEK_CHAT_TEMPERATURE ?? "0.8");
+  if (!Number.isFinite(value)) {
+    return 0.8;
+  }
+
+  return Math.min(2, Math.max(0, value));
+};
 
 const buildOfficialSeedContext = (seed: OfficialSeed): RuntimeContext => {
   const supportedEvidence = seed.supportedReply.basis.map((item) => ({
@@ -115,6 +200,7 @@ export const runChatWorkflow = async (input: {
   content: string;
   seed?: OfficialSeed | null;
   dynamicContext?: RuntimeContext;
+  chatContext?: ChatContextEnvelope;
 }, deps: {
   requestStructuredJson?: ChatStructuredRequester;
 } = {}) => {
@@ -142,6 +228,8 @@ export const runChatWorkflow = async (input: {
   const userPrompt = buildChatUserPrompt({
     question: input.content,
     classification,
+    recentTurns: input.chatContext?.recentTurns ?? [],
+    retrievedMemories: input.chatContext?.retrievedMemories ?? [],
     evidence: runtimeContext.evidence,
   });
 
@@ -150,16 +238,29 @@ export const runChatWorkflow = async (input: {
     snippet: item.snippet,
   }));
 
-  try {
-    const modelResult = await (deps.requestStructuredJson ?? requestStructuredJson)({
+  const recentAssistantAnswers = collectRecentAssistantAnswers(input.chatContext);
+
+  const requestModelReply = async (extraInstruction?: string) =>
+    (deps.requestStructuredJson ?? requestStructuredJson)({
       apiKey: process.env.DEEPSEEK_API_KEY,
       baseUrl: process.env.DEEPSEEK_BASE_URL,
       model: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
-      systemPrompt,
+      temperature: readChatTemperature(),
+      systemPrompt: extraInstruction ? `${systemPrompt}\n${extraInstruction}` : systemPrompt,
       userPrompt,
       schema: chatModelReplySchema,
       maxTokens: 700,
     });
+
+  try {
+    let modelResult = await requestModelReply();
+
+    if (isTooCloseToRecentAssistantAnswer(modelResult.answer, recentAssistantAnswers)) {
+      modelResult = await requestModelReply(
+        "上一轮草稿与近期 assistant 话术过近。必须换一个新的开头与表达路径，不要重复对象摘要、示例回答或最近 assistant 原句。",
+      );
+    }
+
     console.info("[chat-workflow] used structured model response", {
       model: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
       personaVersionId: runtimeContext.personaVersionId,
@@ -202,4 +303,8 @@ export const runChatWorkflow = async (input: {
   }
 
   return null;
+};
+
+export const __internal = {
+  isTooCloseToRecentAssistantAnswer,
 };

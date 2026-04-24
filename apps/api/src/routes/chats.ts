@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  chatSessionSummaryListSchema,
   chatReplySchema,
   chatSessionSchema,
   createChatMessageSchema,
@@ -9,7 +10,13 @@ import {
 import type { FastifyPluginAsync } from "fastify";
 
 import { resolvePersonaSeed } from "../seed/official-personae.js";
-import { getChatSession, saveChatSession } from "../store/chat-store.js";
+import {
+  appendChatMessages,
+  getChatSession,
+  listChatSessionSummariesByCreator,
+  saveChatSession,
+} from "../store/chat-store.js";
+import { assembleChatContext } from "../services/chat-memory/assemble-chat-context.js";
 import {
   canAccessPersonaVersion,
   getPersonaDetail,
@@ -17,7 +24,7 @@ import {
   listApprovedSourceEvidence,
   resolveChatTarget,
 } from "../store/persona-store.js";
-import { getActorSession } from "../utils/actor-session.js";
+import { getActorSession, requireActorSession } from "../utils/actor-session.js";
 import { enforceWindowRateLimit } from "../utils/rate-limit.js";
 import { runChatWorkflow } from "../workflows/chat/index.js";
 
@@ -51,7 +58,44 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       messages: [],
     });
 
-    return await saveChatSession(session);
+    return await saveChatSession(session, {
+      createdByUserId: actor?.userId ?? null,
+    });
+  });
+
+  app.get("/v1/chats", async (request, reply) => {
+    const actor = requireActorSession(request, reply);
+    if (!actor) {
+      return;
+    }
+
+    const items = await listChatSessionSummariesByCreator({
+      createdByUserId: actor.userId,
+      limit: 50,
+    });
+
+    return chatSessionSummaryListSchema.parse({
+      items: items.map((item) => {
+        const officialSeed = resolvePersonaSeed({
+          targetType: item.targetType,
+          personaId: item.targetPersonaId ?? undefined,
+          personaVersionId: item.targetPersonaVersionId,
+          shareSlug: item.shareSlug ?? undefined,
+        });
+
+        return {
+          id: item.chatId,
+          targetType: item.targetType,
+          resumePersonaId:
+            item.targetType === "published_persona" ? (item.targetPersonaId ?? officialSeed?.persona.id ?? null) : null,
+          targetPersonaVersionId: item.targetPersonaVersionId,
+          shareSlug: item.shareSlug,
+          displayName: item.dynamicDisplayName ?? officialSeed?.persona.displayName ?? "对象",
+          latestMessage: item.latestMessage,
+          updatedAt: item.updatedAt,
+        };
+      }),
+    });
   });
 
   app.get<{ Params: { chatId: string } }>("/v1/chats/:chatId", async (request, reply) => {
@@ -106,12 +150,25 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       refusalReason: null,
       createdAt: new Date().toISOString(),
     };
+    const [persistedUserMessage] = await appendChatMessages(session.id, [userMessage]);
 
     const dynamicVersion = await getPersonaVersion(session.targetPersonaVersionId);
     const dynamicPersona = session.targetPersonaId ? (await getPersonaDetail(session.targetPersonaId))?.persona ?? null : null;
+    const personaEvidence =
+      officialSeed === null && dynamicVersion ? await listApprovedSourceEvidence(dynamicVersion.personaId) : [];
+    const chatContext = await assembleChatContext({
+      chatId: session.id,
+      personaId: session.targetPersonaId,
+      personaVersionId: session.targetPersonaVersionId,
+      query: input.content,
+      latestMessageId: persistedUserMessage?.messageId ?? userMessage.id,
+      latestTurnIndex: persistedUserMessage?.turnIndex ?? null,
+      personaEvidence,
+    });
     const rawReply = await runChatWorkflow({
       content: input.content,
       seed: officialSeed,
+      chatContext,
       dynamicContext:
         officialSeed === null && dynamicVersion
           ? {
@@ -126,7 +183,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                 ...dynamicVersion.recommendedQuestions,
                 ...dynamicVersion.sampleAnswers,
               ],
-              evidence: await listApprovedSourceEvidence(dynamicVersion.personaId),
+              evidence: personaEvidence,
             }
           : undefined,
     });
@@ -149,9 +206,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       refusalReason: replyPayload.refusalReason,
       createdAt: new Date().toISOString(),
     };
-
-    session.messages.push(userMessage, assistantMessage);
-    await saveChatSession(session);
+    await appendChatMessages(session.id, [assistantMessage]);
 
     return assistantMessage;
   });

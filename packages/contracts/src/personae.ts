@@ -48,3 +48,26 @@ export const personaDetailResponseSchema = z.object({
     profileJson: z.record(z.string(), z.unknown()),
   }),
 });
+
+export const myPersonaSummarySchema = z.object({
+  personaId: z.string().uuid(),
+  displayName: z.string(),
+  positioning: z.string().nullable(),
+  previewIntro: z.string().nullable(),
+  distillFocus: z.array(z.string()),
+  status: personaStatusSchema,
+  listingStatus: personaListingStatusSchema,
+  currentDraftVersionId: z.string().uuid().nullable(),
+  currentPublishedVersionId: z.string().uuid().nullable(),
+  primaryShareSlug: z.string().nullable(),
+  primaryShareUrl: z.string().url().nullable(),
+  updatedAt: z.string(),
+});
+
+export const myPersonaeResponseSchema = z.object({
+  stats: z.object({
+    draftCount: z.number().int().nonnegative(),
+    publishedCount: z.number().int().nonnegative(),
+  }),
+  items: z.array(myPersonaSummarySchema),
+});

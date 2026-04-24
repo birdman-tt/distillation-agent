@@ -9,6 +9,62 @@ const schemaFileUrl = new URL("./schema.sql", import.meta.url);
 const schemaSentinelTable = "persona_version_publish_reviews";
 const readPublicWebBaseUrl = () => process.env.PUBLIC_WEB_BASE_URL ?? process.env.APP_BASE_URL ?? "http://localhost:3000";
 
+const ensureChatMessageSearchSchema = async () => {
+  const sql = getSql();
+  await sql.unsafe(`
+    ALTER TABLE chat_messages
+      ADD COLUMN IF NOT EXISTS turn_index INTEGER;
+  `);
+  await sql.unsafe(`
+    ALTER TABLE chat_messages
+      ADD COLUMN IF NOT EXISTS message_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+  `);
+  await sql.unsafe(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'chat_messages'
+          AND column_name = 'content_tsv'
+      ) THEN
+        ALTER TABLE chat_messages
+          ADD COLUMN content_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(content, ''))) STORED;
+      END IF;
+    END $$;
+  `);
+  await sql.unsafe(`
+    WITH ranked AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY chat_id
+          ORDER BY created_at ASC, id ASC
+        ) AS rn
+      FROM chat_messages
+      WHERE turn_index IS NULL
+    )
+    UPDATE chat_messages AS messages
+    SET turn_index = ranked.rn
+    FROM ranked
+    WHERE messages.id = ranked.id;
+  `);
+  await sql.unsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_chat_turn_idx
+      ON chat_messages (chat_id, turn_index)
+      WHERE turn_index IS NOT NULL;
+  `);
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS chat_messages_content_tsv_idx
+      ON chat_messages USING GIN (content_tsv);
+  `);
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS chat_messages_chat_id_created_at_idx
+      ON chat_messages (chat_id, created_at DESC);
+  `);
+};
+
 const syncOfficialSeedShadows = async () => {
   const sql = getSql();
   const seeds = listFeaturedPersonae();
@@ -169,6 +225,7 @@ export const ensureDatabaseSchema = () => {
       }
 
       await syncOfficialSeedShadows();
+      await ensureChatMessageSearchSchema();
     })();
   }
 

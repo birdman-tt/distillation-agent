@@ -4,11 +4,10 @@ import test from "node:test";
 import {
   buildCreatePageBody,
   buildFeaturedListBody,
+  buildHistoryPageBody,
   buildPersonaPageBody,
   buildProfilePageBody,
   buildReplyInspectorHtml,
-  buildReviewPageBody,
-  buildSessionBannerHtml,
 } from "./h5-app.js";
 
 test("reply inspector hides raw system adjudication wording by default", () => {
@@ -39,6 +38,7 @@ test("home shell uses a bottom shuttle nav instead of top pills", () => {
   assert.match(body, /bottom-shuttle/);
   assert.match(body, /shuttle-track/);
   assert.match(body, />聊天</);
+  assert.match(body, />列表</);
   assert.match(body, />创建</);
   assert.match(body, />我的</);
   assert.doesNotMatch(body, />审核</);
@@ -100,16 +100,65 @@ test("persona page behaves like a messaging thread", () => {
     },
   });
 
-  assert.match(body, /thread-header/);
+  assert.doesNotMatch(body, /<header class="thread-header">/);
+  assert.match(body, /data-thread-name/);
   assert.match(body, /thread-status/);
   assert.match(body, /message-list/);
   assert.match(body, /composer/);
   assert.doesNotMatch(body, /data-suggested-question=|人物气质|回答样本|prompt-cluster/);
 });
 
+test("persona page can return to the history list when opened from history", () => {
+  const body = buildPersonaPageBody(
+    {
+      persona: {
+        displayName: "苏轼",
+        currentPublishedVersionId: "version-1",
+        originType: "OFFICIAL",
+      },
+      version: {
+        previewIntro: "在失意与豁达之间找到生命张力的文人。",
+        recommendedQuestions: [],
+        sampleAnswers: [],
+      },
+    },
+    { returnHref: "/history" },
+  );
+
+  assert.match(body, /href="\/history">返回/);
+});
+
+test("history page renders as a single chat list tab", () => {
+  const body = buildHistoryPageBody({
+    items: [
+      {
+        id: "history-1",
+        displayName: "秦始皇",
+        lastMessage: "如果局面失控，先稳住哪里？",
+        updatedAtLabel: "刚刚",
+        href: "/persona/history-1",
+      },
+      {
+        id: "history-2",
+        displayName: "苏轼",
+        lastMessage: "继续从上次的话题接着聊。",
+        updatedAtLabel: "上周",
+        href: "/persona/history-2",
+      },
+    ],
+  });
+
+  assert.match(body, /聊天列表/);
+  assert.match(body, /之前聊过的对象，都在这里/);
+  assert.match(body, /history-item/);
+  assert.match(body, /history-snippet/);
+  assert.match(body, /刚刚/);
+  assert.match(body, />列表</);
+  assert.doesNotMatch(body, /最近开口|历史记录|继续聊|返回聊天/);
+});
+
 test("supporting pages inherit the same dark-chat shell", () => {
   const createPage = buildCreatePageBody();
-  const reviewPage = buildReviewPageBody();
   const profilePage = buildProfilePageBody();
 
   assert.match(createPage, /bottom-shuttle/);
@@ -119,23 +168,8 @@ test("supporting pages inherit the same dark-chat shell", () => {
   assert.match(createPage, /data-create-workbench/);
   assert.doesNotMatch(createPage, /top-nav|Step 1|share\/demo/);
 
-  assert.match(reviewPage, /bottom-shuttle/);
-  assert.doesNotMatch(reviewPage, />审核</);
-  assert.doesNotMatch(reviewPage, /share\/demo/);
-
   assert.match(profilePage, /切换亮暗模式/);
-  assert.doesNotMatch(profilePage, /审核入口/);
-  assert.match(profilePage, /data-profile-persona-name/);
+  assert.doesNotMatch(profilePage, /审核入口|最近对象/);
+  assert.match(profilePage, /data-profile-persona-list/);
   assert.doesNotMatch(profilePage, /主题切换|data-theme-state|data-theme-choice|>浅色<|>深色</);
-});
-
-test("session banner keeps auth state human and hides raw technical identifiers", () => {
-  const anonymous = buildSessionBannerHtml({
-    role: "ANONYMOUS",
-    sessionKind: "ANONYMOUS",
-    userId: "12345678-aaaa-bbbb-cccc-1234567890ab",
-  });
-
-  assert.match(anonymous, /已进入匿名体验/);
-  assert.doesNotMatch(anonymous, /ANONYMOUS|12345678|user/);
 });

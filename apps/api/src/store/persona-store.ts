@@ -12,7 +12,9 @@ import {
   createDynamicUrlSource,
   getDynamicPersonaDetail,
   getDynamicPersonaVersion,
+  getPrimaryDynamicShareByVersionId,
   getDynamicShareLanding,
+  listDynamicPersonaeByCreator,
   listApprovedDynamicSourceEvidence,
   listDynamicPersonaSources,
   listDynamicPersonaVersions,
@@ -20,6 +22,7 @@ import {
   listPendingDynamicSourceReviews,
   persistDynamicDistilledVersion,
   persistDynamicUrlSourceIngestResult,
+  publishDynamicPersonaVersion,
   resolveDynamicChatTarget,
   reviewDynamicPublishRequest,
   reviewDynamicSource,
@@ -94,7 +97,7 @@ export const getPersonaDetail = async (personaId: string) => {
       listingStatus: detail.persona.listingStatus,
       status: detail.persona.status,
       featuredRank: detail.persona.featuredRank,
-      currentPublishedVersionId: detail.version.id,
+      currentPublishedVersionId: detail.persona.currentPublishedVersionId,
     },
     version: detail.version,
   };
@@ -309,12 +312,12 @@ export const prepareDistillInput = async (personaId: string) => {
     return null;
   }
 
-  const approvedSources = (await listDynamicPersonaSources(personaId)).filter((item) => item.reviewStatus === "APPROVED");
-  if (approvedSources.length === 0) {
-    throw new Error("At least one approved source is required before distill");
+  const usableSources = (await listDynamicPersonaSources(personaId)).filter((item) => item.reviewStatus !== "REJECTED");
+  if (usableSources.length === 0) {
+    throw new Error("At least one source is required before distill");
   }
 
-  const sourceKindCounts = approvedSources.reduce(
+  const sourceKindCounts = usableSources.reduce(
     (acc, source) => {
       if (source.sourceKind === "PRIMARY" || source.sourceKind === "SECONDARY") {
         acc.primaryOrSecondary += 1;
@@ -328,14 +331,14 @@ export const prepareDistillInput = async (personaId: string) => {
   return {
     displayName: detail.persona.displayName,
     distillFocus: focus,
-    approvedSources: approvedSources.map((source) => ({
+    approvedSources: usableSources.map((source) => ({
       sourceId: source.id,
       sourceKind: source.sourceKind,
       title: source.sourceTitle,
       summary: source.sourceSummary ?? "已审核资料摘要",
     })),
     stats: {
-      approvedSources: approvedSources.length,
+      approvedSources: usableSources.length,
       primaryOrSecondarySources: sourceKindCounts.primaryOrSecondary,
     },
   };
@@ -394,6 +397,52 @@ export const persistDistilledVersion = async (
 };
 
 export const submitPublishReview = async (versionId: string) => submitDynamicPublishReview(versionId);
+
+export const publishPersonaVersion = async (
+  versionId: string,
+  visibility: "PRIVATE" | "PUBLIC",
+) => publishDynamicPersonaVersion({ versionId, visibility });
+
+export const listMyPersonae = async (actorUserId: string) => {
+  const items = await Promise.all(
+    (await listDynamicPersonaeByCreator(actorUserId)).map(async (persona) => {
+      const activeVersionId =
+        persona.status === "PUBLISHED"
+          ? persona.currentPublishedVersionId ?? persona.currentDraftVersionId
+          : persona.currentDraftVersionId ?? persona.currentPublishedVersionId;
+      const version = activeVersionId ? await getDynamicPersonaVersion(activeVersionId) : null;
+      const primaryShare = persona.currentPublishedVersionId
+        ? await getPrimaryDynamicShareByVersionId(persona.currentPublishedVersionId)
+        : null;
+
+      return {
+        personaId: persona.id,
+        displayName: persona.displayName,
+        positioning:
+          typeof version?.profileJson?.summary === "string"
+            ? version.profileJson.summary
+            : version?.previewIntro ?? null,
+        previewIntro: version?.previewIntro ?? null,
+        distillFocus: version?.distillFocus ?? [],
+        status: persona.status,
+        listingStatus: persona.listingStatus,
+        currentDraftVersionId: persona.currentDraftVersionId,
+        currentPublishedVersionId: persona.currentPublishedVersionId,
+        primaryShareSlug: primaryShare?.shareSlug ?? null,
+        primaryShareUrl: primaryShare?.canonicalUrl ?? null,
+        updatedAt: persona.updatedAt,
+      };
+    }),
+  );
+
+  return {
+    stats: {
+      draftCount: items.filter((item) => item.status !== "PUBLISHED").length,
+      publishedCount: items.filter((item) => item.status === "PUBLISHED").length,
+    },
+    items,
+  };
+};
 
 export const listPendingPublishReviews = async () => {
   const items = await listPendingDynamicPublishReviews();
@@ -540,7 +589,7 @@ export const createDynamicReply = async (versionId: string, content: string, cla
     return null;
   }
 
-  const approvedSources = (await listDynamicPersonaSources(version.personaId)).filter((item) => item.reviewStatus === "APPROVED");
+  const approvedSources = (await listDynamicPersonaSources(version.personaId)).filter((item) => item.reviewStatus !== "REJECTED");
   const firstSource = approvedSources[0];
   const mode = classification?.category ?? "THEME_ANCHORED";
   const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");

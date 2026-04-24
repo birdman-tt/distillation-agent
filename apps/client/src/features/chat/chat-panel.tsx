@@ -4,6 +4,50 @@ import { useRef, useState } from "react";
 
 import { getApiBaseUrl } from "../../lib/api.js";
 
+const sessionStorageKey = "hall-of-fame-session";
+
+const readStoredAccessToken = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(sessionStorageKey);
+    const session = raw ? (JSON.parse(raw) as { accessToken?: string } | null) : null;
+    return typeof session?.accessToken === "string" ? session.accessToken : null;
+  } catch {
+    return null;
+  }
+};
+
+const ensureAnonymousAccessToken = async () => {
+  const existingToken = readStoredAccessToken();
+  if (existingToken) {
+    return existingToken;
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/v1/auth/anonymous`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ deviceId: "react-browser" }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as { accessToken?: string; message?: string } | null;
+  if (!response.ok || typeof payload?.accessToken !== "string") {
+    throw new Error(payload?.message ?? "创建匿名会话失败");
+  }
+
+  try {
+    localStorage.setItem(sessionStorageKey, JSON.stringify(payload));
+  } catch {
+    // ignore storage write failures
+  }
+
+  return payload.accessToken;
+};
+
 type ChatPanelProps =
   | {
       targetType: "published_persona";
@@ -44,6 +88,7 @@ export const ChatPanel = (props: ChatPanelProps) => {
       return await sessionPromiseRef.current;
     }
 
+    const accessToken = await ensureAnonymousAccessToken();
     const pending = createChatSession(
       getApiBaseUrl(),
       props.targetType === "published_persona"
@@ -51,6 +96,7 @@ export const ChatPanel = (props: ChatPanelProps) => {
         : props.targetType === "draft_version_preview"
           ? { targetType: props.targetType, personaVersionId: props.personaVersionId }
           : { targetType: props.targetType, shareSlug: props.shareSlug },
+      accessToken,
     )
       .then((created) => {
         const session = created.id as string;
@@ -96,7 +142,7 @@ export const ChatPanel = (props: ChatPanelProps) => {
     try {
       const session = await ensureChatSession();
       failureLabel = "回复失败";
-      const reply = await sendChatMessage(getApiBaseUrl(), session, content);
+      const reply = await sendChatMessage(getApiBaseUrl(), session, content, readStoredAccessToken() ?? undefined);
 
       setMessages((current) =>
         current.flatMap((message) =>

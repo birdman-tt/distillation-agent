@@ -20,6 +20,42 @@ test("chat submit script renders a retry control for failed user messages", () =
   assert.match(h5Source, /重试/);
 });
 
+test("chat submit script creates an anonymous session before opening a persisted chat", () => {
+  const ensureChatBlock = h5Source.match(
+    /const ensureChatId = async \(\) => \{[\s\S]*?await HallOfFameClient\.ensureAnonymousSession\(\);[\s\S]*?HallOfFameClient\.requestJson\("\/v1\/chats", \{/,
+  );
+
+  assert.ok(ensureChatBlock, "expected chat script to ensure an anonymous session before chat creation");
+});
+
+test("h5 shell does not render auth state as visible page chrome", () => {
+  assert.doesNotMatch(h5Source, /data-session-slot/);
+  assert.doesNotMatch(h5Source, /session-banner/);
+  assert.doesNotMatch(h5Source, /已进入匿名体验/);
+});
+
+test("chat page keeps the return action reachable in long threads", () => {
+  assert.match(h5Source, /\.chat-stage\s*>\s*\.top-bar\s*\{[\s\S]*?position:\s*sticky/);
+  assert.match(h5Source, /\.chat-stage\s+\.thread-header\s*\{[\s\S]*?top:\s*var\(--chat-sticky-offset\)/);
+});
+
+test("history links reopen the existing chat session", () => {
+  assert.match(h5Source, /\?chatId=" \+ encodeURIComponent\(item\.id\) \+ "&from=history/);
+});
+
+test("chat page resumes persisted messages before continuing a history chat", () => {
+  assert.match(h5Source, /initialChatId/);
+  assert.match(h5Source, /renderExistingMessages/);
+  assert.match(h5Source, /requestJson\("\/v1\/chats\/" \+ encodeURIComponent\(initialChatId\)/);
+});
+
+test("preview page publishes directly instead of submitting publish review", () => {
+  assert.match(h5Source, /data-publish-private/);
+  assert.match(h5Source, /data-publish-public/);
+  assert.ok(h5Source.includes('/v1/persona-versions/" + versionId + "/publish'));
+  assert.doesNotMatch(h5Source, /submit-publish-review/);
+});
+
 test("sendChatMessage throws the API error body when the request fails", async () => {
   const fetchMock = mock.method(globalThis, "fetch", async () => {
     return new Response(JSON.stringify({ message: "reply failed" }), {

@@ -6,6 +6,7 @@ import { ensureDatabaseSchema } from "./db/bootstrap.js";
 import { authRoute } from "./routes/auth.js";
 import { chatsRoute } from "./routes/chats.js";
 import { feedbackRoute } from "./routes/feedback.js";
+import { meRoute } from "./routes/me.js";
 import { personaVersionsRoute } from "./routes/persona-versions.js";
 import { personaDetailRoute } from "./routes/personae/detail.js";
 import { featuredPersonaeRoute } from "./routes/personae/featured.js";
@@ -37,6 +38,7 @@ export const buildApiApp = () => {
   });
 
   void app.register(authRoute);
+  void app.register(meRoute);
   void app.register(featuredPersonaeRoute);
   void app.register(personaDetailRoute);
   void app.register(personaeManageRoute);

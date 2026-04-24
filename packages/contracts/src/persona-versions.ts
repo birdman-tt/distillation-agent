@@ -1,6 +1,8 @@
 import { personaVersionStatusSchema } from "@hall-of-fame/domain";
 import { z } from "zod";
 
+import { shareLinkResponseSchema } from "./shares.js";
+
 export const submitPublishReviewSchema = z.object({
   versionId: z.string().uuid(),
 });
@@ -22,4 +24,17 @@ export const personaVersionResponseSchema = z.object({
 
 export const personaVersionListResponseSchema = z.object({
   items: z.array(personaVersionResponseSchema),
+});
+
+export const publishPersonaVersionSchema = z.object({
+  visibility: z.enum(["PRIVATE", "PUBLIC"]).default("PRIVATE"),
+});
+
+export const publishPersonaVersionResponseSchema = z.object({
+  personaVersionId: z.string().uuid(),
+  status: personaVersionStatusSchema,
+  visibility: z.enum(["PRIVATE", "PUBLIC"]),
+  personaStatus: z.enum(["DRAFT", "PROCESSING", "READY", "PUBLISHED", "REJECTED"]),
+  listingStatus: z.enum(["PRIVATE", "UNLISTED", "FEATURED", "REMOVED"]),
+  share: shareLinkResponseSchema.nullable(),
 });

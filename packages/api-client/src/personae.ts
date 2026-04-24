@@ -54,6 +54,17 @@ export const listPersonaVersions = async (baseUrl: string, personaId: string) =>
   return response.json();
 };
 
+export const getMyPersonae = async (baseUrl: string, accessToken?: string) => {
+  const response = await fetch(`${baseUrl}/v1/me/personae`, {
+    headers: accessToken
+      ? {
+          authorization: `Bearer ${accessToken}`,
+        }
+      : undefined,
+  });
+  return response.json();
+};
+
 export const distillPersona = async (baseUrl: string, personaId: string) => {
   const response = await fetch(`${baseUrl}/v1/personae/${personaId}/distill`, {
     method: "POST",

@@ -192,14 +192,24 @@ CREATE TABLE chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
   role message_role NOT NULL,
+  turn_index INTEGER,
   content TEXT NOT NULL,
+  content_tsv TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(content, ''))) STORED,
   basis JSONB,
   basis_summary JSONB,
   inference_level inference_level,
   conflict_detected BOOLEAN,
   refusal_reason refusal_reason,
+  message_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX chat_messages_chat_turn_idx
+  ON chat_messages (chat_id, turn_index)
+  WHERE turn_index IS NOT NULL;
+
+CREATE INDEX chat_messages_content_tsv_idx ON chat_messages USING GIN (content_tsv);
+CREATE INDEX chat_messages_chat_id_created_at_idx ON chat_messages (chat_id, created_at DESC);
 
 CREATE TABLE persona_feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

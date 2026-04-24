@@ -380,6 +380,18 @@ const selectShareColumns = `
   created_at as "createdAt"
 `;
 
+const selectShareColumnsFromAlias = (alias: string) => `
+  ${alias}.id as "id",
+  ${alias}.persona_version_id as "personaVersionId",
+  ${alias}.share_slug as "shareSlug",
+  ${alias}.canonical_url as "canonicalUrl",
+  ${alias}.miniapp_path as "miniappPath",
+  ${alias}.channel_hint as "channelHint",
+  ${alias}.is_primary as "isPrimary",
+  ${alias}.is_active as "isActive",
+  ${alias}.created_at as "createdAt"
+`;
+
 const createSourceDocumentWithSpan = async (
   sql: any,
   source: SourceRecord,
@@ -625,6 +637,33 @@ export const listDynamicPersonaVersions = async (personaId: string) => {
 
 export const getDynamicPersonaVersion = async (versionId: string) => getDynamicVersionRow(versionId);
 
+export const listDynamicPersonaeByCreator = async (creatorUserId: string) => {
+  const sql = getSql();
+  const rows = await sql.unsafe<PersonaRow[]>(
+    `select ${selectPersonaColumns}
+       from personae
+      where creator_user_id = $1
+        and origin_type = 'USER'
+      order by updated_at desc, created_at desc`,
+    [creatorUserId],
+  );
+  return rows.map(mapPersona);
+};
+
+export const getPrimaryDynamicShareByVersionId = async (personaVersionId: string) => {
+  const sql = getSql();
+  const rows = await sql.unsafe<ShareRow[]>(
+    `select ${selectShareColumns}
+       from share_links
+      where persona_version_id = $1
+        and is_primary = true
+        and is_active = true
+      limit 1`,
+    [personaVersionId],
+  );
+  return rows[0] ? mapShare(rows[0]) : null;
+};
+
 export const transferDynamicPersonaOwnership = async (fromUserId: string, toUserId: string) => {
   if (fromUserId === toUserId) {
     return;
@@ -726,7 +765,7 @@ export const createDynamicTextSource = async (input: {
         ${sourceId}::uuid,
         ${input.personaId}::uuid,
         ${"TEXT"},
-        ${"PENDING_REVIEW"},
+        ${"APPROVED"},
         null,
         ${input.title ?? null},
         ${input.author ?? null},
@@ -739,7 +778,7 @@ export const createDynamicTextSource = async (input: {
         ${trustScore},
         null,
         null,
-        null,
+        ${createdAt},
         ${createdAt}
       )
     `;
@@ -748,7 +787,7 @@ export const createDynamicTextSource = async (input: {
       id: sourceId,
       personaId: input.personaId,
       inputType: "TEXT",
-      reviewStatus: "PENDING_REVIEW",
+      reviewStatus: "APPROVED",
       sourceUrl: null,
       sourceTitle: input.title ?? null,
       sourceAuthor: input.author ?? null,
@@ -761,7 +800,7 @@ export const createDynamicTextSource = async (input: {
       trustScore,
       reviewReason: null,
       reviewedByUserId: null,
-      reviewedAt: null,
+      reviewedAt: createdAt,
       createdAt,
     };
 
@@ -817,7 +856,7 @@ export const createDynamicUrlSource = async (input: {
       ${sourceId}::uuid,
       ${input.personaId}::uuid,
       ${"URL"},
-      ${"PENDING_REVIEW"},
+      ${"APPROVED"},
       ${input.normalizedUrl},
       ${input.title ?? null},
       ${input.author ?? null},
@@ -830,7 +869,7 @@ export const createDynamicUrlSource = async (input: {
       ${trustScore},
       null,
       null,
-      null,
+      ${createdAt},
       ${createdAt}
     )
   `;
@@ -1071,7 +1110,7 @@ export const persistDynamicDistilledVersion = async (input: {
       select id as "sourceId"
       from persona_sources
       where persona_id = ${input.personaId}::uuid
-        and review_status = 'APPROVED'
+        and review_status != 'REJECTED'
       order by created_at asc
     `;
     const approvedSourceIds = approvedSources.map((row) => row.sourceId);
@@ -1185,6 +1224,105 @@ export const submitDynamicPublishReview = async (versionId: string) => {
     [versionId],
   );
   return rows[0] ? mapPersonaVersion(rows[0]) : null;
+};
+
+export const publishDynamicPersonaVersion = async (input: {
+  versionId: string;
+  visibility: "PRIVATE" | "PUBLIC";
+}) => {
+  return withTransaction(async (sql) => {
+    const versionRows = await sql.unsafe<PersonaVersionRow[]>(`select ${selectPersonaVersionColumns} from persona_versions where id = $1`, [
+      input.versionId,
+    ]);
+    const version = versionRows[0] ? mapPersonaVersion(versionRows[0]) : null;
+    if (!version) {
+      return null;
+    }
+
+    const personaRows = await sql.unsafe<PersonaRow[]>(`select ${selectPersonaColumns} from personae where id = $1`, [version.personaId]);
+    const persona = personaRows[0] ? mapPersona(personaRows[0]) : null;
+    if (!persona) {
+      return null;
+    }
+
+    const createdAt = new Date().toISOString();
+
+    if (input.visibility === "PRIVATE") {
+      if (version.status !== "CANDIDATE") {
+        throw new Error("Only preview versions can be saved for private use");
+      }
+
+      await sql`
+        update personae
+           set current_draft_version_id = ${version.id}::uuid,
+               status = 'READY',
+               listing_status = 'PRIVATE',
+               updated_at = ${createdAt}
+         where id = ${persona.id}::uuid
+      `;
+
+      const updatedVersion = (await sql.unsafe<PersonaVersionRow[]>(
+        `select ${selectPersonaVersionColumns} from persona_versions where id = $1`,
+        [version.id],
+      ))[0];
+      const updatedPersona = (await sql.unsafe<PersonaRow[]>(`select ${selectPersonaColumns} from personae where id = $1`, [persona.id]))[0];
+
+      return {
+        version: mapPersonaVersion(updatedVersion!),
+        persona: mapPersona(updatedPersona!),
+        share: null,
+      };
+    }
+
+    if (version.status !== "CANDIDATE" && version.status !== "PUBLISHED") {
+      throw new Error("Only preview versions can be published");
+    }
+
+    if (persona.currentPublishedVersionId && persona.currentPublishedVersionId !== version.id) {
+      await sql`
+        update persona_versions
+           set status = 'SUPERSEDED',
+               superseded_at = ${createdAt}
+         where id = ${persona.currentPublishedVersionId}::uuid
+      `;
+    }
+
+    if (version.status !== "PUBLISHED") {
+      await sql`
+        update persona_versions
+           set status = 'PUBLISHED',
+               published_at = ${createdAt}
+         where id = ${version.id}::uuid
+      `;
+    }
+
+    await sql`
+      update personae
+         set current_draft_version_id = ${version.id}::uuid,
+             current_published_version_id = ${version.id}::uuid,
+             status = 'PUBLISHED',
+             listing_status = 'UNLISTED',
+             updated_at = ${createdAt}
+       where id = ${persona.id}::uuid
+    `;
+
+    const updatedVersion = (await sql.unsafe<PersonaVersionRow[]>(
+      `select ${selectPersonaVersionColumns} from persona_versions where id = $1`,
+      [version.id],
+    ))[0];
+    const updatedPersona = (await sql.unsafe<PersonaRow[]>(`select ${selectPersonaColumns} from personae where id = $1`, [persona.id]))[0];
+    const share = await ensurePrimaryShare(sql, {
+      version: mapPersonaVersion(updatedVersion!),
+      persona: mapPersona(updatedPersona!),
+      createdAt,
+    });
+
+    return {
+      version: mapPersonaVersion(updatedVersion!),
+      persona: mapPersona(updatedPersona!),
+      share,
+    };
+  });
 };
 
 export const listPendingDynamicPublishReviews = async () => {
@@ -1439,7 +1577,7 @@ export const getDynamicShareLanding = async (shareSlug: string) => {
     })[]
   >(
     `select
-      ${selectShareColumns},
+      ${selectShareColumnsFromAlias("s")},
       p.id as "personaId",
       p.display_name as "displayName",
       p.origin_type as "originType",

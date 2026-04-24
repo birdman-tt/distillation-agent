@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { getSql, resetSqlForTests } from "./db/client.js";
 
-test("anonymous session can create, verify, and continue owning a persona through worker-backed distill", async () => {
+test("anonymous session can create, distill, save private, publish, and keep a usable share", async () => {
   const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = "";
 
@@ -72,80 +72,25 @@ test("anonymous session can create, verify, and continue owning a persona throug
     `;
     assert.equal(persistedSource.length, 1);
 
-    const textSources = [];
-    for (const [index, payload] of [
-      { content: "第一份文本资料，偏一手视角。", sourceKind: "PRIMARY" },
-      { content: "第二份文本资料，补充其判断方式。", sourceKind: "SECONDARY" },
-      { content: "第三份文本资料，补充其表达风格。", sourceKind: "PRIMARY" },
-      { content: "第四份文本资料，补充其价值取向。", sourceKind: "SECONDARY" },
-    ].entries()) {
-      const response = await apiApp.inject({
-        method: "POST",
-        url: `/v1/personae/${persona.id}/sources/text`,
-        headers: {
-          authorization: `Bearer ${anonymousBody.accessToken}`,
-        },
-        payload: {
-          title: `text-${index + 1}`,
-          ...payload,
-        },
-      });
-      assert.equal(response.statusCode, 200);
-      textSources.push(response.json());
-    }
-
-    const reviewWithoutReviewer = await apiApp.inject({
+    const textSource = await apiApp.inject({
       method: "POST",
-      url: `/v1/reviews/sources/${sourceResponse.json().id}/approve`,
+      url: `/v1/personae/${persona.id}/sources/text`,
       headers: {
         authorization: `Bearer ${anonymousBody.accessToken}`,
       },
       payload: {
-        reason: "should fail",
+        title: "text-1",
+        content: "第一份文本资料，补充它的判断方式和表达风格。",
+        sourceKind: "PRIMARY",
       },
     });
-    assert.equal(reviewWithoutReviewer.statusCode, 403);
-
-    const upgraded = await apiApp.inject({
-      method: "POST",
-      url: "/v1/auth/web/sms/verify",
-      headers: {
-        authorization: `Bearer ${anonymousBody.accessToken}`,
-      },
-      payload: {
-        phoneNumber: "13800000000",
-        code: "123456",
-      },
-    });
-    assert.equal(upgraded.statusCode, 200);
-    const upgradedBody = upgraded.json();
-
-    const reviewer = await apiApp.inject({
-      method: "POST",
-      url: "/v1/auth/dev/reviewer",
-    });
-    assert.equal(reviewer.statusCode, 200);
-    const reviewerBody = reviewer.json();
-
-    for (const sourceId of [source.id, ...textSources.map((item) => item.id)]) {
-      const approved = await apiApp.inject({
-        method: "POST",
-        url: `/v1/reviews/sources/${sourceId}/approve`,
-        headers: {
-          authorization: `Bearer ${reviewerBody.accessToken}`,
-        },
-        payload: {
-          reason: "approved",
-        },
-      });
-      assert.equal(approved.statusCode, 200);
-    }
+    assert.equal(textSource.statusCode, 200);
 
     const distilled = await apiApp.inject({
       method: "POST",
       url: `/v1/personae/${persona.id}/distill`,
       headers: {
-        authorization: `Bearer ${upgradedBody.accessToken}`,
+        authorization: `Bearer ${anonymousBody.accessToken}`,
       },
     });
     assert.equal(distilled.statusCode, 200);
@@ -159,27 +104,46 @@ test("anonymous session can create, verify, and continue owning a persona throug
     assert.equal(persistedVersion.length, 1);
     assert.equal(persistedVersion[0]?.status, "CANDIDATE");
 
-    const submitted = await apiApp.inject({
+    const savedPrivate = await apiApp.inject({
       method: "POST",
-      url: `/v1/persona-versions/${distilledBody.id}/submit-publish-review`,
+      url: `/v1/persona-versions/${distilledBody.id}/publish`,
       headers: {
-        authorization: `Bearer ${upgradedBody.accessToken}`,
+        authorization: `Bearer ${anonymousBody.accessToken}`,
+      },
+      payload: {
+        visibility: "PRIVATE",
       },
     });
-    assert.equal(submitted.statusCode, 200);
+    assert.equal(savedPrivate.statusCode, 200);
+    assert.equal(savedPrivate.json().share, null);
+    assert.equal(savedPrivate.json().personaStatus, "READY");
+    assert.equal(savedPrivate.json().listingStatus, "PRIVATE");
+
+    const privateDashboard = await apiApp.inject({
+      method: "GET",
+      url: "/v1/me/personae",
+      headers: {
+        authorization: `Bearer ${anonymousBody.accessToken}`,
+      },
+    });
+    assert.equal(privateDashboard.statusCode, 200);
+    assert.equal(privateDashboard.json().stats.draftCount, 1);
+    assert.equal(privateDashboard.json().stats.publishedCount, 0);
+    assert.equal(privateDashboard.json().items[0]?.displayName, "测试对象");
+    assert.equal(privateDashboard.json().items[0]?.primaryShareSlug, null);
 
     const published = await apiApp.inject({
       method: "POST",
-      url: `/v1/reviews/persona-versions/${distilledBody.id}/approve-publish`,
+      url: `/v1/persona-versions/${distilledBody.id}/publish`,
       headers: {
-        authorization: `Bearer ${reviewerBody.accessToken}`,
+        authorization: `Bearer ${anonymousBody.accessToken}`,
       },
       payload: {
-        reason: "publish",
+        visibility: "PUBLIC",
       },
     });
     assert.equal(published.statusCode, 200);
-    assert.equal(published.json().version.status, "PUBLISHED");
+    assert.equal(published.json().status, "PUBLISHED");
     assert.ok(published.json().share?.shareSlug);
 
     const persistedShare = await sql<{ share_slug: string }[]>`
@@ -188,6 +152,18 @@ test("anonymous session can create, verify, and continue owning a persona throug
       where persona_version_id = ${distilledBody.id}::uuid
     `;
     assert.equal(persistedShare.length, 1);
+
+    const publishedDashboard = await apiApp.inject({
+      method: "GET",
+      url: "/v1/me/personae",
+      headers: {
+        authorization: `Bearer ${anonymousBody.accessToken}`,
+      },
+    });
+    assert.equal(publishedDashboard.statusCode, 200);
+    assert.equal(publishedDashboard.json().stats.draftCount, 0);
+    assert.equal(publishedDashboard.json().stats.publishedCount, 1);
+    assert.equal(publishedDashboard.json().items[0]?.primaryShareSlug, persistedShare[0]?.share_slug);
 
     const chat = await apiApp.inject({
       method: "POST",
@@ -224,7 +200,7 @@ test("anonymous session can create, verify, and continue owning a persona throug
       method: "POST",
       url: "/v1/feedback",
       headers: {
-        authorization: `Bearer ${upgradedBody.accessToken}`,
+        authorization: `Bearer ${anonymousBody.accessToken}`,
       },
       payload: {
         personaId: persona.id,
@@ -276,6 +252,108 @@ test("official seed persona can open a persisted chat session", async () => {
     assert.ok(body.id);
     assert.equal(body.targetPersonaId, null);
     assert.equal(body.targetPersonaVersionId, "64c071d9-a7a6-4dad-8a67-dcb0370d03f8");
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    if (originalDeepSeekApiKey !== undefined) {
+      process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
+    } else {
+      delete process.env.DEEPSEEK_API_KEY;
+    }
+  }
+});
+
+test("chat list returns the current actor's persisted histories", async () => {
+  const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "";
+
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+
+  try {
+    const primarySession = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-history-primary" },
+    });
+    assert.equal(primarySession.statusCode, 200);
+    const primaryAccessToken = primarySession.json().accessToken as string;
+
+    const secondarySession = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-history-secondary" },
+    });
+    assert.equal(secondarySession.statusCode, 200);
+    const secondaryAccessToken = secondarySession.json().accessToken as string;
+
+    const primaryChat = await apiApp.inject({
+      method: "POST",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${primaryAccessToken}`,
+      },
+      payload: {
+        targetType: "published_persona",
+        personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
+      },
+    });
+    assert.equal(primaryChat.statusCode, 200);
+    const primaryChatId = primaryChat.json().id as string;
+
+    const primaryReply = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${primaryChatId}/messages`,
+      headers: {
+        authorization: `Bearer ${primaryAccessToken}`,
+      },
+      payload: {
+        content: "如果局面失控，应该先稳住哪里？",
+      },
+    });
+    assert.equal(primaryReply.statusCode, 200);
+
+    const secondaryChat = await apiApp.inject({
+      method: "POST",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${secondaryAccessToken}`,
+      },
+      payload: {
+        targetType: "published_persona",
+        personaId: "9cb9d15b-b39b-4451-a7c1-20dbc0d7496e",
+      },
+    });
+    assert.equal(secondaryChat.statusCode, 200);
+
+    const secondaryChatId = secondaryChat.json().id as string;
+    const secondaryReply = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${secondaryChatId}/messages`,
+      headers: {
+        authorization: `Bearer ${secondaryAccessToken}`,
+      },
+      payload: {
+        content: "局势不明时，先看人还是先看势？",
+      },
+    });
+    assert.equal(secondaryReply.statusCode, 200);
+
+    const list = await apiApp.inject({
+      method: "GET",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${primaryAccessToken}`,
+      },
+    });
+    assert.equal(list.statusCode, 200);
+    const listBody = list.json();
+    assert.equal(listBody.items.length, 1);
+    assert.equal(listBody.items[0]?.displayName, "秦始皇");
+    assert.equal(listBody.items[0]?.resumePersonaId, "0f2610a1-34b2-46c8-b915-f92d928f06a1");
+    assert.equal(listBody.items[0]?.targetType, "published_persona");
+    assert.ok(typeof listBody.items[0]?.latestMessage === "string" && listBody.items[0].latestMessage.length > 0);
+    assert.ok(typeof listBody.items[0]?.updatedAt === "string" && listBody.items[0].updatedAt.length > 0);
   } finally {
     await apiApp.close();
     await resetSqlForTests();
