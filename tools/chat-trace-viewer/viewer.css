@@ -1,0 +1,392 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --panel-strong: #f8fafb;
+  --line: #d7dde3;
+  --ink: #182028;
+  --muted: #5a6875;
+  --accent: #165dff;
+  --accent-soft: rgba(22, 93, 255, 0.08);
+  --success: #14804a;
+  --warning: #9a6700;
+  --danger: #b42318;
+  --shadow: 0 10px 30px rgba(24, 32, 40, 0.08);
+  --radius: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "SF Pro Text",
+    "PingFang SC",
+    "Helvetica Neue",
+    sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(22, 93, 255, 0.12), transparent 18rem),
+    linear-gradient(180deg, #eef2f7, var(--bg));
+}
+
+button,
+input {
+  font: inherit;
+}
+
+code,
+pre {
+  font-family:
+    "SFMono-Regular",
+    "Menlo",
+    "Monaco",
+    monospace;
+}
+
+.trace-shell {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.hero,
+.query-panel,
+.trace-list-panel,
+.trace-detail-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 24px;
+}
+
+.hero h1,
+.panel-header h2,
+.detail-section h3 {
+  margin: 0;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-copy,
+.hero-note p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.hero-note {
+  min-width: 240px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--panel-strong);
+}
+
+.query-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px;
+  margin-top: 18px;
+}
+
+.query-form {
+  display: grid;
+  gap: 8px;
+}
+
+.query-form label {
+  font-weight: 600;
+}
+
+.query-row {
+  display: flex;
+  gap: 10px;
+}
+
+.query-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.query-row button {
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.status-banner {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.status-banner.info {
+  color: var(--ink);
+}
+
+.status-banner.success {
+  color: var(--success);
+  border-color: rgba(20, 128, 74, 0.2);
+  background: rgba(20, 128, 74, 0.06);
+}
+
+.status-banner.warning {
+  color: var(--warning);
+  border-color: rgba(154, 103, 0, 0.2);
+  background: rgba(154, 103, 0, 0.07);
+}
+
+.status-banner.error {
+  color: var(--danger);
+  border-color: rgba(180, 35, 24, 0.2);
+  background: rgba(180, 35, 24, 0.08);
+}
+
+.trace-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.trace-list-panel,
+.trace-detail-panel {
+  padding: 18px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.trace-list,
+.event-list,
+.artifact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trace-item {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.trace-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.trace-item-top,
+.trace-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.trace-item-bottom {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.trace-id {
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-pill.success,
+.status-pill.fallback_success {
+  color: var(--success);
+  background: rgba(20, 128, 74, 0.1);
+}
+
+.status-pill.failed,
+.status-pill.error {
+  color: var(--danger);
+  background: rgba(180, 35, 24, 0.1);
+}
+
+.status-pill.running,
+.status-pill.received,
+.status-pill.started,
+.status-pill.info {
+  color: var(--accent);
+  background: rgba(22, 93, 255, 0.1);
+}
+
+.detail-section + .detail-section {
+  margin-top: 20px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.summary-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-strong);
+}
+
+.summary-card dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summary-card dd {
+  margin: 8px 0 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.event-card,
+.artifact-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  overflow: hidden;
+}
+
+.event-head,
+.artifact-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.event-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.event-name,
+.artifact-key {
+  font-weight: 700;
+}
+
+.event-body,
+.artifact-body {
+  padding: 0 14px 14px;
+}
+
+.event-body pre,
+.artifact-body pre {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #10161d;
+  color: #e6edf5;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.artifact-card details summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.artifact-card details summary::-webkit-details-marker {
+  display: none;
+}
+
+.empty-state {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 1080px) {
+  .trace-layout,
+  .query-panel,
+  .hero {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .hero-note {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .trace-shell {
+    padding: 14px;
+  }
+
+  .query-row,
+  .trace-item-top,
+  .trace-item-bottom,
+  .event-head,
+  .artifact-head,
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .query-row button {
+    width: 100%;
+  }
+}

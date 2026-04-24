@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat Trace Viewer</title>
+    <link rel="stylesheet" href="viewer.css" />
+  </head>
+  <body>
+    <main class="trace-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local Only</p>
+          <h1>Chat Trace Viewer</h1>
+          <p class="hero-copy">输入 `turnTraceId` 或 `chatId`，直接查看本地对话 trace 的 waterfall、summary 和 artifacts。</p>
+        </div>
+        <div class="hero-note">
+          <p>数据来源</p>
+          <code>/internal/debug/chat-traces/*</code>
+        </div>
+      </header>
+
+      <section class="query-panel">
+        <form id="turn-trace-form" class="query-form">
+          <label for="turnTraceId">按 Turn Trace ID 查询</label>
+          <div class="query-row">
+            <input id="turnTraceId" name="turnTraceId" type="text" placeholder="turn_xxx" autocomplete="off" />
+            <button type="submit">查看 Trace</button>
+          </div>
+        </form>
+
+        <form id="chat-id-form" class="query-form">
+          <label for="chatId">按 Chat ID 查询</label>
+          <div class="query-row">
+            <input id="chatId" name="chatId" type="text" placeholder="chat uuid" autocomplete="off" />
+            <button type="submit">列出多轮</button>
+          </div>
+        </form>
+      </section>
+
+      <p id="status-banner" class="status-banner" hidden></p>
+
+      <section class="trace-layout">
+        <aside class="trace-list-panel">
+          <div class="panel-header">
+            <h2>Trace 列表</h2>
+            <span id="trace-list-meta" class="panel-meta">等待查询</span>
+          </div>
+          <div id="trace-list" class="trace-list empty-state">还没有结果</div>
+        </aside>
+
+        <section class="trace-detail-panel">
+          <div class="panel-header">
+            <h2>Trace 详情</h2>
+            <span id="detail-meta" class="panel-meta">未选中</span>
+          </div>
+
+          <section class="detail-section">
+            <h3>Summary</h3>
+            <div id="trace-summary" class="summary-grid empty-state">先选中一条 trace</div>
+          </section>
+
+          <section class="detail-section">
+            <h3>Waterfall</h3>
+            <div id="trace-events" class="event-list empty-state">暂无事件</div>
+          </section>
+
+          <section class="detail-section">
+            <h3>Artifacts</h3>
+            <div id="trace-artifacts" class="artifact-list empty-state">暂无 artifacts</div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

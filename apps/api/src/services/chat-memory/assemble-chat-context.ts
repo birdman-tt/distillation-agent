@@ -61,6 +61,7 @@ export const assembleChatContext = async (input: {
     snippet: string;
   }>;
 }) => {
+  const memoryRequestId = randomUUID();
   const recentTurns = keepFocusedRecentTurns(await listRecentChatMessages({
     chatId: input.chatId,
     limit: 3,
@@ -71,7 +72,7 @@ export const assembleChatContext = async (input: {
   const memoryResult = await searchChatMemory({
     toolName: "search_chat_memory",
     version: "v1",
-    requestId: randomUUID(),
+    requestId: memoryRequestId,
     chatId: input.chatId,
     personaId: input.personaId ?? null,
     personaVersionId: input.personaVersionId,
@@ -91,7 +92,7 @@ export const assembleChatContext = async (input: {
   const recentIds = new Set(recentTurns.map((item) => item.messageId));
   const retrievedMemories = limitRetrievedMemories(memoryResult.hits).filter((item) => !recentIds.has(item.messageId));
 
-  return chatContextEnvelopeSchema.parse({
+  const context = chatContextEnvelopeSchema.parse({
     recentTurns: recentTurns.map((item) => ({
       messageId: item.messageId,
       role: item.role,
@@ -101,4 +102,23 @@ export const assembleChatContext = async (input: {
     retrievedMemories,
     personaEvidence: input.personaEvidence,
   });
+
+  return {
+    ...context,
+    diagnostics: {
+      memorySearch: {
+        requestId: memoryRequestId,
+        totalHits: memoryResult.summary.totalHits,
+        returnedHits: memoryResult.summary.returnedHits,
+        truncated: memoryResult.summary.truncated,
+        retrievalMode: memoryResult.summary.retrievalMode,
+        topHits: memoryResult.hits.slice(0, 3).map((item) => ({
+          messageId: item.messageId,
+          score: item.score,
+          reason: item.reason,
+          turnDistance: item.turnDistance,
+        })),
+      },
+    },
+  };
 };

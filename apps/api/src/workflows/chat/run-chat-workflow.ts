@@ -42,6 +42,29 @@ const chatModelReplySchema = z.object({
 type ChatModelReply = z.infer<typeof chatModelReplySchema>;
 type ChatStructuredRequester = (input: Parameters<typeof requestStructuredJson>[0]) => Promise<ChatModelReply>;
 type ChatContextEnvelope = z.infer<typeof chatContextEnvelopeSchema>;
+type ChatWorkflowTraceArtifact =
+  | {
+      artifactKey: string;
+      contentType?: string;
+      kind: "text";
+      value: string;
+    }
+  | {
+      artifactKey: string;
+      contentType?: string;
+      kind: "json";
+      value: unknown;
+    };
+type ChatWorkflowTraceEvent = {
+  eventName: string;
+  stage: string;
+  status: string;
+  level?: "info" | "warn" | "error";
+  durationMs?: number;
+  fields?: Record<string, unknown>;
+  artifacts?: ChatWorkflowTraceArtifact[];
+};
+type ChatWorkflowTraceSink = (event: ChatWorkflowTraceEvent) => void;
 
 const normalizeComparableText = (value: string) =>
   value
@@ -115,6 +138,17 @@ const normalizeRefusalReason = (value: string | null | undefined) => {
   }
 
   return "none";
+};
+
+const previewText = (value: string | null | undefined, limit = 280) => {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit)}...`;
 };
 
 const normalizeInferenceLevel = (input: {
@@ -203,6 +237,7 @@ export const runChatWorkflow = async (input: {
   chatContext?: ChatContextEnvelope;
 }, deps: {
   requestStructuredJson?: ChatStructuredRequester;
+  trace?: ChatWorkflowTraceSink;
 } = {}) => {
   const runtimeContext = input.dynamicContext ?? (input.seed ? buildOfficialSeedContext(input.seed) : undefined);
 
@@ -217,6 +252,23 @@ export const runChatWorkflow = async (input: {
       : classification.category === "THEME_ANCHORED"
         ? "grounded"
         : "inferred";
+  deps.trace?.({
+    eventName: "chat.classification.completed",
+    stage: "classification",
+    status: "completed",
+    fields: {
+      category: classification.category,
+      matchedKeyword: classification.matchedKeyword ?? null,
+      requiredInferenceLevel,
+    },
+    artifacts: [
+      {
+        artifactKey: "classification_snapshot",
+        kind: "json",
+        value: classification,
+      },
+    ],
+  });
 
   const systemPrompt = buildChatSystemPrompt({
     displayName: runtimeContext.displayName,
@@ -232,6 +284,30 @@ export const runChatWorkflow = async (input: {
     retrievedMemories: input.chatContext?.retrievedMemories ?? [],
     evidence: runtimeContext.evidence,
   });
+  deps.trace?.({
+    eventName: "chat.prompt.built",
+    stage: "prompt",
+    status: "completed",
+    fields: {
+      systemPromptPreview: previewText(systemPrompt),
+      userPromptPreview: previewText(userPrompt),
+      evidenceCount: runtimeContext.evidence.length,
+      recentTurnCount: input.chatContext?.recentTurns.length ?? 0,
+      retrievedMemoryCount: input.chatContext?.retrievedMemories.length ?? 0,
+    },
+    artifacts: [
+      {
+        artifactKey: "system_prompt",
+        kind: "text",
+        value: systemPrompt,
+      },
+      {
+        artifactKey: "user_prompt",
+        kind: "text",
+        value: userPrompt,
+      },
+    ],
+  });
 
   const basis = runtimeContext.evidence.map((item) => ({
     sourceId: item.sourceId,
@@ -240,23 +316,114 @@ export const runChatWorkflow = async (input: {
 
   const recentAssistantAnswers = collectRecentAssistantAnswers(input.chatContext);
 
-  const requestModelReply = async (extraInstruction?: string) =>
-    (deps.requestStructuredJson ?? requestStructuredJson)({
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      baseUrl: process.env.DEEPSEEK_BASE_URL,
-      model: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
-      temperature: readChatTemperature(),
-      systemPrompt: extraInstruction ? `${systemPrompt}\n${extraInstruction}` : systemPrompt,
-      userPrompt,
-      schema: chatModelReplySchema,
-      maxTokens: 700,
+  const model = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat";
+  const temperature = readChatTemperature();
+  const maxTokens = 700;
+  const requestModelReply = async (attempt: number, extraInstruction?: string) => {
+    const finalSystemPrompt = extraInstruction ? `${systemPrompt}\n${extraInstruction}` : systemPrompt;
+    const startedAt = Date.now();
+    deps.trace?.({
+      eventName: "chat.model.request.started",
+      stage: "model",
+      status: "started",
+      fields: {
+        attempt,
+        provider: "deepseek",
+        model,
+        temperature,
+        maxTokens,
+      },
     });
 
+    let telemetryResponse:
+      | {
+          status: number;
+          ok: boolean;
+          payload: unknown;
+          rawContent: string | null;
+        }
+      | undefined;
+
+    try {
+      const modelReply = await (deps.requestStructuredJson ?? requestStructuredJson)({
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseUrl: process.env.DEEPSEEK_BASE_URL,
+        model,
+        temperature,
+        systemPrompt: finalSystemPrompt,
+        userPrompt,
+        schema: chatModelReplySchema,
+        maxTokens,
+        telemetry: {
+          onResponse: (payload) => {
+            telemetryResponse = payload;
+          },
+        },
+      });
+
+      deps.trace?.({
+        eventName: "chat.model.request.completed",
+        stage: "model",
+        status: "completed",
+        durationMs: Date.now() - startedAt,
+        fields: {
+          attempt,
+          provider: "deepseek",
+          model,
+          temperature,
+          maxTokens,
+          httpStatus: telemetryResponse?.status ?? null,
+          parsedOk: true,
+          rawResponsePreview: previewText(telemetryResponse?.rawContent),
+        },
+        artifacts: telemetryResponse
+          ? [
+              {
+                artifactKey: attempt === 1 ? "raw_model_response" : `raw_model_response_attempt_${attempt}`,
+                kind: "json",
+                value: telemetryResponse.payload,
+              },
+            ]
+          : [],
+      });
+
+      return modelReply;
+    } catch (error) {
+      deps.trace?.({
+        eventName: "chat.model.request.failed",
+        stage: "model",
+        status: "failed",
+        level: error instanceof DeepSeekNotConfiguredError ? "warn" : "error",
+        durationMs: Date.now() - startedAt,
+        fields: {
+          attempt,
+          provider: "deepseek",
+          model,
+          temperature,
+          maxTokens,
+          httpStatus: telemetryResponse?.status ?? null,
+          errorMessage: error instanceof Error ? error.message : "unknown error",
+        },
+        artifacts: telemetryResponse
+          ? [
+              {
+                artifactKey: attempt === 1 ? "raw_model_response" : `raw_model_response_attempt_${attempt}`,
+                kind: "json",
+                value: telemetryResponse.payload,
+              },
+            ]
+          : [],
+      });
+      throw error;
+    }
+  };
+
   try {
-    let modelResult = await requestModelReply();
+    let modelResult = await requestModelReply(1);
 
     if (isTooCloseToRecentAssistantAnswer(modelResult.answer, recentAssistantAnswers)) {
       modelResult = await requestModelReply(
+        2,
         "上一轮草稿与近期 assistant 话术过近。必须换一个新的开头与表达路径，不要重复对象摘要、示例回答或最近 assistant 原句。",
       );
     }
@@ -272,7 +439,7 @@ export const runChatWorkflow = async (input: {
       basisMode: modelResult.basisSummary.mode,
     });
 
-    return chatGenerationSchema.parse({
+    const normalizedReply = chatGenerationSchema.parse({
       ...modelResult,
       basis,
       basisSummary:
@@ -287,19 +454,89 @@ export const runChatWorkflow = async (input: {
       inferenceLevel: normalizedInferenceLevel,
       refusalReason: normalizeRefusalReason(modelResult.refusalReason),
     });
+    deps.trace?.({
+      eventName: "chat.model.response.normalized",
+      stage: "normalization",
+      status: "completed",
+      fields: {
+        basisMode: normalizedReply.basisSummary.mode,
+        inferenceLevel: normalizedReply.inferenceLevel,
+        conflictDetected: normalizedReply.conflictDetected,
+        refusalReason: normalizedReply.refusalReason,
+      },
+      artifacts: [
+        {
+          artifactKey: "normalized_model_response",
+          kind: "json",
+          value: normalizedReply,
+        },
+      ],
+    });
+
+    return normalizedReply;
   } catch (error) {
     if (!(error instanceof DeepSeekNotConfiguredError)) {
       console.warn("[chat-workflow] falling back to deterministic reply", error);
     }
+    deps.trace?.({
+      eventName: "chat.workflow.fallback.used",
+      stage: "fallback",
+      status: "completed",
+      level: error instanceof DeepSeekNotConfiguredError ? "warn" : "error",
+      fields: {
+        fallbackReason: error instanceof DeepSeekNotConfiguredError ? "deepseek_not_configured" : "model_error",
+        errorMessage: error instanceof Error ? error.message : "unknown error",
+      },
+    });
   }
 
   const reply = await createDynamicReply(runtimeContext.personaVersionId, input.content, classification);
   if (reply) {
-    return chatGenerationSchema.parse(reply);
+    const normalizedReply = chatGenerationSchema.parse(reply);
+    deps.trace?.({
+      eventName: "chat.model.response.normalized",
+      stage: "normalization",
+      status: "completed",
+      fields: {
+        basisMode: normalizedReply.basisSummary.mode,
+        inferenceLevel: normalizedReply.inferenceLevel,
+        conflictDetected: normalizedReply.conflictDetected,
+        refusalReason: normalizedReply.refusalReason,
+        responseSource: "dynamic_fallback",
+      },
+      artifacts: [
+        {
+          artifactKey: "normalized_model_response",
+          kind: "json",
+          value: normalizedReply,
+        },
+      ],
+    });
+    return normalizedReply;
   }
 
   if (input.seed) {
-    return chatGenerationSchema.parse(createSeedReply(input.seed, input.content));
+    const normalizedReply = chatGenerationSchema.parse(createSeedReply(input.seed, input.content));
+    deps.trace?.({
+      eventName: "chat.model.response.normalized",
+      stage: "normalization",
+      status: "completed",
+      fields: {
+        basisMode: normalizedReply.basisSummary.mode,
+        inferenceLevel: normalizedReply.inferenceLevel,
+        conflictDetected: normalizedReply.conflictDetected,
+        refusalReason: normalizedReply.refusalReason,
+        responseSource: "seed_fallback",
+      },
+      artifacts: [
+        {
+          artifactKey: "normalized_model_response",
+          kind: "json",
+          value: normalizedReply,
+        },
+      ],
+    });
+    return normalizedReply;
   }
 
   return null;

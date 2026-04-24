@@ -1,5 +1,6 @@
 export * from "./auth.js";
 export * from "./chat-tools.js";
+export * from "./chat-traces.js";
 export * from "./chats.js";
 export * from "./feedback.js";
 export * from "./personae.js";

@@ -17,6 +17,14 @@ export const requestStructuredJson = async <T>(input: {
   };
   temperature?: number;
   maxTokens?: number;
+  telemetry?: {
+    onResponse?: (payload: {
+      status: number;
+      ok: boolean;
+      payload: unknown;
+      rawContent: string | null;
+    }) => void;
+  };
 }) => {
   if (!isDeepSeekConfigured(input.apiKey)) {
     throw new DeepSeekNotConfiguredError();
@@ -59,12 +67,19 @@ export const requestStructuredJson = async <T>(input: {
       message?: string;
     };
   };
+  const content = payload.choices?.[0]?.message?.content ?? null;
+
+  input.telemetry?.onResponse?.({
+    status: response.status,
+    ok: response.ok,
+    payload,
+    rawContent: content,
+  });
 
   if (!response.ok) {
     throw new Error(payload.error?.message ?? `DeepSeek request failed with ${response.status}`);
   }
 
-  const content = payload.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error("DeepSeek returned an empty JSON response");
   }

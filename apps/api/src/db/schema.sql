@@ -211,6 +211,68 @@ CREATE UNIQUE INDEX chat_messages_chat_turn_idx
 CREATE INDEX chat_messages_content_tsv_idx ON chat_messages USING GIN (content_tsv);
 CREATE INDEX chat_messages_chat_id_created_at_idx ON chat_messages (chat_id, created_at DESC);
 
+CREATE TABLE chat_turn_traces (
+  turn_trace_id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  persona_id UUID REFERENCES personae(id) ON DELETE SET NULL,
+  persona_version_id UUID NOT NULL REFERENCES persona_versions(id) ON DELETE RESTRICT,
+  message_id UUID REFERENCES chat_messages(id) ON DELETE SET NULL,
+  assistant_message_id UUID REFERENCES chat_messages(id) ON DELETE SET NULL,
+  capture_level TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  total_duration_ms INTEGER,
+  trace_schema_version TEXT NOT NULL,
+  chat_workflow_version TEXT NOT NULL,
+  memory_search_version TEXT NOT NULL,
+  prompt_template_version TEXT NOT NULL,
+  normalization_version TEXT NOT NULL,
+  model_provider TEXT,
+  model_name TEXT,
+  temperature DOUBLE PRECISION,
+  max_tokens INTEGER,
+  fallback_used BOOLEAN NOT NULL DEFAULT false,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX chat_turn_traces_chat_id_started_at_idx
+  ON chat_turn_traces (chat_id, started_at DESC);
+
+CREATE TABLE chat_turn_trace_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  turn_trace_id TEXT NOT NULL REFERENCES chat_turn_traces(turn_trace_id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  event_name TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'info',
+  at TIMESTAMPTZ NOT NULL,
+  duration_ms INTEGER,
+  fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+  artifact_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (turn_trace_id, seq)
+);
+
+CREATE INDEX chat_turn_trace_events_trace_seq_idx
+  ON chat_turn_trace_events (turn_trace_id, seq);
+
+CREATE TABLE chat_turn_trace_artifacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  turn_trace_id TEXT NOT NULL REFERENCES chat_turn_traces(turn_trace_id) ON DELETE CASCADE,
+  artifact_key TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  storage_kind TEXT NOT NULL DEFAULT 'inline',
+  text_value TEXT,
+  json_value JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (turn_trace_id, artifact_key)
+);
+
 CREATE TABLE persona_feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   persona_id UUID NOT NULL REFERENCES personae(id) ON DELETE CASCADE,
