@@ -9,6 +9,7 @@ import {
   listPersistedChatMessagesForSearch,
   listPersistedRecentChatMessages,
   savePersistedChatSession,
+  type PersistableChatMessage,
   type PersistedChatMessageRecord,
   type PersistedChatSessionSummaryRecord,
 } from "../db/repositories/chat-repository.js";
@@ -29,7 +30,8 @@ export const listChatSessionSummariesByCreator = async (input: {
   limit: number;
 }) => listPersistedChatSessionSummariesByCreator(input);
 
-export const appendChatMessages = async (chatId: string, messages: ChatSession["messages"]) => appendPersistedChatMessages(chatId, messages);
+export const appendChatMessages = async (chatId: string, messages: PersistableChatMessage[]) =>
+  appendPersistedChatMessages(chatId, messages);
 
 export const listRecentChatMessages = async (input: {
   chatId: string;

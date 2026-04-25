@@ -211,6 +211,33 @@ CREATE UNIQUE INDEX chat_messages_chat_turn_idx
 CREATE INDEX chat_messages_content_tsv_idx ON chat_messages USING GIN (content_tsv);
 CREATE INDEX chat_messages_chat_id_created_at_idx ON chat_messages (chat_id, created_at DESC);
 
+CREATE TABLE chat_realtime_presence (
+  session_id TEXT PRIMARY KEY,
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX chat_realtime_presence_chat_expires_idx
+  ON chat_realtime_presence (chat_id, expires_at DESC);
+
+CREATE TABLE chat_proactive_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  source_turn_trace_id TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  due_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX chat_proactive_jobs_due_idx
+  ON chat_proactive_jobs (status, due_at ASC);
+
 CREATE TABLE chat_turn_traces (
   turn_trace_id TEXT PRIMARY KEY,
   request_id TEXT NOT NULL,

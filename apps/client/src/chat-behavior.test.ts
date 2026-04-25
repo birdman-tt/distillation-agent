@@ -49,6 +49,33 @@ test("chat page resumes persisted messages before continuing a history chat", ()
   assert.match(h5Source, /requestJson\("\/v1\/chats\/" \+ encodeURIComponent\(initialChatId\)/);
 });
 
+test("chat page deduplicates HTTP and realtime messages by message id", () => {
+  assert.match(h5Source, /appendMessageIfMissing/);
+  assert.match(h5Source, /data-message-id/);
+  assert.match(h5Source, /seenMessageIds/);
+});
+
+test("chat page treats async accepted message responses as delivery acknowledgements", () => {
+  assert.match(h5Source, /reply\.status === "accepted"/);
+  assert.doesNotMatch(h5Source, /消息已发送，等待回复/);
+});
+
+test("chat page keeps the composer pinned and inline on the focused chat screen", () => {
+  assert.match(h5Source, /\.shell\.chat-only\s+\.chat-stage\.chat-focused\s+\.composer-shell\s*\{[\s\S]*?position:\s*fixed/);
+  assert.match(
+    h5Source,
+    /\.shell\.chat-only\s+\.chat-stage\.chat-focused\s+\.composer-shell\s*\{[\s\S]*?bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom\)\)/,
+  );
+  assert.match(h5Source, /\.composer\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
+  assert.match(h5Source, /\.composer textarea\s*\{[\s\S]*?height:\s*52px/);
+  assert.match(h5Source, /\.composer textarea\s*\{[\s\S]*?scrollbar-width:\s*thin/);
+  assert.match(h5Source, /\.composer textarea::-webkit-scrollbar-thumb\s*\{[\s\S]*?background:\s*var\(--input-scrollbar-thumb\)/);
+  assert.match(h5Source, /\.composer-actions button\s*\{[\s\S]*?height:\s*52px/);
+  assert.match(h5Source, /const syncComposerHeight = \(\) => \{/);
+  assert.match(h5Source, /composerInput\?\.addEventListener\("input", syncComposerHeight\)/);
+  assert.match(h5Source, /\.shell\.chat-only\s+\.chat-stage\s+\[data-chat-status\]\s*\{[\s\S]*?display:\s*none/);
+});
+
 test("preview page publishes directly instead of submitting publish review", () => {
   assert.match(h5Source, /data-publish-private/);
   assert.match(h5Source, /data-publish-public/);

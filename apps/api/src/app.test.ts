@@ -3,6 +3,10 @@ import test from "node:test";
 
 import { getSql, resetSqlForTests } from "./db/client.js";
 
+process.env.CHAT_REALTIME_ENABLED = "false";
+process.env.CHAT_PLANNER_ENABLED = "false";
+process.env.CHAT_PROACTIVE_ENABLED = "false";
+
 test("anonymous session can create, distill, save private, publish, and keep a usable share", async () => {
   const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = "";
@@ -349,7 +353,7 @@ test("chat list returns the current actor's persisted histories", async () => {
     assert.equal(list.statusCode, 200);
     const listBody = list.json();
     assert.equal(listBody.items.length, 1);
-    assert.equal(listBody.items[0]?.displayName, "秦始皇");
+    assert.equal(listBody.items[0]?.displayName, "雷军");
     assert.equal(listBody.items[0]?.resumePersonaId, "0f2610a1-34b2-46c8-b915-f92d928f06a1");
     assert.equal(listBody.items[0]?.targetType, "published_persona");
     assert.ok(typeof listBody.items[0]?.latestMessage === "string" && listBody.items[0].latestMessage.length > 0);

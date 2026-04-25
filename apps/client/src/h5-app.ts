@@ -49,6 +49,8 @@ const pageStyles = `
     --support-accent: ${uiTokens.colors.signalBlue};
     --accent-glow: rgba(56, 112, 255, 0.18);
     --support-glow: rgba(56, 112, 255, 0.08);
+    --input-scrollbar-thumb: rgba(56, 112, 255, 0.38);
+    --input-scrollbar-thumb-hover: rgba(56, 112, 255, 0.55);
     --peek-surface: linear-gradient(180deg, #f1f4f8, #e7ecf3);
     --portrait-surface:
       radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.45), transparent 4rem),
@@ -90,6 +92,8 @@ const pageStyles = `
     --support-accent: ${uiTokens.colors.supportCyan};
     --accent-glow: rgba(177, 255, 59, 0.18);
     --support-glow: rgba(68, 219, 255, 0.1);
+    --input-scrollbar-thumb: rgba(177, 255, 59, 0.42);
+    --input-scrollbar-thumb-hover: rgba(177, 255, 59, 0.62);
     --peek-surface: ${uiTokens.colors.darkSoft};
     --portrait-surface:
       linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(177, 255, 59, 0.12)),
@@ -989,18 +993,80 @@ const pageStyles = `
 
   .composer {
     display: grid;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
   }
 
   .composer textarea {
-    min-height: 74px;
+    height: 52px;
+    min-height: 52px;
+    max-height: 120px;
+    overflow-y: hidden;
     resize: none;
+    scrollbar-color: var(--input-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+
+  .composer textarea::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .composer textarea::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 999px;
+    margin-block: 10px;
+  }
+
+  .composer textarea::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--input-scrollbar-thumb);
+    background-clip: content-box;
+  }
+
+  .composer textarea::-webkit-scrollbar-thumb:hover {
+    background: var(--input-scrollbar-thumb-hover);
+    background-clip: content-box;
   }
 
   .composer-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: stretch;
     gap: 8px;
+  }
+
+  .composer-actions button {
+    height: 52px;
+    min-height: 52px;
+    padding-block: 0;
+    white-space: nowrap;
+  }
+
+  .shell.chat-only .message-list {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  }
+
+  .shell.chat-only .chat-stage.chat-focused .composer-shell {
+    position: fixed;
+    left: 50%;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    z-index: 8;
+    width: min(calc(100vw - 24px), calc(var(--shell-width) - 24px));
+    transform: translateX(-50%);
+    gap: 0;
+    padding: 8px;
+    border-width: 1px;
+    border-radius: 24px;
+    background:
+      radial-gradient(circle at 88% 0%, var(--accent-glow), transparent 8rem),
+      var(--glass-surface);
+    box-shadow: 0 -18px 34px rgba(0, 0, 0, 0.18);
+  }
+
+  .shell.chat-only .chat-stage [data-chat-status] {
+    display: none;
   }
 
   .profile-avatar {
@@ -2012,9 +2078,20 @@ const renderChatScript = (input: {
     || log?.getAttribute("data-chat-assistant-name")
     || document.querySelector("[data-thread-name]")?.textContent?.trim()
     || "对象";
+  const composerInput = form?.querySelector("textarea");
 
   const setStatus = (content) => {
     if (status) status.textContent = content;
+  };
+
+  const syncComposerHeight = () => {
+    if (!composerInput) return;
+    const minHeight = 52;
+    const maxHeight = 120;
+    composerInput.style.height = minHeight + "px";
+    const nextHeight = Math.min(Math.max(composerInput.scrollHeight, minHeight), maxHeight);
+    composerInput.style.height = nextHeight + "px";
+    composerInput.style.overflowY = composerInput.scrollHeight > maxHeight ? "auto" : "hidden";
   };
 
   const buildTypingIndicator = () => {
@@ -2139,11 +2216,21 @@ const renderChatScript = (input: {
     });
   };
 
-  const appendBubble = (role, content, scrollBehavior = "auto", createdAt = null) => {
+  const seenMessageIds = new Set();
+  let realtimeSocket = null;
+  let realtimeSubscribedChatId = null;
+
+  const appendBubble = (role, content, scrollBehavior = "auto", createdAt = null, messageId = null) => {
+    if (messageId) {
+      seenMessageIds.add(messageId);
+    }
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (role === "ASSISTANT" ? "assistant" : "user");
     bubble.setAttribute("data-message-content", content);
     bubble.setAttribute("data-message-time", formatBubbleClock(createdAt));
+    if (messageId) {
+      bubble.setAttribute("data-message-id", messageId);
+    }
 
     const copy = document.createElement("div");
     copy.className = "bubble-copy";
@@ -2166,17 +2253,83 @@ const renderChatScript = (input: {
     return bubble;
   };
 
+  const appendMessageIfMissing = (message, scrollBehavior = "auto") => {
+    if (!message || !message.id || seenMessageIds.has(message.id)) {
+      return null;
+    }
+    return appendBubble(message.role, message.content, scrollBehavior, message.createdAt || null, message.id);
+  };
+
   const renderExistingMessages = (messages) => {
     if (!log || !Array.isArray(messages) || !messages.length) {
       return false;
     }
 
     log.replaceChildren();
+    seenMessageIds.clear();
     messages.forEach((message) => {
-      appendBubble(message.role, message.content, null, message.createdAt || null);
+      appendMessageIfMissing(message, null);
     });
     scrollLogToLatest("auto");
     return true;
+  };
+
+  const realtimeUrl = () => {
+    try {
+      const url = new URL(HallOfFameClient.API_BASE_URL);
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+      url.pathname = "/v1/realtime";
+      url.search = "";
+      return url.toString();
+    } catch {
+      return null;
+    }
+  };
+
+  const connectRealtime = (sessionId) => {
+    if (!sessionId || realtimeSubscribedChatId === sessionId || typeof WebSocket === "undefined") {
+      return;
+    }
+    const session = HallOfFameClient.readSession();
+    const url = realtimeUrl();
+    if (!session?.accessToken || !url) {
+      return;
+    }
+
+    realtimeSubscribedChatId = sessionId;
+    try {
+      if (realtimeSocket) {
+        realtimeSocket.close();
+      }
+      realtimeSocket = new WebSocket(url);
+      realtimeSocket.addEventListener("open", () => {
+        realtimeSocket.send(JSON.stringify({
+          type: "auth.subscribe",
+          token: session.accessToken,
+          chatId: sessionId,
+        }));
+      });
+      realtimeSocket.addEventListener("message", (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === "chat.message.created") {
+            appendMessageIfMissing(payload.message, "auto");
+          }
+          if (payload.type === "chat.turn.failed") {
+            setStatus(payload.message || "回复失败");
+          }
+        } catch {
+          // Ignore malformed realtime frames; history reload remains the source of truth.
+        }
+      });
+      realtimeSocket.addEventListener("close", () => {
+        if (realtimeSubscribedChatId === sessionId) {
+          realtimeSubscribedChatId = null;
+        }
+      });
+    } catch {
+      realtimeSubscribedChatId = null;
+    }
   };
 
   const loadExistingChat = async () => {
@@ -2184,14 +2337,14 @@ const renderChatScript = (input: {
       return;
     }
 
-    setStatus("加载聊天记录…");
     try {
       await HallOfFameClient.ensureAnonymousSession();
       const session = await HallOfFameClient.requestJson("/v1/chats/" + encodeURIComponent(initialChatId), {
         method: "GET",
       });
       chatId = session.id || initialChatId;
-      setStatus(renderExistingMessages(session.messages || []) ? "已加载历史" : "还没有历史消息");
+      connectRealtime(chatId);
+      renderExistingMessages(session.messages || []);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "加载聊天记录失败");
     }
@@ -2215,6 +2368,7 @@ const renderChatScript = (input: {
     })
       .then((created) => {
         chatId = created.id;
+        connectRealtime(chatId);
         return chatId;
       })
       .finally(() => {
@@ -2230,7 +2384,6 @@ const renderChatScript = (input: {
     setUserBubblePending(bubble);
     pendingDeliveries += 1;
     syncThreadTyping();
-    setStatus("正在回复…");
 
     try {
       const sessionId = await ensureChatId();
@@ -2240,8 +2393,14 @@ const renderChatScript = (input: {
         body: JSON.stringify({ content }),
       });
       setUserBubbleDelivered(bubble);
-      appendBubble("ASSISTANT", reply.content, "auto", reply.createdAt || null);
-      setStatus("已回复");
+      if (reply && reply.status === "accepted") {
+        if (reply.message?.id) {
+          bubble.setAttribute("data-message-id", reply.message.id);
+          seenMessageIds.add(reply.message.id);
+        }
+        return;
+      }
+      appendMessageIfMissing(reply, "auto");
     } catch (error) {
       setUserBubbleFailed(bubble, failureLabel);
       setStatus(error instanceof Error ? error.message : String(error));
@@ -2262,15 +2421,18 @@ const renderChatScript = (input: {
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const input = form.querySelector("textarea");
+    const input = composerInput;
     if (!input) return;
     const content = input.value.trim();
     if (!content) return;
     const userBubble = appendBubble("USER", content, "auto");
     input.value = "";
+    syncComposerHeight();
     void deliverUserBubble(userBubble, content);
   });
 
+  composerInput?.addEventListener("input", syncComposerHeight);
+  syncComposerHeight();
   void loadExistingChat();
 `;
 

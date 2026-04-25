@@ -4,7 +4,15 @@ type ChatSession = {
 
 type ChatMessage = {
   id: string;
+  role: "SYSTEM" | "USER" | "ASSISTANT";
   content: string;
+  createdAt: string;
+};
+
+type ChatMessageAccepted = {
+  status: "accepted";
+  turnTraceId: string;
+  message: ChatMessage;
 };
 
 type ChatSessionSummary = {
@@ -79,7 +87,7 @@ export const sendChatMessage = async (
   chatId: string,
   content: string,
   accessToken?: string,
-): Promise<ChatMessage> => {
+): Promise<ChatMessage | ChatMessageAccepted> => {
   const response = await fetch(`${baseUrl}/v1/chats/${chatId}/messages`, {
     method: "POST",
     headers: withAuthHeaders(accessToken, "application/json"),

@@ -171,6 +171,9 @@ artifact 区默认按优先级排序，重点看这些 key：
 - `raw_model_response`
 - `normalized_model_response`
 - `final_assistant_message`
+- `planner_tool_calls`
+- `planner_plan`
+- `planner_raw_response`
 
 前几个 artifact 默认展开，其他默认折叠。
 

@@ -10,15 +10,15 @@ test("official persona questions use the structured model runtime before falling
 
   const reply = await runChatWorkflow(
     {
-      content: "如果你面对分裂失序的局面，会先统一制度还是先统一人心？",
+      content: "一个产品到底该先卷参数还是先卷体验？",
       seed,
     },
     {
       requestStructuredJson: async () => ({
-          answer: "我会先把制度骨架统一，再让人心有可归附的秩序。",
+          answer: "我会先把用户能感知到的体验打透，再让参数为体验服务。",
           basisSummary: {
             mode: "SUPPORTED" as const,
-            summary: "依据人物画像中的秩序与制度导向生成。",
+            summary: "依据人物画像中的产品体验与用户感知导向生成。",
           },
           inferenceLevel: "grounded" as const,
           conflictDetected: false,
@@ -28,7 +28,7 @@ test("official persona questions use the structured model runtime before falling
   );
 
   assert.ok(reply);
-  assert.equal(reply.answer, "我会先把制度骨架统一，再让人心有可归附的秩序。");
+  assert.equal(reply.answer, "我会先把用户能感知到的体验打透，再让参数为体验服务。");
   assert.equal(reply.inferenceLevel, "grounded");
   assert.ok(reply.basis.length > 0);
 });
@@ -39,15 +39,15 @@ test("chat workflow normalizes empty refusalReason from the model to none", asyn
 
   const reply = await runChatWorkflow(
     {
-      content: "如果你面对分裂失序的局面，会先统一制度还是先统一人心？",
+      content: "一个产品到底该先卷参数还是先卷体验？",
       seed,
     },
     {
       requestStructuredJson: async () => ({
-        answer: "我会先补制度骨架，再逐步让人心归拢。",
+        answer: "我会先补体验短板，再逐步把参数优势讲清楚。",
         basisSummary: {
           mode: "SUPPORTED" as const,
-          summary: "依据秩序与制度导向的官方资料。",
+          summary: "依据产品体验与用户感知导向的官方资料。",
         },
         inferenceLevel: "grounded" as const,
         conflictDetected: false,
@@ -57,7 +57,7 @@ test("chat workflow normalizes empty refusalReason from the model to none", asyn
   );
 
   assert.ok(reply);
-  assert.equal(reply.answer, "我会先补制度骨架，再逐步让人心归拢。");
+  assert.equal(reply.answer, "我会先补体验短板，再逐步把参数优势讲清楚。");
   assert.equal(reply.refusalReason, "none");
 });
 
@@ -67,15 +67,15 @@ test("open-ended questions no longer short-circuit to out_of_scope before the mo
 
   const reply = await runChatWorkflow(
     {
-      content: "如果今天从头建立一个国家秩序，你最想先定下什么气质？",
+      content: "如果今天从头做一个产品，你最想先定下什么体验？",
       seed,
     },
     {
       requestStructuredJson: async () => ({
-        answer: "我会先把秩序的尺度定稳，让所有后续安排都有共同准绳。",
+        answer: "我会先把用户每天真正用到的体验定住，再决定哪些参数值得投入。",
         basisSummary: {
           mode: "INFERRED" as const,
-          summary: "回答延续了秩序与制度优先的画像风格，而不是复述单条史实。",
+          summary: "回答延续了用户体验优先的画像风格，而不是复述单条事实。",
         },
         inferenceLevel: "inferred" as const,
         conflictDetected: false,
@@ -85,7 +85,7 @@ test("open-ended questions no longer short-circuit to out_of_scope before the mo
   );
 
   assert.ok(reply);
-  assert.equal(reply.answer, "我会先把秩序的尺度定稳，让所有后续安排都有共同准绳。");
+  assert.equal(reply.answer, "我会先把用户每天真正用到的体验定住，再决定哪些参数值得投入。");
   assert.equal(reply.inferenceLevel, "inferred");
 });
 
@@ -123,15 +123,15 @@ test("loose model inference labels are normalized instead of forcing a fallback 
 
   const reply = await runChatWorkflow(
     {
-      content: "如果今天从头建立一个国家秩序，你最想先定下什么气质？",
+      content: "如果今天从头做一个产品，你最想先定下什么体验？",
       seed,
     },
     {
       requestStructuredJson: async () => ({
-        answer: "我会先把法度与尺度定稳，让天下先有共同遵循的骨架。",
+        answer: "我会先把用户感知最强的体验做稳，再让参数成为背后的支撑。",
         basisSummary: {
           mode: "SUPPORTED" as const,
-          summary: "统一标准和制度，是维持大一统秩序的核心手段。",
+          summary: "用户感知到的体验，是产品长期口碑的核心支点。",
         },
         inferenceLevel: "LOW" as unknown as "inferred",
         conflictDetected: false,
@@ -141,7 +141,7 @@ test("loose model inference labels are normalized instead of forcing a fallback 
   );
 
   assert.ok(reply);
-  assert.equal(reply.answer, "我会先把法度与尺度定稳，让天下先有共同遵循的骨架。");
+  assert.equal(reply.answer, "我会先把用户感知最强的体验做稳，再让参数成为背后的支撑。");
   assert.match(reply.inferenceLevel, /grounded|inferred/);
   assert.equal(reply.refusalReason, "none");
 });
@@ -152,15 +152,15 @@ test("numeric model inference levels are tolerated instead of forcing a fallback
 
   const reply = await runChatWorkflow(
     {
-      content: "如果今天从头建立一个国家秩序，你最想先定下什么气质？",
+      content: "如果今天从头做一个产品，你最想先定下什么体验？",
       seed,
     },
     {
       requestStructuredJson: async () => ({
-        answer: "我会先把法度与尺度立稳，让后续动作都不至于失序。",
+        answer: "我会先把体验账算清楚，让后续每个参数投入都有用户价值。",
         basisSummary: {
           mode: "SUPPORTED" as const,
-          summary: "统一标准和制度，是维持大一统秩序的核心手段。",
+          summary: "用户体验和效率，是产品判断的核心依据。",
         },
         inferenceLevel: 2,
         conflictDetected: false,
@@ -170,7 +170,7 @@ test("numeric model inference levels are tolerated instead of forcing a fallback
   );
 
   assert.ok(reply);
-  assert.equal(reply.answer, "我会先把法度与尺度立稳，让后续动作都不至于失序。");
+  assert.equal(reply.answer, "我会先把体验账算清楚，让后续每个参数投入都有用户价值。");
   assert.equal(reply.inferenceLevel, "grounded");
   assert.equal(reply.refusalReason, "none");
 });
@@ -182,20 +182,20 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
   let capturedPrompt = "";
   const reply = await runChatWorkflow(
     {
-      content: "那你刚才说的秩序尺度，展开讲讲。",
+      content: "那你刚才说的体验账，展开讲讲。",
       seed,
       chatContext: {
         recentTurns: [
           {
             messageId: "11111111-1111-1111-1111-111111111111",
             role: "USER",
-            content: "你更看重秩序还是效率？",
+            content: "你更看重参数还是体验？",
             createdAt: new Date().toISOString(),
           },
           {
             messageId: "22222222-2222-2222-2222-222222222222",
             role: "ASSISTANT",
-            content: "我会先把秩序的尺度定住，再谈效率。",
+            content: "我会先把用户能感知到的体验定住，再谈参数。",
             createdAt: new Date().toISOString(),
           },
         ],
@@ -203,7 +203,7 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
           {
             messageId: "33333333-3333-3333-3333-333333333333",
             role: "ASSISTANT",
-            content: "若尺度先乱，后面的效率只会加速失序。",
+            content: "如果用户感知不到，参数只是发布会上的自嗨。",
             createdAt: new Date().toISOString(),
             score: 0.91,
             reason: "followup_reference",
@@ -217,10 +217,10 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
       requestStructuredJson: async (input) => {
         capturedPrompt = input.userPrompt;
         return {
-          answer: "我会先把尺度讲清，再谈动作怎么落。",
+          answer: "我会先把体验账讲清，再谈参数怎么落。",
           basisSummary: {
             mode: "SUPPORTED" as const,
-            summary: "延续秩序与尺度优先的画像。",
+            summary: "延续体验优先和用户感知导向的画像。",
           },
           inferenceLevel: "grounded" as const,
           conflictDetected: false,
@@ -232,9 +232,9 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
 
   assert.ok(reply);
   assert.match(capturedPrompt, /\[Recent Conversation Window\]/);
-  assert.match(capturedPrompt, /我会先把秩序的尺度定住/);
+  assert.match(capturedPrompt, /我会先把用户能感知到的体验定住/);
   assert.match(capturedPrompt, /\[Retrieved Chat Memory\]/);
-  assert.match(capturedPrompt, /若尺度先乱/);
+  assert.match(capturedPrompt, /参数只是发布会上的自嗨/);
 });
 
 test("chat workflow retries once when the draft answer is too close to a recent assistant reply", async () => {
@@ -252,7 +252,7 @@ test("chat workflow retries once when the draft answer is too close to a recent 
           {
             messageId: "11111111-1111-1111-1111-111111111111",
             role: "ASSISTANT",
-            content: "重秩序，也重控制。若只按我一贯的取向来想，我会先从判断尺度和行动边界去判断，再决定动作轻重，而不会急着把话说死。",
+            content: "把复杂产品讲成普通人能感知的体验。若只按我一贯的取向来想，我会先从用户场景和体验账去判断，再决定参数投入，而不会急着讲宏大叙事。",
             createdAt: new Date().toISOString(),
           },
         ],
@@ -267,7 +267,7 @@ test("chat workflow retries once when the draft answer is too close to a recent 
 
         if (callCount === 1) {
           return {
-            answer: "重秩序，也重控制。若只按我一贯的取向来想，我会先从判断尺度和行动边界去判断，再决定动作轻重，而不会急着把话说死。",
+            answer: "把复杂产品讲成普通人能感知的体验。若只按我一贯的取向来想，我会先从用户场景和体验账去判断，再决定参数投入，而不会急着讲宏大叙事。",
             basisSummary: {
               mode: "INFERRED" as const,
               summary: "第一次草稿过于接近上一轮回答。",
@@ -300,20 +300,20 @@ test("chat workflow retries once when the draft answer is too close to a recent 
 
 test("assistant similarity guard catches exact and prefix-heavy repeats", () => {
   assert.equal(
-    __internal.isTooCloseToRecentAssistantAnswer("重秩序，也重控制。先把尺度定住，再谈动作。", [
-      "重秩序，也重控制。先把尺度定住，再谈动作。",
+    __internal.isTooCloseToRecentAssistantAnswer("先把体验打透，再谈参数。", [
+      "先把体验打透，再谈参数。",
     ]),
     true,
   );
   assert.equal(
-    __internal.isTooCloseToRecentAssistantAnswer("先把尺度定住，再谈动作和后果。", [
-      "先把尺度定住，再谈动作。",
+    __internal.isTooCloseToRecentAssistantAnswer("先把体验打透，再谈参数和成本。", [
+      "先把体验打透，再谈参数。",
     ]),
     true,
   );
   assert.equal(
     __internal.isTooCloseToRecentAssistantAnswer("先把拖延的借口拆掉，再逼他当天交付一个结果。", [
-      "重秩序，也重控制。先把尺度定住，再谈动作。",
+      "先把体验打透，再谈参数。",
     ]),
     false,
   );

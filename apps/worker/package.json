@@ -15,6 +15,7 @@
     "@hall-of-fame/domain": "workspace:*",
     "@hall-of-fame/prompt-kit": "workspace:*",
     "@hall-of-fame/runtime-env": "workspace:*",
-    "fastify": "^5.4.0"
+    "fastify": "^5.4.0",
+    "postgres": "^3.4.7"
   }
 }

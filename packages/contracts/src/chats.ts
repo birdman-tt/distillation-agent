@@ -49,6 +49,31 @@ export const chatMessageSchema = z.object({
   createdAt: z.string(),
 });
 
+export const chatMessageMetadataSchema = z.object({
+  turnTraceId: z.string().min(1).optional(),
+  source: z.enum(["reply", "proactive"]).optional(),
+  sequence: z.number().int().positive().optional(),
+  plannerModel: z.string().min(1).optional(),
+  responderModel: z.string().min(1).optional(),
+  proactiveJobId: z.string().uuid().optional(),
+});
+
+export const chatTurnPlanSchema = z.object({
+  userIntent: z.string(),
+  contextUsed: z.array(z.string()),
+  replyGoal: z.string(),
+  responseOutline: z.array(z.string()),
+  shouldSendMultipleMessages: z.boolean(),
+  suggestedMessageCount: z.number().int().min(1).max(3),
+  avoidRepeating: z.array(z.string()),
+  proactiveCandidate: z.object({
+    shouldSchedule: z.boolean(),
+    delaySeconds: z.number().int().positive().nullable(),
+    topic: z.string().nullable(),
+    reason: z.string().nullable(),
+  }),
+});
+
 export const chatSessionSchema = z.object({
   id: z.string().uuid(),
   targetType: chatTargetTypeSchema,

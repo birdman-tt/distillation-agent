@@ -144,6 +144,22 @@ export const ChatPanel = (props: ChatPanelProps) => {
       failureLabel = "回复失败";
       const reply = await sendChatMessage(getApiBaseUrl(), session, content, readStoredAccessToken() ?? undefined);
 
+      if (!("content" in reply)) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  status: "sent",
+                  errorLabel: undefined,
+                }
+              : message,
+          ),
+        );
+        return;
+      }
+      const assistantReply = reply;
+
       setMessages((current) =>
         current.flatMap((message) =>
           message.id === messageId
@@ -156,7 +172,7 @@ export const ChatPanel = (props: ChatPanelProps) => {
                 {
                   id: createLocalMessageId(),
                   role: "ASSISTANT",
-                  content: reply.content,
+                  content: assistantReply.content,
                   status: "sent",
                 },
               ]

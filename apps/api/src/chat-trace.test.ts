@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resetSqlForTests } from "./db/client.js";
+import { getSql, resetSqlForTests } from "./db/client.js";
+
+process.env.CHAT_REALTIME_ENABLED = "false";
+process.env.CHAT_PLANNER_ENABLED = "false";
+process.env.CHAT_PROACTIVE_ENABLED = "false";
 
 const createChatAndSendMessage = async (input?: {
   personaId?: string;
@@ -133,6 +137,81 @@ test("chat traces can be listed back by chatId in reverse chronological order", 
       process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
     } else {
       delete process.env.DEEPSEEK_API_KEY;
+    }
+  }
+});
+
+test("chat message returns accepted immediately when realtime is enabled", async () => {
+  const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+  const originalRealtimeEnabled = process.env.CHAT_REALTIME_ENABLED;
+  const originalPlannerEnabled = process.env.CHAT_PLANNER_ENABLED;
+  process.env.DEEPSEEK_API_KEY = "";
+  process.env.CHAT_REALTIME_ENABLED = "true";
+  process.env.CHAT_PLANNER_ENABLED = "false";
+
+  const { buildApiApp } = await import("./app.js");
+  const apiApp = buildApiApp();
+  const sql = getSql();
+
+  try {
+    const chat = await apiApp.inject({
+      method: "POST",
+      url: "/v1/chats",
+      payload: {
+        targetType: "published_persona",
+        personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
+      },
+    });
+    assert.equal(chat.statusCode, 200);
+    const chatId = chat.json().id as string;
+
+    const startedAt = Date.now();
+    const accepted = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${chatId}/messages`,
+      payload: {
+        content: "这条消息应该先落库再异步回复",
+      },
+    });
+
+    assert.equal(accepted.statusCode, 202);
+    assert.ok(Date.now() - startedAt < 3000);
+    const body = accepted.json();
+    assert.equal(body.status, "accepted");
+    assert.equal(body.message.role, "USER");
+    assert.equal(typeof body.turnTraceId, "string");
+
+    let messageCount = "0";
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const [row] = await sql<{ count: string }[]>`
+        select count(*)::text as count
+        from chat_messages
+        where chat_id = ${chatId}::uuid
+      `;
+      messageCount = row?.count ?? "0";
+      if (messageCount === "2") {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert.equal(messageCount, "2");
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    if (originalDeepSeekApiKey !== undefined) {
+      process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
+    } else {
+      delete process.env.DEEPSEEK_API_KEY;
+    }
+    if (originalRealtimeEnabled !== undefined) {
+      process.env.CHAT_REALTIME_ENABLED = originalRealtimeEnabled;
+    } else {
+      delete process.env.CHAT_REALTIME_ENABLED;
+    }
+    if (originalPlannerEnabled !== undefined) {
+      process.env.CHAT_PLANNER_ENABLED = originalPlannerEnabled;
+    } else {
+      delete process.env.CHAT_PLANNER_ENABLED;
     }
   }
 });

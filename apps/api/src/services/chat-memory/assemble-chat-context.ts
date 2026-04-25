@@ -5,7 +5,47 @@ import { chatContextEnvelopeSchema } from "@hall-of-fame/contracts";
 import { listRecentChatMessages } from "../../store/chat-store.js";
 import { searchChatMemory } from "./search-chat-memory.js";
 
-const keepFocusedRecentTurns = (
+const DEFAULT_DEEPSEEK_CONTEXT_WINDOW_TOKENS = 1_000_000;
+const DEFAULT_OUTPUT_RESERVE_TOKENS = 4_096;
+const DEFAULT_STATIC_PROMPT_RESERVE_TOKENS = 12_000;
+const DEFAULT_MAX_HISTORY_MESSAGES = 1_000;
+
+const readPositiveInteger = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+
+const readHistoryTokenBudget = () => {
+  const explicitBudget = process.env.CHAT_CONTEXT_MAX_INPUT_TOKENS;
+  if (explicitBudget) {
+    return readPositiveInteger(explicitBudget, 64_000);
+  }
+
+  const contextWindow = readPositiveInteger(
+    process.env.DEEPSEEK_CONTEXT_WINDOW_TOKENS,
+    DEFAULT_DEEPSEEK_CONTEXT_WINDOW_TOKENS,
+  );
+  const outputReserve = readPositiveInteger(
+    process.env.CHAT_CONTEXT_OUTPUT_RESERVE_TOKENS,
+    DEFAULT_OUTPUT_RESERVE_TOKENS,
+  );
+  const staticPromptReserve = readPositiveInteger(
+    process.env.CHAT_CONTEXT_STATIC_PROMPT_RESERVE_TOKENS,
+    DEFAULT_STATIC_PROMPT_RESERVE_TOKENS,
+  );
+
+  return Math.max(1_024, contextWindow - outputReserve - staticPromptReserve);
+};
+
+const readMaxHistoryMessages = () =>
+  readPositiveInteger(process.env.CHAT_CONTEXT_MAX_HISTORY_MESSAGES, DEFAULT_MAX_HISTORY_MESSAGES);
+
+const estimateTextTokens = (value: string) => Math.max(1, Math.ceil(Buffer.byteLength(value, "utf8") / 3));
+
+const estimateTurnTokens = (turn: { role: "SYSTEM" | "USER" | "ASSISTANT"; content: string }) =>
+  16 + estimateTextTokens(turn.role) + estimateTextTokens(turn.content);
+
+const selectHistoryWithinBudget = (
   turns: Array<{
     messageId: string;
     role: "SYSTEM" | "USER" | "ASSISTANT";
@@ -13,18 +53,28 @@ const keepFocusedRecentTurns = (
     createdAt: string;
     turnIndex: number;
   }>,
+  maxTokens: number,
 ) => {
-  const kept = turns.slice(-3);
-  let assistantCount = 0;
+  const selected = [];
+  let estimatedTokens = 0;
 
-  return kept.filter((turn) => {
-    if (turn.role !== "ASSISTANT") {
-      return true;
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index]!;
+    const turnTokens = estimateTurnTokens(turn);
+    if (selected.length > 0 && estimatedTokens + turnTokens > maxTokens) {
+      break;
     }
 
-    assistantCount += 1;
-    return assistantCount > 1 ? false : true;
-  });
+    selected.unshift(turn);
+    estimatedTokens += turnTokens;
+  }
+
+  return {
+    turns: selected,
+    estimatedTokens,
+    truncated: selected.length < turns.length,
+    originalTurnCount: turns.length,
+  };
 };
 
 const limitRetrievedMemories = (
@@ -62,12 +112,16 @@ export const assembleChatContext = async (input: {
   }>;
 }) => {
   const memoryRequestId = randomUUID();
-  const recentTurns = keepFocusedRecentTurns(await listRecentChatMessages({
+  const maxHistoryMessages = readMaxHistoryMessages();
+  const historyTokenBudget = readHistoryTokenBudget();
+  const fullHistory = await listRecentChatMessages({
     chatId: input.chatId,
-    limit: 3,
+    limit: maxHistoryMessages,
     excludeMessageIds: input.latestMessageId ? [input.latestMessageId] : [],
     roles: ["USER", "ASSISTANT"],
-  }));
+  });
+  const budgetedHistory = selectHistoryWithinBudget(fullHistory, historyTokenBudget);
+  const recentTurns = budgetedHistory.turns;
 
   const memoryResult = await searchChatMemory({
     toolName: "search_chat_memory",
@@ -85,7 +139,7 @@ export const assembleChatContext = async (input: {
       includeAssistant: true,
       includeUser: true,
       minScore: 0.32,
-      excludeRecentTurns: 4,
+      excludeRecentTurns: recentTurns.length,
     },
   });
 
@@ -118,6 +172,14 @@ export const assembleChatContext = async (input: {
           reason: item.reason,
           turnDistance: item.turnDistance,
         })),
+      },
+      contextBudget: {
+        maxInputTokens: historyTokenBudget,
+        estimatedHistoryTokens: budgetedHistory.estimatedTokens,
+        maxHistoryMessages,
+        originalTurnCount: budgetedHistory.originalTurnCount,
+        includedTurnCount: recentTurns.length,
+        truncated: budgetedHistory.truncated,
       },
     },
   };

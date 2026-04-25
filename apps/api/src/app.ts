@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import { loadLocalEnv } from "@hall-of-fame/runtime-env";
 import Fastify from "fastify";
 
@@ -13,7 +14,9 @@ import { personaDetailRoute } from "./routes/personae/detail.js";
 import { featuredPersonaeRoute } from "./routes/personae/featured.js";
 import { personaeManageRoute } from "./routes/personae/manage.js";
 import { reviewsRoute } from "./routes/reviews.js";
+import { realtimeRoute } from "./routes/realtime.js";
 import { sharesRoute } from "./routes/shares.js";
+import { startRealtimePostgresListener, stopRealtimePostgresListener } from "./services/realtime/realtime-pg-listener.js";
 
 await loadLocalEnv();
 
@@ -30,6 +33,7 @@ export const buildApiApp = () => {
     origin: true,
     credentials: false,
   });
+  void app.register(websocket);
 
   app.get("/health", async () => ({
     ok: true,
@@ -40,6 +44,11 @@ export const buildApiApp = () => {
     if (shouldRunDatabaseBootstrapOnStartup()) {
       await ensureDatabaseSchema();
     }
+    await startRealtimePostgresListener(app.log);
+  });
+
+  app.addHook("onClose", async () => {
+    await stopRealtimePostgresListener();
   });
 
   void app.register(authRoute);
@@ -49,6 +58,7 @@ export const buildApiApp = () => {
   void app.register(personaDetailRoute);
   void app.register(personaeManageRoute);
   void app.register(personaVersionsRoute);
+  void app.register(realtimeRoute);
   void app.register(chatsRoute);
   void app.register(sharesRoute);
   void app.register(reviewsRoute);

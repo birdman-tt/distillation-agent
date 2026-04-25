@@ -136,6 +136,41 @@ const ensureChatTraceSchema = async () => {
   `);
 };
 
+const ensureChatRealtimeSchema = async () => {
+  const sql = getSql();
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS chat_realtime_presence (
+      session_id TEXT PRIMARY KEY,
+      chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS chat_realtime_presence_chat_expires_idx
+      ON chat_realtime_presence (chat_id, expires_at DESC);
+  `);
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS chat_proactive_jobs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      source_turn_trace_id TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      due_at TIMESTAMPTZ NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await sql.unsafe(`
+    CREATE INDEX IF NOT EXISTS chat_proactive_jobs_due_idx
+      ON chat_proactive_jobs (status, due_at ASC);
+  `);
+};
+
 const syncOfficialSeedShadows = async () => {
   const sql = getSql();
   const seeds = listFeaturedPersonae();
@@ -298,6 +333,7 @@ export const ensureDatabaseSchema = () => {
       await syncOfficialSeedShadows();
       await ensureChatMessageSearchSchema();
       await ensureChatTraceSchema();
+      await ensureChatRealtimeSchema();
     })();
   }
 

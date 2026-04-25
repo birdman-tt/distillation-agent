@@ -24,6 +24,37 @@ test("chat system prompt explicitly requires JSON output for structured response
   assert.match(prompt, /不要直接复述原句|重复固定套话/);
 });
 
+test("chat system prompt keeps casual replies from over-performing the persona", () => {
+  const prompt = buildChatSystemPrompt({
+    displayName: "查理·芒格",
+    previewIntro: "重判断，也重长期。",
+    profileSummary: "强调判断框架、反蠢思维和长期主义。",
+    styleExamples: ["别先问收益，先问自己会在哪犯蠢。"],
+    requiredInferenceLevel: "inferred",
+    replyMode: "CASUAL",
+    personaIntensity: "low",
+  });
+
+  assert.match(prompt, /普通闲聊/);
+  assert.match(prompt, /不要自称.*查理·芒格|不要.*我是.*查理·芒格/);
+  assert.match(prompt, /不要强行输出金句|不要每句都显露人物主张/);
+});
+
+test("chat system prompt allows domain replies to use persona frameworks", () => {
+  const prompt = buildChatSystemPrompt({
+    displayName: "查理·芒格",
+    previewIntro: "重判断，也重长期。",
+    profileSummary: "强调判断框架、反蠢思维和长期主义。",
+    styleExamples: ["别先问收益，先问自己会在哪犯蠢。"],
+    requiredInferenceLevel: "grounded",
+    replyMode: "DOMAIN",
+    personaIntensity: "high",
+  });
+
+  assert.match(prompt, /领域命中/);
+  assert.match(prompt, /可以显露人物主张、判断框架和代表性表达/);
+});
+
 test("chat user prompt includes recent turns and retrieved memories before the current message", () => {
   const prompt = buildChatUserPrompt({
     question: "那你刚才说的秩序尺度，展开讲讲。",
@@ -63,4 +94,28 @@ test("chat user prompt includes recent turns and retrieved memories before the c
   assert.match(prompt, /\[Retrieved Chat Memory\]/);
   assert.match(prompt, /\[Persona Evidence\]/);
   assert.match(prompt, /\[Current User Message\]/);
+});
+
+test("chat user prompt includes planner context used as responder guidance", () => {
+  const prompt = buildChatUserPrompt({
+    question: "对了，我叫什么？",
+    classification: {
+      category: "OPEN_ENDED",
+      matchedKeyword: null,
+      shouldEscalateToModelJudge: true,
+    },
+    turnPlan: {
+      userIntent: "用户在询问自己此前告诉过的名字",
+      contextUsed: ["用户此前说自己叫小雨，外号大铁锤。"],
+      replyGoal: "直接回答用户名字，不要假装不知道",
+      responseOutline: ["告诉用户：你叫小雨，也可以叫你大铁锤"],
+      shouldSendMultipleMessages: false,
+      suggestedMessageCount: 1,
+      avoidRepeating: [],
+    },
+    evidence: [],
+  });
+
+  assert.match(prompt, /contextUsed=用户此前说自己叫小雨，外号大铁锤。/);
+  assert.match(prompt, /告诉用户：你叫小雨，也可以叫你大铁锤/);
 });

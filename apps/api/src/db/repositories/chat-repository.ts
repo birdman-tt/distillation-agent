@@ -1,12 +1,16 @@
 import type { z } from "zod";
 
-import { chatMessageSchema, chatSessionSchema } from "@hall-of-fame/contracts";
+import { chatMessageMetadataSchema, chatMessageSchema, chatSessionSchema } from "@hall-of-fame/contracts";
 
 import { getSql, withTransaction } from "../client.js";
 import { ensureUserShadow } from "./user-shadow-repository.js";
 
 type ChatSession = z.infer<typeof chatSessionSchema>;
 type ChatMessage = z.infer<typeof chatMessageSchema>;
+type ChatMessageMetadata = z.infer<typeof chatMessageMetadataSchema>;
+export type PersistableChatMessage = ChatMessage & {
+  messageMetadata?: ChatMessageMetadata;
+};
 type ChatMessageRole = ChatMessage["role"];
 
 export type PersistedChatMessageRecord = {
@@ -15,6 +19,7 @@ export type PersistedChatMessageRecord = {
   content: string;
   createdAt: string;
   turnIndex: number;
+  messageMetadata?: ChatMessageMetadata;
 };
 
 export type PersistedChatSessionSummaryRecord = {
@@ -132,12 +137,14 @@ export const savePersistedChatSession = async (
   return getPersistedChatSession(session.id);
 };
 
-export const appendPersistedChatMessages = async (chatId: string, messages: ChatMessage[]) => {
+export const appendPersistedChatMessages = async (chatId: string, messages: PersistableChatMessage[]) => {
   if (!messages.length) {
     return [] as PersistedChatMessageRecord[];
   }
 
   return await withTransaction(async (sql) => {
+    await sql`select pg_advisory_xact_lock(hashtext(${chatId}))`;
+
     const existingChat = await sql<{ id: string }[]>`
       select id from chats where id = ${chatId}::uuid limit 1
     `;
@@ -156,6 +163,7 @@ export const appendPersistedChatMessages = async (chatId: string, messages: Chat
 
     for (const message of messages) {
       const turnIndex = nextTurnIndex++;
+      const messageMetadata = chatMessageMetadataSchema.parse(message.messageMetadata ?? {});
       await sql`
         insert into chat_messages (
           id,
@@ -181,7 +189,7 @@ export const appendPersistedChatMessages = async (chatId: string, messages: Chat
           ${message.inferenceLevel},
           ${message.conflictDetected},
           ${message.refusalReason},
-          '{}'::jsonb,
+          ${sql.json(messageMetadata)},
           ${message.createdAt}
         )
       `;
@@ -192,6 +200,7 @@ export const appendPersistedChatMessages = async (chatId: string, messages: Chat
         content: message.content,
         createdAt: message.createdAt,
         turnIndex,
+        messageMetadata,
       });
     }
 

@@ -6,6 +6,11 @@ const PRIORITY_ARTIFACT_KEYS = [
   "raw_model_response",
   "normalized_model_response",
   "final_assistant_message",
+  "planner_tool_calls",
+  "planner_plan",
+  "planner_raw_response",
+  "planner_parse_error",
+  "planner_normalized_candidate",
 ];
 
 const state = {

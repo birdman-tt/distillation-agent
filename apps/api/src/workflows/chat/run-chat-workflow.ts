@@ -11,6 +11,7 @@ import { z } from "zod";
 import { createSeedReply } from "../../seed/official-personae.js";
 import { createDynamicReply } from "../../store/persona-store.js";
 import { classifyUserQuestion } from "./classification.js";
+import type { ChatTurnRouting } from "./turn-router.js";
 
 type PromptEvidenceItem = {
   sourceId: string;
@@ -42,6 +43,15 @@ const chatModelReplySchema = z.object({
 type ChatModelReply = z.infer<typeof chatModelReplySchema>;
 type ChatStructuredRequester = (input: Parameters<typeof requestStructuredJson>[0]) => Promise<ChatModelReply>;
 type ChatContextEnvelope = z.infer<typeof chatContextEnvelopeSchema>;
+type ChatTurnPlanForPrompt = {
+  userIntent: string;
+  contextUsed: string[];
+  replyGoal: string;
+  responseOutline: string[];
+  shouldSendMultipleMessages: boolean;
+  suggestedMessageCount: number;
+  avoidRepeating: string[];
+};
 type ChatWorkflowTraceArtifact =
   | {
       artifactKey: string;
@@ -183,6 +193,31 @@ const normalizeInferenceLevel = (input: {
 
 type RuntimeClassification = ReturnType<typeof classifyUserQuestion>;
 
+const defaultReplyModeForClassification = (classification: RuntimeClassification): ChatTurnRouting["replyMode"] => {
+  switch (classification.category) {
+    case "HIGH_RISK":
+      return "HIGH_RISK";
+    case "FACT_SPECIFIC":
+      return "FACT";
+    case "THEME_ANCHORED":
+      return "DOMAIN";
+    case "OPEN_ENDED":
+      return "CASUAL";
+  }
+};
+
+const defaultPersonaIntensityForMode = (replyMode: ChatTurnRouting["replyMode"]): ChatTurnRouting["personaIntensity"] => {
+  switch (replyMode) {
+    case "DOMAIN":
+      return "high";
+    case "FACT":
+    case "HIGH_RISK":
+      return "medium";
+    case "CASUAL":
+      return "low";
+  }
+};
+
 const readChatTemperature = () => {
   const value = Number(process.env.DEEPSEEK_CHAT_TEMPERATURE ?? "0.8");
   if (!Number.isFinite(value)) {
@@ -235,6 +270,8 @@ export const runChatWorkflow = async (input: {
   seed?: OfficialSeed | null;
   dynamicContext?: RuntimeContext;
   chatContext?: ChatContextEnvelope;
+  turnPlan?: ChatTurnPlanForPrompt | null;
+  turnRouting?: Pick<ChatTurnRouting, "replyMode" | "personaIntensity"> | null;
 }, deps: {
   requestStructuredJson?: ChatStructuredRequester;
   trace?: ChatWorkflowTraceSink;
@@ -270,18 +307,23 @@ export const runChatWorkflow = async (input: {
     ],
   });
 
+  const replyMode = input.turnRouting?.replyMode ?? defaultReplyModeForClassification(classification);
+  const personaIntensity = input.turnRouting?.personaIntensity ?? defaultPersonaIntensityForMode(replyMode);
   const systemPrompt = buildChatSystemPrompt({
     displayName: runtimeContext.displayName,
     previewIntro: runtimeContext.previewIntro,
     profileSummary: runtimeContext.profileSummary,
     styleExamples: runtimeContext.styleExamples,
     requiredInferenceLevel,
+    replyMode,
+    personaIntensity,
   });
   const userPrompt = buildChatUserPrompt({
     question: input.content,
     classification,
     recentTurns: input.chatContext?.recentTurns ?? [],
     retrievedMemories: input.chatContext?.retrievedMemories ?? [],
+    turnPlan: input.turnPlan ?? null,
     evidence: runtimeContext.evidence,
   });
   deps.trace?.({
@@ -294,6 +336,9 @@ export const runChatWorkflow = async (input: {
       evidenceCount: runtimeContext.evidence.length,
       recentTurnCount: input.chatContext?.recentTurns.length ?? 0,
       retrievedMemoryCount: input.chatContext?.retrievedMemories.length ?? 0,
+      plannerUsed: Boolean(input.turnPlan),
+      replyMode,
+      personaIntensity,
     },
     artifacts: [
       {
