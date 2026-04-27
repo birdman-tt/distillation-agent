@@ -22,6 +22,9 @@ test("chat system prompt explicitly requires JSON output for structured response
   assert.match(prompt, /不能编造.*具体事实|不能补出.*具体事实/);
   assert.match(prompt, /对象摘要、参考口吻、推荐问题都只是内部风格线索/);
   assert.match(prompt, /不要直接复述原句|重复固定套话/);
+  assert.match(prompt, /用户说“你”，默认指当前蒸馏对象/);
+  assert.match(prompt, /禁止自称.*AI|不要自称.*AI/);
+  assert.match(prompt, /不能用旧知识回答最新事实/);
 });
 
 test("chat system prompt keeps casual replies from over-performing the persona", () => {
@@ -53,6 +56,20 @@ test("chat system prompt allows domain replies to use persona frameworks", () =>
 
   assert.match(prompt, /领域命中/);
   assert.match(prompt, /可以显露人物主张、判断框架和代表性表达/);
+});
+
+test("chat system prompt includes the server runtime date", () => {
+  const prompt = buildChatSystemPrompt({
+    displayName: "雷军",
+    previewIntro: "把复杂产品讲成普通人能感知的体验。",
+    profileSummary: "产品型人格。",
+    styleExamples: [],
+    requiredInferenceLevel: "inferred",
+    runtimeDate: "2026年4月26日 星期日",
+  });
+
+  assert.match(prompt, /当前服务端日期: 2026年4月26日 星期日/);
+  assert.match(prompt, /用户问今天、今年、这个月、几几年/);
 });
 
 test("chat user prompt includes recent turns and retrieved memories before the current message", () => {
@@ -106,6 +123,12 @@ test("chat user prompt includes planner context used as responder guidance", () 
     },
     turnPlan: {
       userIntent: "用户在询问自己此前告诉过的名字",
+      replyMode: "FACT",
+      personaIntensity: "medium",
+      needChatMemory: true,
+      needPersonaKnowledge: false,
+      needWebSearch: false,
+      webSearchQuery: null,
       contextUsed: ["用户此前说自己叫小雨，外号大铁锤。"],
       replyGoal: "直接回答用户名字，不要假装不知道",
       responseOutline: ["告诉用户：你叫小雨，也可以叫你大铁锤"],
@@ -116,6 +139,102 @@ test("chat user prompt includes planner context used as responder guidance", () 
     evidence: [],
   });
 
+  assert.match(prompt, /replyMode=FACT/);
+  assert.match(prompt, /needChatMemory=true/);
+  assert.match(prompt, /needWebSearch=false/);
   assert.match(prompt, /contextUsed=用户此前说自己叫小雨，外号大铁锤。/);
   assert.match(prompt, /告诉用户：你叫小雨，也可以叫你大铁锤/);
+});
+
+test("chat user prompt includes user memory facts before retrieved chat memory", () => {
+  const prompt = buildChatUserPrompt({
+    question: "我叫什么？",
+    classification: {
+      category: "OPEN_ENDED",
+      matchedKeyword: null,
+      shouldEscalateToModelJudge: true,
+    },
+    userFacts: [
+      {
+        factType: "name",
+        factValue: "小雨",
+        confidence: 1,
+      },
+      {
+        factType: "nickname",
+        factValue: "大铁锤",
+        confidence: 1,
+      },
+    ],
+    evidence: [],
+  });
+
+  assert.match(prompt, /\[User Memory Facts\]/);
+  assert.match(prompt, /factType=name/);
+  assert.match(prompt, /factValue=小雨/);
+  assert.ok(prompt.indexOf("[User Memory Facts]") < prompt.indexOf("[Retrieved Chat Memory]"));
+});
+
+test("chat user prompt includes web context before current user message", () => {
+  const prompt = buildChatUserPrompt({
+    question: "今天有什么最新消息？",
+    classification: {
+      category: "OPEN_ENDED",
+      matchedKeyword: null,
+      shouldEscalateToModelJudge: true,
+    },
+    webContext: {
+      query: "latest news",
+      freshnessStatus: "fresh",
+      keyFindings: ["有一条刚发布的消息。"],
+      sources: [
+        {
+          title: "News Source",
+          url: "https://example.com/news",
+          publishedAt: null,
+          snippet: "latest",
+        },
+      ],
+      uncertainty: null,
+    },
+    evidence: [],
+  });
+
+  assert.match(prompt, /\[Web Context\]/);
+  assert.match(prompt, /freshnessStatus=fresh/);
+  assert.match(prompt, /https:\/\/example\.com\/news/);
+  assert.ok(prompt.indexOf("[Web Context]") < prompt.indexOf("[Current User Message]"));
+});
+
+test("chat user prompt includes retrieved persona chunks", () => {
+  const prompt = buildChatUserPrompt({
+    question: "聊聊投资风险。",
+    classification: {
+      category: "THEME_ANCHORED",
+      matchedKeyword: "投资",
+      shouldEscalateToModelJudge: true,
+    },
+    personaChunks: [
+      {
+        scope: "source",
+        title: "投资原则资料",
+        section: null,
+        content: "投资时先看风险，再看收益。",
+        score: 0.92,
+      },
+      {
+        scope: "profile",
+        title: null,
+        section: "principles",
+        content: "重视长期、概率和反蠢判断。",
+        score: 0.9,
+      },
+    ],
+    evidence: [],
+  });
+
+  assert.match(prompt, /\[Persona Retrieved Chunks\]/);
+  assert.match(prompt, /scope=source/);
+  assert.match(prompt, /投资时先看风险/);
+  assert.match(prompt, /section=principles/);
 });

@@ -9,6 +9,7 @@ import {
 } from "@hall-of-fame/contracts";
 import type { FastifyPluginAsync } from "fastify";
 
+import { createChatProactiveJob } from "../db/repositories/chat-proactive-repository.js";
 import { readChatTraceCaptureLevel } from "../observability/chat-trace/config.js";
 import { ChatTraceCollector } from "../observability/chat-trace/collector.js";
 import { persistChatTraceRecord } from "../observability/chat-trace/repository.js";
@@ -20,7 +21,17 @@ import {
   saveChatSession,
 } from "../store/chat-store.js";
 import { assembleChatContext } from "../services/chat-memory/assemble-chat-context.js";
-import { runChatPlanner } from "../services/minimax-planner/chat-planner.js";
+import { enqueueChatMessageEmbedding } from "../services/embeddings/chat-message-embedding-scheduler.js";
+import { runKimiResearcher, type WebContext } from "../services/kimi/kimi-researcher.js";
+import { runUserMemoryFactExtractionJob } from "../services/memory/user-memory-fact-extractor.js";
+import {
+  buildPlannerRuntimeContext,
+  isChatProactiveEnabled,
+  isExplicitProactiveRequest,
+  runChatPlanner,
+} from "../services/minimax-planner/chat-planner.js";
+import { normalizeResearchPlan } from "../services/research/research-plan.js";
+import { sanitizeWebContext } from "../services/research/web-context-sanitizer.js";
 import { chatRealtimeHub } from "../services/realtime/realtime-hub.js";
 import { isChatRealtimeEnabled } from "../services/realtime/realtime-pg-listener.js";
 import {
@@ -32,7 +43,7 @@ import {
 } from "../store/persona-store.js";
 import { getActorSession, requireActorSession } from "../utils/actor-session.js";
 import { enforceWindowRateLimit } from "../utils/rate-limit.js";
-import { runChatWorkflow } from "../workflows/chat/index.js";
+import { readChatMaxTokens, runChatWorkflow } from "../workflows/chat/index.js";
 import { routeChatTurn } from "../workflows/chat/turn-router.js";
 
 const previewText = (value: string, limit = 200) => {
@@ -72,6 +83,35 @@ const toPublicChatMessage = <T extends object>(message: T): Omit<T, "messageMeta
   const { messageMetadata: _messageMetadata, ...publicMessage } = message as T & { messageMetadata?: unknown };
   return publicMessage;
 };
+
+const isKimiWebSearchEnabled = () => process.env.KIMI_WEB_SEARCH_ENABLED === "true";
+
+const readPlannerModelForMetadata = (decisionSource?: "fast_planner" | "minimax" | "fallback") => {
+  if (decisionSource === "minimax") {
+    return process.env.MINIMAX_PLANNER_MODEL ?? "MiniMax-M2.7";
+  }
+  if (decisionSource === "fast_planner") {
+    const provider = (process.env.CHAT_FAST_PLANNER_PROVIDER ?? process.env.CHAT_PLANNER_PROVIDER ?? "deepseek")
+      .trim()
+      .toLowerCase();
+    if (provider === "kimi") {
+      return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.KIMI_MODEL ?? "kimi-k2.5";
+    }
+    return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
+  }
+  return undefined;
+};
+
+const unavailableWebContext = (input: {
+  query: string;
+  uncertainty: string;
+}): WebContext => ({
+  query: input.query,
+  freshnessStatus: "uncertain",
+  keyFindings: [],
+  sources: [],
+  uncertainty: input.uncertainty,
+});
 
 export const chatsRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/chats", async (request, reply) => {
@@ -191,7 +231,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       modelProvider: "deepseek",
       modelName: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
       temperature: Number(process.env.DEEPSEEK_CHAT_TEMPERATURE ?? "0.8"),
-      maxTokens: 700,
+      maxTokens: readChatMaxTokens(),
     });
     reply.header("x-turn-trace-id", turnTraceId);
     collector.recordEvent({
@@ -265,6 +305,35 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       };
       const [persistedUserMessage] = await appendChatMessages(session.id, [userMessage]);
       collector.setMessageId(persistedUserMessage?.messageId ?? userMessage.id);
+      if (persistedUserMessage) {
+        enqueueChatMessageEmbedding(
+          {
+            chatId: session.id,
+            messageId: persistedUserMessage.messageId,
+            role: persistedUserMessage.role,
+            content: persistedUserMessage.content,
+            turnIndex: persistedUserMessage.turnIndex,
+          },
+          {
+            logger: request.log,
+          },
+        );
+        void runUserMemoryFactExtractionJob({
+          chatId: session.id,
+          sourceMessageId: persistedUserMessage.messageId,
+          content: persistedUserMessage.content,
+        }).catch((error) => {
+          request.log.warn(
+            {
+              kind: "user_memory_fact_extraction_failed",
+              chatId: session.id,
+              messageId: persistedUserMessage.messageId,
+              errorMessage: error instanceof Error ? error.message : "unknown error",
+            },
+            "[memory] user memory fact extraction failed",
+          );
+        });
+      }
       collector.recordEvent({
         eventName: "chat.turn.persisted_user_message",
         stage: "turn",
@@ -294,68 +363,36 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                 ...dynamicVersion.sampleAnswers,
               ]
             : [];
-        const turnRouting = routeChatTurn({
+        const fallbackRouting = routeChatTurn({
           content: input.content,
           focusKeywords,
         });
-        collector.recordEvent({
-          eventName: "chat.turn.routed",
-          stage: "routing",
-          status: "completed",
-          fields: {
-            replyMode: turnRouting.replyMode,
-            personaIntensity: turnRouting.personaIntensity,
-            plannerToolPolicy: "model_decides",
-          },
-        });
-        const chatContext = await assembleChatContext({
+        const plannerPersonaContext = {
+          displayName:
+            dynamicPersona?.displayName ??
+            officialSeed?.persona.displayName ??
+            "User Persona",
+          previewIntro: dynamicVersion?.previewIntro ?? officialSeed?.version.previewIntro ?? null,
+          profileSummary:
+            typeof dynamicVersion?.profileJson.summary === "string"
+              ? dynamicVersion.profileJson.summary
+              : officialSeed?.version.profileJson.summary && typeof officialSeed.version.profileJson.summary === "string"
+                ? officialSeed.version.profileJson.summary
+                : null,
+        };
+        const plannerRuntimeContext = buildPlannerRuntimeContext();
+        const rawTurnPlan = await runChatPlanner({
           chatId: session.id,
           personaId: session.targetPersonaId,
           personaVersionId: session.targetPersonaVersionId,
-          query: input.content,
-          latestMessageId: persistedUserMessage?.messageId ?? userMessage.id,
-          latestTurnIndex: persistedUserMessage?.turnIndex ?? null,
-          personaEvidence,
-        });
-        collector.recordEvent({
-          eventName: "chat.memory.search.completed",
-          stage: "memory",
-          status: "completed",
-          fields: {
-            requestId: chatContext.diagnostics.memorySearch.requestId,
-            totalHits: chatContext.diagnostics.memorySearch.totalHits,
-            returnedHits: chatContext.diagnostics.memorySearch.returnedHits,
-            truncated: chatContext.diagnostics.memorySearch.truncated,
-            retrievalMode: chatContext.diagnostics.memorySearch.retrievalMode,
-            topHits: chatContext.diagnostics.memorySearch.topHits,
-          },
-        });
-        const chatContextArtifact = collector.addJsonArtifact("chat_context", {
-          recentTurns: chatContext.recentTurns,
-          retrievedMemories: chatContext.retrievedMemories,
-          personaEvidence: chatContext.personaEvidence,
-        });
-        collector.recordEvent({
-          eventName: "chat.context.assembled",
-          stage: "context",
-          status: "completed",
-          fields: {
-            recentTurnsCount: chatContext.recentTurns.length,
-            retrievedMemoriesCount: chatContext.retrievedMemories.length,
-            personaEvidenceCount: chatContext.personaEvidence.length,
-            contextBudget: chatContext.diagnostics.contextBudget,
-          },
-          artifactRefs: [chatContextArtifact],
-        });
-
-        const turnPlan = await runChatPlanner({
-          chatId: session.id,
-          personaId: session.targetPersonaId,
-          personaVersionId: session.targetPersonaVersionId,
+          personaContext: plannerPersonaContext,
+          runtimeContext: plannerRuntimeContext,
           content: input.content,
           latestMessageId: persistedUserMessage?.messageId ?? userMessage.id,
           latestTurnIndex: persistedUserMessage?.turnIndex ?? null,
           turnTraceId,
+          fallbackReplyMode: fallbackRouting.replyMode,
+          fallbackPersonaIntensity: fallbackRouting.personaIntensity,
           trace: (event) => {
             const artifactRefs = (event.artifacts ?? []).map((artifact) =>
               artifact.kind === "text"
@@ -373,6 +410,269 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             });
           },
         });
+        const turnPlan = rawTurnPlan?.needWebSearch
+          ? (() => {
+              const normalized = normalizeResearchPlan({
+                needWebSearch: rawTurnPlan.needWebSearch,
+                webSearchQuery: rawTurnPlan.webSearchQuery,
+                researchPlan: rawTurnPlan.researchPlan,
+                personaContext: plannerPersonaContext,
+                runtimeContext: plannerRuntimeContext,
+                userMessage: input.content,
+              });
+              const normalizedPlan = {
+                ...rawTurnPlan,
+                webSearchQuery: normalized.webSearchQuery,
+                researchPlan: normalized.researchPlan,
+                retrievalHints: {
+                  ...rawTurnPlan.retrievalHints,
+                  focusQueries: [
+                    ...new Set([
+                      ...(normalized.researchPlan?.searchQueries ?? []),
+                      ...rawTurnPlan.retrievalHints.focusQueries,
+                    ]),
+                  ],
+                },
+              };
+              const artifactRef = collector.addJsonArtifact("research_plan_normalized", normalized.researchPlan);
+              collector.recordEvent({
+                eventName: "chat.research_plan.normalized",
+                stage: "planner",
+                status: "completed",
+                fields: {
+                  subject: normalized.researchPlan?.subject ?? null,
+                  searchQueries: normalized.researchPlan?.searchQueries ?? [],
+                  timeWindow: normalized.researchPlan?.timeWindow ?? null,
+                  asOf: normalized.researchPlan?.asOf ?? null,
+                  webSearchQuery: normalized.webSearchQuery,
+                },
+                artifactRefs: [artifactRef],
+              });
+              return normalizedPlan;
+            })()
+          : rawTurnPlan;
+        const turnRouting = turnPlan
+          ? {
+              replyMode: turnPlan.replyMode,
+              personaIntensity: turnPlan.personaIntensity,
+            }
+          : fallbackRouting;
+        collector.recordEvent({
+          eventName: "chat.turn.routed",
+          stage: "routing",
+          status: "completed",
+          fields: {
+            replyMode: turnRouting.replyMode,
+            personaIntensity: turnRouting.personaIntensity,
+            fallbackReplyMode: fallbackRouting.replyMode,
+            fallbackPersonaIntensity: fallbackRouting.personaIntensity,
+            plannerUsed: turnPlan ? turnPlan.decisionSource !== "fallback" : false,
+            plannerDecisionSource: turnPlan?.decisionSource ?? null,
+            plannerToolPolicy: "decision_only",
+          },
+        });
+
+        if (turnPlan?.proactiveCandidate.shouldSchedule) {
+          if (!isChatProactiveEnabled()) {
+            collector.recordEvent({
+              eventName: "chat.proactive.job.skipped",
+              stage: "proactive",
+              status: "skipped",
+              level: "warn",
+              fields: {
+                reason: "disabled",
+              },
+            });
+          } else if (!isExplicitProactiveRequest(input.content)) {
+            collector.recordEvent({
+              eventName: "chat.proactive.job.skipped",
+              stage: "proactive",
+              status: "skipped",
+              level: "warn",
+              fields: {
+                reason: "requires_explicit_user_request",
+                plannerReason: turnPlan.proactiveCandidate.reason,
+              },
+            });
+          } else {
+            try {
+              const job = await createChatProactiveJob({
+                chatId: session.id,
+                sourceTurnTraceId: turnTraceId,
+                topic: turnPlan.proactiveCandidate.topic ?? "继续刚才的话题",
+                reason: turnPlan.proactiveCandidate.reason ?? "planner requested proactive follow-up",
+                delaySeconds: turnPlan.proactiveCandidate.delaySeconds ?? 180,
+              });
+              collector.recordEvent({
+                eventName: "chat.proactive.job.created",
+                stage: "proactive",
+                status: "completed",
+                fields: {
+                  jobId: job.id,
+                  dueAt: job.dueAt,
+                  delaySeconds: turnPlan.proactiveCandidate.delaySeconds ?? 180,
+                },
+              });
+            } catch (error) {
+              collector.recordEvent({
+                eventName: "chat.proactive.job.failed",
+                stage: "proactive",
+                status: "failed",
+                level: "warn",
+                fields: {
+                  errorMessage: error instanceof Error ? error.message : "unknown error",
+                },
+              });
+            }
+          }
+        }
+
+        const chatContext = await assembleChatContext({
+          chatId: session.id,
+          personaId: session.targetPersonaId,
+          personaVersionId: session.targetPersonaVersionId,
+          query: input.content,
+          latestMessageId: persistedUserMessage?.messageId ?? userMessage.id,
+          latestTurnIndex: persistedUserMessage?.turnIndex ?? null,
+          includeChatMemory: turnPlan?.needChatMemory ?? true,
+          includePersonaKnowledge: turnPlan?.needPersonaKnowledge ?? true,
+          personaEvidence,
+        });
+        collector.recordEvent({
+          eventName: "chat.memory.search.completed",
+          stage: "memory",
+          status: "completed",
+          fields: {
+            requestId: chatContext.diagnostics.memorySearch.requestId,
+            totalHits: chatContext.diagnostics.memorySearch.totalHits,
+            returnedHits: chatContext.diagnostics.memorySearch.returnedHits,
+            truncated: chatContext.diagnostics.memorySearch.truncated,
+            retrievalMode: chatContext.diagnostics.memorySearch.retrievalMode,
+            topHits: chatContext.diagnostics.memorySearch.topHits,
+            vectorSearch: chatContext.diagnostics.vectorSearch,
+            retrievalPlan: chatContext.diagnostics.retrievalPlan,
+          },
+        });
+        const chatContextArtifact = collector.addJsonArtifact("chat_context", {
+          recentTurns: chatContext.recentTurns,
+          retrievedMemories: chatContext.retrievedMemories,
+          userFacts: chatContext.userFacts,
+          personaChunks: chatContext.personaChunks,
+          personaEvidence: chatContext.personaEvidence,
+        });
+        collector.recordEvent({
+          eventName: "chat.context.assembled",
+          stage: "context",
+          status: "completed",
+          fields: {
+            recentTurnsCount: chatContext.recentTurns.length,
+            retrievedMemoriesCount: chatContext.retrievedMemories.length,
+            userFactsCount: chatContext.userFacts.length,
+            personaChunksCount: chatContext.personaChunks.length,
+            personaEvidenceCount: chatContext.personaEvidence.length,
+            contextBudget: chatContext.diagnostics.contextBudget,
+            vectorSearch: chatContext.diagnostics.vectorSearch,
+            retrievalPlan: chatContext.diagnostics.retrievalPlan,
+          },
+          artifactRefs: [chatContextArtifact],
+        });
+        let webContext: WebContext | null = null;
+        if (turnPlan?.needWebSearch) {
+          const researchPlan = turnPlan.researchPlan;
+          const webSearchQuery = researchPlan?.searchQueries[0] ?? turnPlan.webSearchQuery ?? input.content;
+          let rawWebContext: WebContext;
+          if (!isKimiWebSearchEnabled()) {
+            rawWebContext = unavailableWebContext({
+              query: webSearchQuery,
+              uncertainty: "Kimi web search is disabled in this environment.",
+            });
+            collector.recordEvent({
+              eventName: "chat.kimi.research.skipped",
+              stage: "kimi",
+              status: "skipped",
+              level: "warn",
+              fields: {
+                reason: "disabled",
+                query: webSearchQuery,
+              },
+            });
+          } else {
+            const kimiStartedAt = Date.now();
+            collector.recordEvent({
+              eventName: "chat.kimi.research.started",
+              stage: "kimi",
+              status: "started",
+              fields: {
+                model: process.env.KIMI_MODEL ?? "kimi-k2.5",
+                query: webSearchQuery,
+                searchQueries: researchPlan?.searchQueries ?? [webSearchQuery],
+                researchSubject: researchPlan?.subject ?? null,
+                plannerReason: turnPlan.webSearchReason ?? null,
+              },
+            });
+            try {
+              rawWebContext = await runKimiResearcher({
+                userMessage: input.content,
+                webSearchQuery: researchPlan ? undefined : webSearchQuery,
+                researchPlan: researchPlan ?? undefined,
+                plannerReason: turnPlan.webSearchReason ?? "planner requested fresh information",
+                locale: "zh-CN",
+                maxFindings: 5,
+              });
+              const webContextArtifact = collector.addJsonArtifact("kimi_web_context_raw", rawWebContext);
+              collector.recordEvent({
+                eventName: "chat.kimi.research.completed",
+                stage: "kimi",
+                status: "completed",
+                durationMs: Date.now() - kimiStartedAt,
+                fields: {
+                  query: rawWebContext.query,
+                  freshnessStatus: rawWebContext.freshnessStatus,
+                  findingCount: rawWebContext.keyFindings.length,
+                  sourceCount: rawWebContext.sources.length,
+                },
+                artifactRefs: [webContextArtifact],
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "unknown error";
+              rawWebContext = unavailableWebContext({
+                query: webSearchQuery,
+                uncertainty: `Kimi researcher failed: ${message}`,
+              });
+              collector.recordEvent({
+                eventName: "chat.kimi.research.failed",
+                stage: "kimi",
+                status: "failed",
+                level: "warn",
+                durationMs: Date.now() - kimiStartedAt,
+                fields: {
+                  query: webSearchQuery,
+                  errorMessage: message,
+                },
+              });
+            }
+          }
+          const sanitized = sanitizeWebContext({
+            webContext: rawWebContext,
+            researchPlan,
+          });
+          webContext = sanitized.webContext;
+          const sanitizedArtifact = collector.addJsonArtifact("kimi_web_context_sanitized", sanitized.webContext);
+          collector.recordEvent({
+            eventName: "chat.kimi.web_context.sanitized",
+            stage: "kimi",
+            status: "completed",
+            fields: {
+              webSearchRequested: true,
+              webSearchResultUsed: sanitized.used,
+              webSearchFreshnessStatus: sanitized.webContext.freshnessStatus,
+              webSearchSourceCount: sanitized.webContext.sources.length,
+              webSearchQueryOriginal: turnPlan.webSearchQuery ?? null,
+              webSearchQueriesResolved: researchPlan?.searchQueries ?? [webSearchQuery],
+            },
+            artifactRefs: [sanitizedArtifact],
+          });
+        }
 
         const rawReply = await runChatWorkflow(
           {
@@ -380,6 +680,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             seed: officialSeed,
             chatContext,
             turnPlan,
+            webContext,
             turnRouting,
             dynamicContext:
               officialSeed === null && dynamicVersion
@@ -464,11 +765,25 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             turnTraceId,
             source: "reply" as const,
             sequence: index + 1,
-            plannerModel: turnPlan ? (process.env.MINIMAX_PLANNER_MODEL ?? "MiniMax-M2.7") : undefined,
+            plannerModel: readPlannerModelForMetadata(turnPlan?.decisionSource),
             responderModel: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
           },
         }));
-        await appendChatMessages(session.id, assistantMessages);
+        const persistedAssistantMessages = await appendChatMessages(session.id, assistantMessages);
+        for (const message of persistedAssistantMessages) {
+          enqueueChatMessageEmbedding(
+            {
+              chatId: session.id,
+              messageId: message.messageId,
+              role: message.role,
+              content: message.content,
+              turnIndex: message.turnIndex,
+            },
+            {
+              logger: request.log,
+            },
+          );
+        }
         const firstAssistantMessage = assistantMessages[0]!;
         collector.setAssistantMessageId(firstAssistantMessage.id);
         const assistantArtifact = collector.addJsonArtifact("final_assistant_message", {

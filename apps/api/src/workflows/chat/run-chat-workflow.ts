@@ -44,13 +44,38 @@ type ChatModelReply = z.infer<typeof chatModelReplySchema>;
 type ChatStructuredRequester = (input: Parameters<typeof requestStructuredJson>[0]) => Promise<ChatModelReply>;
 type ChatContextEnvelope = z.infer<typeof chatContextEnvelopeSchema>;
 type ChatTurnPlanForPrompt = {
+  decisionSource?: "fast_planner" | "minimax" | "fallback";
   userIntent: string;
+  replyMode?: ChatTurnRouting["replyMode"];
+  personaIntensity?: ChatTurnRouting["personaIntensity"];
+  needChatMemory?: boolean;
+  needPersonaKnowledge?: boolean;
+  needWebSearch?: boolean;
+  webSearchQuery?: string | null;
+  researchPlan?: {
+    subject: string | null;
+    normalizedQuestion: string;
+    searchQueries: string[];
+    timeWindow: string;
+  } | null;
   contextUsed: string[];
   replyGoal: string;
   responseOutline: string[];
   shouldSendMultipleMessages: boolean;
   suggestedMessageCount: number;
   avoidRepeating: string[];
+};
+type WebContextForPrompt = {
+  query: string;
+  freshnessStatus: "fresh" | "uncertain" | "not_found";
+  keyFindings: string[];
+  sources: Array<{
+    title: string;
+    url: string;
+    publishedAt?: string | null;
+    snippet?: string | null;
+  }>;
+  uncertainty: string | null;
 };
 type ChatWorkflowTraceArtifact =
   | {
@@ -227,6 +252,30 @@ const readChatTemperature = () => {
   return Math.min(2, Math.max(0, value));
 };
 
+export const readChatMaxTokens = () => {
+  const value = Number(process.env.DEEPSEEK_CHAT_MAX_TOKENS ?? "1400");
+  if (!Number.isFinite(value)) {
+    return 1400;
+  }
+
+  return Math.min(4000, Math.max(700, Math.floor(value)));
+};
+
+const readRuntimeTimeZone = () => process.env.CHAT_RUNTIME_TIME_ZONE ?? "Asia/Shanghai";
+
+const formatRuntimeDate = (date = new Date()) =>
+  `${new Intl.DateTimeFormat("zh-CN", {
+    timeZone: readRuntimeTimeZone(),
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date)} ${readRuntimeTimeZone()}`;
+
 const buildOfficialSeedContext = (seed: OfficialSeed): RuntimeContext => {
   const supportedEvidence = seed.supportedReply.basis.map((item) => ({
     sourceId: item.sourceId,
@@ -271,6 +320,7 @@ export const runChatWorkflow = async (input: {
   dynamicContext?: RuntimeContext;
   chatContext?: ChatContextEnvelope;
   turnPlan?: ChatTurnPlanForPrompt | null;
+  webContext?: WebContextForPrompt | null;
   turnRouting?: Pick<ChatTurnRouting, "replyMode" | "personaIntensity"> | null;
 }, deps: {
   requestStructuredJson?: ChatStructuredRequester;
@@ -317,12 +367,16 @@ export const runChatWorkflow = async (input: {
     requiredInferenceLevel,
     replyMode,
     personaIntensity,
+    runtimeDate: formatRuntimeDate(),
   });
   const userPrompt = buildChatUserPrompt({
     question: input.content,
     classification,
     recentTurns: input.chatContext?.recentTurns ?? [],
     retrievedMemories: input.chatContext?.retrievedMemories ?? [],
+    userFacts: input.chatContext?.userFacts ?? [],
+    personaChunks: input.chatContext?.personaChunks ?? [],
+    webContext: input.webContext ?? null,
     turnPlan: input.turnPlan ?? null,
     evidence: runtimeContext.evidence,
   });
@@ -336,7 +390,13 @@ export const runChatWorkflow = async (input: {
       evidenceCount: runtimeContext.evidence.length,
       recentTurnCount: input.chatContext?.recentTurns.length ?? 0,
       retrievedMemoryCount: input.chatContext?.retrievedMemories.length ?? 0,
-      plannerUsed: Boolean(input.turnPlan),
+      userFactsCount: input.chatContext?.userFacts.length ?? 0,
+      personaChunkCount: input.chatContext?.personaChunks.length ?? 0,
+      webContextUsed: Boolean(input.webContext),
+      webContextFreshnessStatus: input.webContext?.freshnessStatus ?? null,
+      webContextSourceCount: input.webContext?.sources.length ?? 0,
+      plannerUsed: input.turnPlan ? input.turnPlan.decisionSource !== "fallback" : false,
+      plannerDecisionSource: input.turnPlan?.decisionSource ?? null,
       replyMode,
       personaIntensity,
     },
@@ -363,7 +423,7 @@ export const runChatWorkflow = async (input: {
 
   const model = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat";
   const temperature = readChatTemperature();
-  const maxTokens = 700;
+  const maxTokens = readChatMaxTokens();
   const requestModelReply = async (attempt: number, extraInstruction?: string) => {
     const finalSystemPrompt = extraInstruction ? `${systemPrompt}\n${extraInstruction}` : systemPrompt;
     const startedAt = Date.now();
@@ -589,4 +649,5 @@ export const runChatWorkflow = async (input: {
 
 export const __internal = {
   isTooCloseToRecentAssistantAnswer,
+  formatRuntimeDate,
 };

@@ -33,6 +33,24 @@ test("official persona questions use the structured model runtime before falling
   assert.ok(reply.basis.length > 0);
 });
 
+test("chat workflow runtime date includes local time and timezone", () => {
+  const originalTimezone = process.env.CHAT_RUNTIME_TIME_ZONE;
+  process.env.CHAT_RUNTIME_TIME_ZONE = "Asia/Shanghai";
+  try {
+    const value = __internal.formatRuntimeDate(new Date("2026-04-27T06:43:39.000Z"));
+    assert.match(value, /2026年4月27日/);
+    assert.match(value, /星期一/);
+    assert.match(value, /14:43:39/);
+    assert.match(value, /Asia\/Shanghai/);
+  } finally {
+    if (originalTimezone === undefined) {
+      delete process.env.CHAT_RUNTIME_TIME_ZONE;
+    } else {
+      process.env.CHAT_RUNTIME_TIME_ZONE = originalTimezone;
+    }
+  }
+});
+
 test("chat workflow normalizes empty refusalReason from the model to none", async () => {
   const seed = findPersonaSeedByPersonaId("0f2610a1-34b2-46c8-b915-f92d928f06a1");
   assert.ok(seed);
@@ -210,6 +228,8 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
             turnDistance: 2,
           },
         ],
+        userFacts: [],
+        personaChunks: [],
         personaEvidence: [],
       },
     },
@@ -237,6 +257,96 @@ test("chat workflow passes recent turns and retrieved memory into the user promp
   assert.match(capturedPrompt, /参数只是发布会上的自嗨/);
 });
 
+test("chat workflow passes web context into the user prompt", async () => {
+  const seed = findPersonaSeedByPersonaId("0f2610a1-34b2-46c8-b915-f92d928f06a1");
+  assert.ok(seed);
+
+  let capturedPrompt = "";
+  const reply = await runChatWorkflow(
+    {
+      content: "今天有什么最新消息？",
+      seed,
+      webContext: {
+        query: "latest news",
+        freshnessStatus: "fresh",
+        keyFindings: ["有一条刚发布的消息。"],
+        sources: [
+          {
+            title: "News Source",
+            url: "https://example.com/news",
+            publishedAt: null,
+            snippet: "latest",
+          },
+        ],
+        uncertainty: null,
+      },
+    },
+    {
+      requestStructuredJson: async (input) => {
+        capturedPrompt = input.userPrompt;
+        return {
+          answer: "我会先按查到的新信息说：有一条刚发布的消息。",
+          basisSummary: {
+            mode: "INFERRED" as const,
+            summary: "结合联网上下文作答。",
+          },
+          inferenceLevel: "inferred" as const,
+          conflictDetected: false,
+          refusalReason: "none",
+        };
+      },
+    },
+  );
+
+  assert.ok(reply);
+  assert.match(capturedPrompt, /\[Web Context\]/);
+  assert.match(capturedPrompt, /https:\/\/example\.com\/news/);
+});
+
+test("chat workflow uses a larger structured JSON budget for web-context answers", async () => {
+  let capturedMaxTokens: number | undefined;
+  const seed = findPersonaSeedByPersonaId("9cb9d15b-b39b-4451-a7c1-20dbc0d7496e");
+  assert.ok(seed);
+
+  await runChatWorkflow(
+    {
+      content: "你最近的访谈节目请了谁？",
+      seed,
+      webContext: {
+        query: "罗永浩 最近 访谈 嘉宾 2026",
+        freshnessStatus: "fresh",
+        keyFindings: ["2026年3月26日新一期节目邀请了杨笠当嘉宾。"],
+        sources: [
+          {
+            title: "访谈来源",
+            url: "https://example.com/interview",
+            publishedAt: "2026-03-26T12:00:00",
+            snippet: "新一期邀请杨笠当嘉宾。",
+          },
+        ],
+        uncertainty: null,
+      },
+    },
+    {
+      requestStructuredJson: async (request) => {
+        capturedMaxTokens = request.maxTokens;
+        return {
+          answer: "最近一期请的是杨笠。",
+          basisSummary: {
+            mode: "SUPPORTED",
+            summary: "根据联网来源。",
+          },
+          inferenceLevel: "grounded",
+          conflictDetected: false,
+          refusalReason: null,
+        };
+      },
+    },
+  );
+
+  assert.equal(capturedMaxTokens, 1400);
+});
+
 test("chat workflow retries once when the draft answer is too close to a recent assistant reply", async () => {
   const seed = findPersonaSeedByPersonaId("0f2610a1-34b2-46c8-b915-f92d928f06a1");
   assert.ok(seed);
@@ -257,6 +367,8 @@ test("chat workflow retries once when the draft answer is too close to a recent 
           },
         ],
         retrievedMemories: [],
+        userFacts: [],
+        personaChunks: [],
         personaEvidence: [],
       },
     },

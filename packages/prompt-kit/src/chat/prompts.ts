@@ -26,8 +26,87 @@ const formatRetrievedMemory = (
   index: number,
 ) => [`# Memory ${index + 1}`, `role=${item.role}`, `reason=${item.reason}`, `turnDistance=${item.turnDistance}`, item.content].join("\n");
 
+const formatUserFact = (
+  item: {
+    factType: string;
+    factValue: string;
+    confidence: number;
+  },
+  index: number,
+) =>
+  [
+    `# Fact ${index + 1}`,
+    `factType=${item.factType}`,
+    `factValue=${item.factValue}`,
+    `confidence=${item.confidence}`,
+  ].join("\n");
+
+const formatWebContext = (input: {
+  query: string;
+  freshnessStatus: "fresh" | "uncertain" | "not_found";
+  keyFindings: string[];
+  sources: Array<{
+    title: string;
+    url: string;
+    publishedAt?: string | null;
+    snippet?: string | null;
+  }>;
+  uncertainty: string | null;
+}) =>
+  [
+    `query=${input.query}`,
+    `freshnessStatus=${input.freshnessStatus}`,
+    `uncertainty=${input.uncertainty ?? "none"}`,
+    "[Findings]",
+    ...(input.keyFindings.length ? input.keyFindings.map((item, index) => `${index + 1}. ${item}`) : ["none"]),
+    "[Sources]",
+    ...(input.sources.length
+      ? input.sources.map((source, index) =>
+          [
+            `# Source ${index + 1}`,
+            `title=${source.title}`,
+            `url=${source.url}`,
+            `publishedAt=${source.publishedAt ?? "unknown"}`,
+            `snippet=${source.snippet ?? "none"}`,
+          ].join("\n"),
+        )
+      : ["none"]),
+  ].join("\n");
+
+const formatPersonaChunk = (
+  item: {
+    scope: "source" | "profile";
+    title: string | null;
+    section: string | null;
+    content: string;
+    score: number;
+  },
+  index: number,
+) =>
+  [
+    `# Persona Chunk ${index + 1}`,
+    `scope=${item.scope}`,
+    `title=${item.title ?? "none"}`,
+    `section=${item.section ?? "none"}`,
+    `score=${item.score}`,
+    item.content,
+  ].join("\n");
+
 const formatPlannerGuidance = (input: {
+  decisionSource?: "fast_planner" | "minimax" | "fallback";
   userIntent: string;
+  replyMode?: ReplyMode;
+  personaIntensity?: PersonaIntensity;
+  needChatMemory?: boolean;
+  needPersonaKnowledge?: boolean;
+  needWebSearch?: boolean;
+  webSearchQuery?: string | null;
+  researchPlan?: {
+    subject: string | null;
+    normalizedQuestion: string;
+    searchQueries: string[];
+    timeWindow: string;
+  } | null;
   contextUsed: string[];
   replyGoal: string;
   responseOutline: string[];
@@ -36,7 +115,18 @@ const formatPlannerGuidance = (input: {
   avoidRepeating: string[];
 }) =>
   [
+    `decisionSource=${input.decisionSource ?? "unspecified"}`,
     `userIntent=${input.userIntent}`,
+    `replyMode=${input.replyMode ?? "unspecified"}`,
+    `personaIntensity=${input.personaIntensity ?? "unspecified"}`,
+    `needChatMemory=${input.needChatMemory ?? "unspecified"}`,
+    `needPersonaKnowledge=${input.needPersonaKnowledge ?? "unspecified"}`,
+    `needWebSearch=${input.needWebSearch ?? "unspecified"}`,
+    `webSearchQuery=${input.webSearchQuery ?? "none"}`,
+    `researchSubject=${input.researchPlan?.subject ?? "none"}`,
+    `researchQuestion=${input.researchPlan?.normalizedQuestion ?? "none"}`,
+    `researchQueries=${input.researchPlan?.searchQueries.join(" / ") || "none"}`,
+    `researchTimeWindow=${input.researchPlan?.timeWindow ?? "none"}`,
     `contextUsed=${input.contextUsed.join(" / ") || "none"}`,
     `replyGoal=${input.replyGoal}`,
     `shouldSendMultipleMessages=${input.shouldSendMultipleMessages}`,
@@ -97,9 +187,14 @@ export const buildChatSystemPrompt = (input: {
   requiredInferenceLevel: "grounded" | "inferred" | "insufficient_evidence";
   replyMode?: ReplyMode;
   personaIntensity?: PersonaIntensity;
+  runtimeDate?: string | null;
 }) =>
   [
     `你正在扮演蒸馏对象 ${input.displayName} 的受控对话 runtime。`,
+    input.runtimeDate ? `当前服务端日期: ${input.runtimeDate}` : null,
+    input.runtimeDate
+      ? "用户问今天、今年、这个月、几几年、当前日期或现在时间时，必须优先使用当前服务端日期，不要凭模型记忆猜。"
+      : null,
     `对象摘要: ${input.previewIntro ?? "暂无摘要"}`,
     `人物画像: ${input.profileSummary ?? "暂无补充画像"}`,
     input.styleExamples && input.styleExamples.length > 0
@@ -114,6 +209,10 @@ export const buildChatSystemPrompt = (input: {
     "如果问题在追问具体事实、具体经历、具体原话，而现有信息没有直接覆盖：不能编造新的具体事实、日期、地点、人物关系、经历细节或原话。",
     "遇到这类未直接覆盖的事实追问时，仍然保持人物口吻，但只给抽象态度、判断框架和价值取向，不要把未经支持的细节说死。",
     "如果问题属于投资、医疗、法律、税务、移民、合同等高风险现实决策，继续保持人物口吻，但只能给原则、提醒、边界与思考框架，不要给步骤、结论、操作建议或确定性判断。",
+    "如果 [Web Context] 存在且 freshnessStatus=fresh，回答最新信息时必须优先使用它；如果 freshnessStatus=uncertain 或 not_found，不能用旧知识硬编最新结果。",
+    "用户说“你”，默认指当前蒸馏对象，不要解释成 AI、助手、模型或 runtime。",
+    "禁止自称 AI、助手、模型或 runtime；也不要说“你是不是把我当成某个具体人”。",
+    "如果 Web Context 没有可靠来源，不能用旧知识回答最新事实；可以自然说“我这边没查到可靠来源”，但不要暴露内部搜索过程。",
     "除非完全无法安全继续，否则不要把“资料不足”“证据不足”“推断级别”之类的系统话术直接说给用户。",
     "回答优先使用第一人称，保持自然、克制、像人，不要像系统警报。",
     "对象摘要、参考口吻、推荐问题都只是内部风格线索，不要把它们原句抄成回答开头。",
@@ -122,7 +221,7 @@ export const buildChatSystemPrompt = (input: {
     '返回字段必须且只能包含: "answer", "basisSummary", "inferenceLevel", "conflictDetected", "refusalReason"。',
     '其中 "basisSummary" 必须是对象: {"mode":"SUPPORTED|INFERRED|UNSUPPORTED","summary":"string"}。',
     '不要输出 Markdown，不要输出代码块，不要省略字段，不要附加解释文本。',
-  ].join("\n");
+  ].filter((item): item is string => Boolean(item)).join("\n");
 
 export const buildChatUserPrompt = (input: {
   question: string;
@@ -137,8 +236,45 @@ export const buildChatUserPrompt = (input: {
     reason: string;
     turnDistance: number;
   }>;
+  userFacts?: Array<{
+    factType: string;
+    factValue: string;
+    confidence: number;
+  }>;
+  webContext?: {
+    query: string;
+    freshnessStatus: "fresh" | "uncertain" | "not_found";
+    keyFindings: string[];
+    sources: Array<{
+      title: string;
+      url: string;
+      publishedAt?: string | null;
+      snippet?: string | null;
+    }>;
+    uncertainty: string | null;
+  } | null;
+  personaChunks?: Array<{
+    scope: "source" | "profile";
+    title: string | null;
+    section: string | null;
+    content: string;
+    score: number;
+  }>;
   turnPlan?: {
+    decisionSource?: "fast_planner" | "minimax" | "fallback";
     userIntent: string;
+    replyMode?: ReplyMode;
+    personaIntensity?: PersonaIntensity;
+    needChatMemory?: boolean;
+    needPersonaKnowledge?: boolean;
+    needWebSearch?: boolean;
+    webSearchQuery?: string | null;
+    researchPlan?: {
+      subject: string | null;
+      normalizedQuestion: string;
+      searchQueries: string[];
+      timeWindow: string;
+    } | null;
     contextUsed: string[];
     replyGoal: string;
     responseOutline: string[];
@@ -150,6 +286,7 @@ export const buildChatUserPrompt = (input: {
 }) =>
   [
     formatSection("[Planner Guidance]", input.turnPlan ? [formatPlannerGuidance(input.turnPlan)] : []),
+    formatSection("[User Memory Facts]", (input.userFacts ?? []).map(formatUserFact)),
     formatSection(
       "[Recent Conversation Window]",
       (input.recentTurns ?? []).map(formatRecentTurn),
@@ -159,6 +296,8 @@ export const buildChatUserPrompt = (input: {
       (input.retrievedMemories ?? []).map(formatRetrievedMemory),
     ),
     formatSection("[Persona Evidence]", input.evidence.map(formatEvidence)),
+    formatSection("[Persona Retrieved Chunks]", (input.personaChunks ?? []).map(formatPersonaChunk)),
+    formatSection("[Web Context]", input.webContext ? [formatWebContext(input.webContext)] : []),
     "[Current User Message]",
     input.question,
     `问题提示: ${input.classification.category}`,

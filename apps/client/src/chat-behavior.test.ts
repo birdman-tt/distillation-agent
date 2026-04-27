@@ -60,6 +60,22 @@ test("chat page treats async accepted message responses as delivery acknowledgem
   assert.doesNotMatch(h5Source, /消息已发送，等待回复/);
 });
 
+test("chat page uses typing indicator for assistant replies, not message delivery", () => {
+  assert.match(h5Source, /let pendingAssistantReplies = 0/);
+  assert.match(h5Source, /const beginAssistantReplyWait = \(\) => \{/);
+  assert.match(h5Source, /const endAssistantReplyWait = \(\) => \{/);
+  assert.match(h5Source, /if \(pendingAssistantReplies > 0\)/);
+  assert.doesNotMatch(h5Source, /pendingDeliveries/);
+
+  const deliveryPendingIndex = h5Source.indexOf("setUserBubblePending(bubble);");
+  const acceptedIndex = h5Source.indexOf('if (reply && reply.status === "accepted")');
+  const typingBeginIndex = h5Source.indexOf("beginAssistantReplyWait();");
+
+  assert.ok(deliveryPendingIndex >= 0, "expected user bubble to show its own delivery pending state");
+  assert.ok(acceptedIndex >= 0, "expected async accepted response handling");
+  assert.ok(typingBeginIndex > acceptedIndex, "expected assistant typing to begin only after send is accepted");
+});
+
 test("chat page keeps the composer pinned and inline on the focused chat screen", () => {
   assert.match(h5Source, /\.shell\.chat-only\s+\.chat-stage\.chat-focused\s+\.composer-shell\s*\{[\s\S]*?position:\s*fixed/);
   assert.match(

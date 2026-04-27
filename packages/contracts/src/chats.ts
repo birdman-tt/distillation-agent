@@ -58,8 +58,51 @@ export const chatMessageMetadataSchema = z.object({
   proactiveJobId: z.string().uuid().optional(),
 });
 
+const plannerReplyModeSchema = z.enum(["CASUAL", "DOMAIN", "FACT", "HIGH_RISK"]);
+const plannerPersonaIntensitySchema = z.enum(["low", "medium", "high"]);
+
+export const chatResearchPlanSchema = z.object({
+  subject: z.string().nullable(),
+  subjectType: z.enum(["persona", "product", "company", "event", "unknown"]),
+  normalizedQuestion: z.string(),
+  searchQueries: z.array(z.string()).max(3),
+  freshnessRequirement: z.enum(["latest_available", "current", "recent", "none"]),
+  timeWindow: z.enum(["today", "this_week", "this_month", "this_year", "recent", "latest_available", "none"]),
+  evidenceRequirement: z.object({
+    minSources: z.number().int().min(1).max(3),
+    requireUrl: z.boolean(),
+  }),
+  ifNoReliableSource: z.enum(["say_not_found_do_not_guess", "ask_clarify"]),
+  asOf: z.string().nullable(),
+  timezone: z.string().nullable(),
+  currentYear: z.number().int().nullable(),
+});
+
 export const chatTurnPlanSchema = z.object({
+  decisionSource: z.enum(["fast_planner", "minimax", "fallback"]).default("minimax"),
   userIntent: z.string(),
+  replyMode: plannerReplyModeSchema.default("CASUAL"),
+  personaIntensity: plannerPersonaIntensitySchema.default("low"),
+  answerMode: z
+    .enum(["casual", "domain", "memory_recall", "fresh_info", "high_risk", "proactive_candidate"])
+    .default("casual"),
+  retrievalHints: z
+    .object({
+      focusQueries: z.array(z.string()).default([]),
+      boostScopes: z
+        .array(z.enum(["user_facts", "chat_memory", "persona_chunks"]))
+        .default([]),
+    })
+    .default({
+      focusQueries: [],
+      boostScopes: [],
+    }),
+  needChatMemory: z.boolean().default(false),
+  needPersonaKnowledge: z.boolean().default(false),
+  needWebSearch: z.boolean().default(false),
+  webSearchQuery: z.string().nullable().default(null),
+  webSearchReason: z.string().nullable().default(null),
+  researchPlan: chatResearchPlanSchema.nullable().default(null),
   contextUsed: z.array(z.string()),
   replyGoal: z.string(),
   responseOutline: z.array(z.string()),

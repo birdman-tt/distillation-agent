@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 const chatContextRoleSchema = z.enum(["SYSTEM", "USER", "ASSISTANT"]);
-const chatMemoryReasonSchema = z.enum(["lexical_match", "followup_reference", "topic_overlap", "recent_anchor"]);
+const chatMemoryReasonSchema = z.enum([
+  "lexical_match",
+  "followup_reference",
+  "topic_overlap",
+  "recent_anchor",
+  "semantic_vector",
+]);
 
 export const searchChatMemoryToolInputSchema = z.object({
   toolName: z.literal("search_chat_memory"),
@@ -73,8 +79,26 @@ export const chatContextEvidenceSchema = z.object({
   snippet: z.string(),
 });
 
+export const chatContextUserFactSchema = z.object({
+  factType: z.string(),
+  factValue: z.string(),
+  sourceMessageId: z.string().uuid(),
+  confidence: z.number(),
+});
+
+export const chatContextPersonaChunkSchema = z.object({
+  scope: z.enum(["source", "profile"]),
+  sourceId: z.string().uuid().nullable().optional(),
+  title: z.string().nullable(),
+  section: z.string().nullable(),
+  content: z.string(),
+  score: z.number(),
+});
+
 export const chatContextEnvelopeSchema = z.object({
   recentTurns: z.array(chatContextTurnSchema),
   retrievedMemories: z.array(searchChatMemoryHitSchema),
+  userFacts: z.array(chatContextUserFactSchema).default([]),
+  personaChunks: z.array(chatContextPersonaChunkSchema).default([]),
   personaEvidence: z.array(chatContextEvidenceSchema),
 });

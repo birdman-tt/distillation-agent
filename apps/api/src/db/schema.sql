@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TYPE auth_provider AS ENUM ('ANONYMOUS', 'WEB_SMS', 'WECHAT_MINIAPP');
 CREATE TYPE persona_origin_type AS ENUM ('OFFICIAL', 'USER');
@@ -210,6 +211,85 @@ CREATE UNIQUE INDEX chat_messages_chat_turn_idx
 
 CREATE INDEX chat_messages_content_tsv_idx ON chat_messages USING GIN (content_tsv);
 CREATE INDEX chat_messages_chat_id_created_at_idx ON chat_messages (chat_id, created_at DESC);
+
+CREATE TABLE chat_message_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  message_id UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  role message_role NOT NULL,
+  content TEXT NOT NULL,
+  embedding VECTOR(1024) NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dimensions INTEGER NOT NULL DEFAULT 1024,
+  turn_index INTEGER,
+  embedded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (message_id, embedding_model),
+  CONSTRAINT chat_message_embeddings_dimensions_check CHECK (embedding_dimensions = 1024)
+);
+
+CREATE INDEX chat_message_embeddings_chat_turn_idx
+  ON chat_message_embeddings (chat_id, turn_index DESC NULLS LAST, embedded_at DESC);
+
+CREATE TABLE persona_source_chunk_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_id UUID NOT NULL REFERENCES personae(id) ON DELETE CASCADE,
+  persona_version_id UUID REFERENCES persona_versions(id) ON DELETE CASCADE,
+  persona_chunk_id UUID REFERENCES persona_chunks(id) ON DELETE CASCADE,
+  source_id UUID REFERENCES persona_sources(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  chunk_text TEXT NOT NULL,
+  embedding VECTOR(1024) NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dimensions INTEGER NOT NULL DEFAULT 1024,
+  embedded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT persona_source_chunk_embeddings_dimensions_check CHECK (embedding_dimensions = 1024)
+);
+
+CREATE INDEX persona_source_chunk_embeddings_persona_version_idx
+  ON persona_source_chunk_embeddings (persona_version_id, chunk_index);
+
+CREATE UNIQUE INDEX persona_source_chunk_embeddings_unique_idx
+  ON persona_source_chunk_embeddings (persona_version_id, source_id, chunk_index, embedding_model);
+
+CREATE TABLE persona_profile_chunk_embeddings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  persona_version_id UUID NOT NULL REFERENCES persona_versions(id) ON DELETE CASCADE,
+  section TEXT NOT NULL,
+  content TEXT NOT NULL,
+  embedding VECTOR(1024) NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dimensions INTEGER NOT NULL DEFAULT 1024,
+  embedded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (persona_version_id, section, embedding_model),
+  CONSTRAINT persona_profile_chunk_embeddings_dimensions_check CHECK (embedding_dimensions = 1024)
+);
+
+CREATE INDEX persona_profile_chunk_embeddings_version_idx
+  ON persona_profile_chunk_embeddings (persona_version_id, section);
+
+CREATE TABLE user_memory_facts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  fact_type TEXT NOT NULL,
+  fact_value TEXT NOT NULL,
+  source_message_id UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  confidence DOUBLE PRECISION NOT NULL DEFAULT 1,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (chat_id, fact_type, fact_value, source_message_id)
+);
+
+CREATE INDEX user_memory_facts_chat_type_active_idx
+  ON user_memory_facts (chat_id, fact_type, updated_at DESC)
+  WHERE is_active = true;
+
+CREATE INDEX user_memory_facts_source_message_idx
+  ON user_memory_facts (source_message_id);
 
 CREATE TABLE chat_realtime_presence (
   session_id TEXT PRIMARY KEY,

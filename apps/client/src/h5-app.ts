@@ -2073,7 +2073,8 @@ const renderChatScript = (input: {
   const initialChatId = ${JSON.stringify(input.initialChatId ?? null)};
   let chatId = initialChatId;
   let chatCreation = null;
-  let pendingDeliveries = 0;
+  let pendingAssistantReplies = 0;
+  const assistantReplyWaitTimers = [];
   const assistantName = ${JSON.stringify(input.assistantName ?? null)}
     || log?.getAttribute("data-chat-assistant-name")
     || document.querySelector("[data-thread-name]")?.textContent?.trim()
@@ -2109,7 +2110,7 @@ const renderChatScript = (input: {
 
   const syncThreadTyping = () => {
     if (!threadTyping) return;
-    if (pendingDeliveries > 0) {
+    if (pendingAssistantReplies > 0) {
       threadTyping.classList.add("is-visible");
       threadTyping.replaceChildren(buildTypingIndicator());
       return;
@@ -2117,6 +2118,27 @@ const renderChatScript = (input: {
 
     threadTyping.classList.remove("is-visible");
     threadTyping.replaceChildren();
+  };
+
+  const beginAssistantReplyWait = () => {
+    pendingAssistantReplies += 1;
+    syncThreadTyping();
+    const timer = window.setTimeout(() => {
+      endAssistantReplyWait();
+    }, 45000);
+    assistantReplyWaitTimers.push(timer);
+  };
+
+  const endAssistantReplyWait = () => {
+    if (pendingAssistantReplies <= 0) {
+      return;
+    }
+    pendingAssistantReplies -= 1;
+    const timer = assistantReplyWaitTimers.shift();
+    if (timer) {
+      window.clearTimeout(timer);
+    }
+    syncThreadTyping();
   };
 
   const formatBubbleClock = (value) => {
@@ -2315,7 +2337,11 @@ const renderChatScript = (input: {
           if (payload.type === "chat.message.created") {
             appendMessageIfMissing(payload.message, "auto");
           }
+          if (payload.type === "chat.turn.completed") {
+            endAssistantReplyWait();
+          }
           if (payload.type === "chat.turn.failed") {
+            endAssistantReplyWait();
             setStatus(payload.message || "回复失败");
           }
         } catch {
@@ -2382,8 +2408,6 @@ const renderChatScript = (input: {
     let failureLabel = "发送失败";
     bubble.setAttribute("data-message-time", formatBubbleClock());
     setUserBubblePending(bubble);
-    pendingDeliveries += 1;
-    syncThreadTyping();
 
     try {
       const sessionId = await ensureChatId();
@@ -2398,15 +2422,13 @@ const renderChatScript = (input: {
           bubble.setAttribute("data-message-id", reply.message.id);
           seenMessageIds.add(reply.message.id);
         }
+        beginAssistantReplyWait();
         return;
       }
       appendMessageIfMissing(reply, "auto");
     } catch (error) {
       setUserBubbleFailed(bubble, failureLabel);
       setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      pendingDeliveries = Math.max(0, pendingDeliveries - 1);
-      syncThreadTyping();
     }
   };
 

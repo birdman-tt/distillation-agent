@@ -1,4 +1,4 @@
-import { chatTurnPlanSchema } from "@hall-of-fame/contracts";
+import { chatResearchPlanSchema, chatTurnPlanSchema } from "@hall-of-fame/contracts";
 import type { z } from "zod";
 
 export class MiniMaxPlannerNotConfiguredError extends Error {
@@ -27,6 +27,7 @@ export class MiniMaxPlannerParseError extends Error {
 }
 
 type ChatTurnPlan = z.infer<typeof chatTurnPlanSchema>;
+type ResearchPlan = NonNullable<ChatTurnPlan["researchPlan"]>;
 
 type MiniMaxTool = {
   name: string;
@@ -102,6 +103,12 @@ const parsePlannerJson = (content: string) => {
     if (record.ChatTurnPlan && typeof record.ChatTurnPlan === "object") {
       return record.ChatTurnPlan;
     }
+    if (record.PlannerDecision && typeof record.PlannerDecision === "object") {
+      return record.PlannerDecision;
+    }
+    if (record.decision && typeof record.decision === "object") {
+      return record.decision;
+    }
     if (record.plan && typeof record.plan === "object") {
       return record.plan;
     }
@@ -134,10 +141,157 @@ const toStringArray = (value: unknown) => {
   return [String(value)];
 };
 
+const toBoolean = (value: unknown) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "是", "需要", "1"].includes(normalized)) {
+      return true;
+    }
+    if (isEmptyLike(normalized) || ["false", "no", "否", "不需要", "0"].includes(normalized)) {
+      return false;
+    }
+  }
+  return Boolean(value);
+};
+
+const normalizeAnswerMode = (value: unknown) => {
+  if (typeof value !== "string") {
+    return "casual";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["domain", "领域", "主题", "专业"].includes(normalized)) {
+    return "domain";
+  }
+  if (["memory_recall", "memory", "recall", "上下文", "记忆"].includes(normalized)) {
+    return "memory_recall";
+  }
+  if (["fresh_info", "fresh", "web", "search", "最新", "联网"].includes(normalized)) {
+    return "fresh_info";
+  }
+  if (["high_risk", "risk", "高风险"].includes(normalized)) {
+    return "high_risk";
+  }
+  if (["proactive_candidate", "proactive", "主动"].includes(normalized)) {
+    return "proactive_candidate";
+  }
+  return "casual";
+};
+
+const replyModeFromAnswerMode = (answerMode: string) => {
+  switch (answerMode) {
+    case "domain":
+      return "DOMAIN";
+    case "memory_recall":
+    case "fresh_info":
+      return "FACT";
+    case "high_risk":
+      return "HIGH_RISK";
+    case "proactive_candidate":
+    case "casual":
+    default:
+      return "CASUAL";
+  }
+};
+
+const normalizeReplyMode = (value: unknown, answerMode: string) => {
+  if (typeof value !== "string") {
+    return replyModeFromAnswerMode(answerMode);
+  }
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "DOMAIN" || normalized === "FACT" || normalized === "HIGH_RISK" || normalized === "CASUAL") {
+    return normalized;
+  }
+  if (["领域", "专业", "主题"].includes(value.trim())) {
+    return "DOMAIN";
+  }
+  if (["事实", "记忆", "上下文", "最新"].includes(value.trim())) {
+    return "FACT";
+  }
+  if (["高风险", "风险"].includes(value.trim())) {
+    return "HIGH_RISK";
+  }
+  return replyModeFromAnswerMode(answerMode);
+};
+
+const normalizePersonaIntensity = (value: unknown, replyMode: string) => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "low" || normalized === "medium" || normalized === "high") {
+      return normalized;
+    }
+    if (["低", "弱"].includes(value.trim())) {
+      return "low";
+    }
+    if (["中", "中等"].includes(value.trim())) {
+      return "medium";
+    }
+    if (["高", "强"].includes(value.trim())) {
+      return "high";
+    }
+  }
+  if (replyMode === "DOMAIN") {
+    return "high";
+  }
+  if (replyMode === "FACT" || replyMode === "HIGH_RISK") {
+    return "medium";
+  }
+  return "low";
+};
+
+const normalizeResearchPlan = (value: unknown, fallbackQuery: string | null): ResearchPlan | null => {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const evidenceRequirement = isPlainRecord(value.evidenceRequirement) ? value.evidenceRequirement : {};
+  const searchQueries = toStringArray(value.searchQueries).concat(fallbackQuery ? [fallbackQuery] : []).slice(0, 3);
+  const subjectType = typeof value.subjectType === "string" ? value.subjectType : "unknown";
+  const freshnessRequirement = typeof value.freshnessRequirement === "string" ? value.freshnessRequirement : "latest_available";
+  const timeWindow = typeof value.timeWindow === "string" ? value.timeWindow : "latest_available";
+  const ifNoReliableSource = value.ifNoReliableSource === "ask_clarify" ? "ask_clarify" : "say_not_found_do_not_guess";
+
+  return chatResearchPlanSchema.parse({
+    subject: typeof value.subject === "string" && value.subject.trim() ? value.subject.trim() : null,
+    subjectType,
+    normalizedQuestion:
+      typeof value.normalizedQuestion === "string" && value.normalizedQuestion.trim()
+        ? value.normalizedQuestion.trim()
+        : fallbackQuery ?? "",
+    searchQueries,
+    freshnessRequirement,
+    timeWindow,
+    evidenceRequirement: {
+      minSources:
+        typeof evidenceRequirement.minSources === "number" && Number.isFinite(evidenceRequirement.minSources)
+          ? evidenceRequirement.minSources
+          : 1,
+      requireUrl:
+        typeof evidenceRequirement.requireUrl === "boolean" ? evidenceRequirement.requireUrl : true,
+    },
+    ifNoReliableSource,
+    asOf: typeof value.asOf === "string" ? value.asOf : null,
+    timezone: typeof value.timezone === "string" ? value.timezone : null,
+    currentYear:
+      typeof value.currentYear === "number" && Number.isFinite(value.currentYear)
+        ? Math.floor(value.currentYear)
+        : null,
+  });
+};
+
 export const normalizeChatTurnPlanCandidate = (candidate: unknown) => {
   if (!isPlainRecord(candidate)) {
     return candidate;
   }
+
+  const answerMode = normalizeAnswerMode(candidate.answerMode);
+  const replyMode = normalizeReplyMode(candidate.replyMode, answerMode);
+  const personaIntensity = normalizePersonaIntensity(candidate.personaIntensity, replyMode);
 
   const proactiveCandidate = (() => {
     const raw = candidate.proactiveCandidate;
@@ -161,9 +315,36 @@ export const normalizeChatTurnPlanCandidate = (candidate: unknown) => {
     };
   })();
 
+  const webSearchQuery =
+    typeof candidate.webSearchQuery === "string" && candidate.webSearchQuery.trim()
+      ? candidate.webSearchQuery.trim()
+      : null;
+
   return {
     ...candidate,
+    decisionSource: candidate.decisionSource === "fallback" ? "fallback" : "minimax",
     userIntent: typeof candidate.userIntent === "string" ? candidate.userIntent : String(candidate.userIntent ?? ""),
+    replyMode,
+    personaIntensity,
+    answerMode,
+    retrievalHints: isPlainRecord(candidate.retrievalHints)
+      ? {
+          focusQueries: toStringArray(candidate.retrievalHints.focusQueries),
+          boostScopes: toStringArray(candidate.retrievalHints.boostScopes),
+        }
+      : {
+          focusQueries: [],
+          boostScopes: [],
+        },
+    needChatMemory: toBoolean(candidate.needChatMemory),
+    needPersonaKnowledge: toBoolean(candidate.needPersonaKnowledge),
+    needWebSearch: toBoolean(candidate.needWebSearch),
+    webSearchQuery,
+    webSearchReason:
+      typeof candidate.webSearchReason === "string" && candidate.webSearchReason.trim()
+        ? candidate.webSearchReason.trim()
+        : null,
+    researchPlan: normalizeResearchPlan(candidate.researchPlan, webSearchQuery),
     contextUsed: toStringArray(candidate.contextUsed),
     replyGoal: typeof candidate.replyGoal === "string" ? candidate.replyGoal : String(candidate.replyGoal ?? ""),
     responseOutline: toStringArray(candidate.responseOutline),
@@ -205,6 +386,23 @@ const requestMiniMax = async (input: {
   signal?: AbortSignal;
 }) => {
   const baseUrl = input.baseUrl ?? defaultBaseUrl;
+  const body: Record<string, unknown> = {
+    model: input.model,
+    reasoning_split: true,
+    messages: input.messages,
+  };
+  if (input.tools.length > 0) {
+    body.tools = input.tools.map((tool) => ({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      },
+    }));
+    body.tool_choice = "auto";
+  }
+
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
@@ -212,20 +410,7 @@ const requestMiniMax = async (input: {
       authorization: `Bearer ${input.apiKey}`,
     },
     signal: input.signal,
-    body: JSON.stringify({
-      model: input.model,
-      reasoning_split: true,
-      messages: input.messages,
-      tools: input.tools.map((tool) => ({
-        type: "function",
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        },
-      })),
-      tool_choice: "auto",
-    }),
+    body: JSON.stringify(body),
   });
 
   const payload = (await response.json()) as MiniMaxResponsePayload;
@@ -241,6 +426,43 @@ const requestMiniMax = async (input: {
   return {
     payload,
     message,
+  };
+};
+
+export const runMiniMaxPlannerDecision = async (input: {
+  apiKey?: string | null;
+  baseUrl?: string;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  signal?: AbortSignal;
+}) => {
+  if (!input.apiKey?.trim()) {
+    throw new MiniMaxPlannerNotConfiguredError();
+  }
+
+  const response = await requestMiniMax({
+    apiKey: input.apiKey,
+    baseUrl: input.baseUrl,
+    model: input.model,
+    messages: [
+      { role: "system", content: input.systemPrompt },
+      { role: "user", content: input.userPrompt },
+    ],
+    tools: [],
+    signal: input.signal,
+  });
+
+  if (!response.message.content) {
+    throw new Error("MiniMax planner returned no decision content");
+  }
+
+  return {
+    plan: parsePlannerContent({
+      content: response.message.content,
+      rawResponse: response.payload,
+    }),
+    rawResponse: response.payload,
   };
 };
 

@@ -1,4 +1,4 @@
-# Chat Retrieval-First、MiniMax Planner 与 Kimi Researcher 架构方案
+# Chat Retrieval-First、Fast Planner 与 Kimi Researcher 架构方案
 
 日期：2026-04-25
 
@@ -8,18 +8,20 @@
 
 ```text
 pgvector + FTS + user_memory_facts = 每轮默认上下文检索
-MiniMax Planner = 仅处理联网、主动消息和复杂计划
+Fast Planner = 同步低延迟路由判断
 Kimi Researcher = 最新信息联网研究，V1 直接接入
 DeepSeek Responder = 唯一最终用户可见回复
+MiniMax Async Planner = 后台深度复盘与复杂主动消息候选
 ```
 
 核心目标：
 
 - 对话历史和蒸馏资料进入向量库，减少每轮 prompt 体积。
 - 每轮默认执行 retrieval，不由 Planner 判断是否查上下文。
-- MiniMax 只处理最新信息、主动消息、复杂计划、多条回复等增强能力。
+- 同步 Planner 必须低延迟，默认使用 DeepSeek non-thinking compact JSON。
 - Kimi 只在需要最新信息时触发，不参与普通聊天，不生成最终用户回复。
 - DeepSeek 只消费已经整理好的 `Context Pack`，负责最终人格化回答。
+- MiniMax 不进入同步热路径，只保留为异步深度 Planner/复盘能力。
 - 保留 trace，可解释每轮带了哪些上下文、为什么联网、最终 prompt 大小。
 
 已确认 V1 决策：
@@ -28,18 +30,37 @@ DeepSeek Responder = 唯一最终用户可见回复
 Embedding: Qwen text-embedding-v4, 1024 dimensions
 Vector DB: 当前 Supabase/PostgreSQL 直接启用 pgvector
 Retrieval: 每轮默认执行 recent + user facts + vector + FTS/exact
-MiniMax Planner: 默认不每轮调用，只处理联网/主动消息/复杂计划
+Fast Planner: 默认 DeepSeek `deepseek-v4-flash`，关闭 thinking，输出紧凑 JSON
+MiniMax Planner: 不放同步主链路；只做异步深度复盘、复杂 proactive 候选
 Kimi: V1 直接接入，只做最新信息 Researcher，模型 kimi-k2.5
 DeepSeek: 唯一最终回复模型
 user_memory_facts: V1 后端能力，V1.1 用户可见管理入口
 ```
+
+## 1.1 2026-04-26 模型选型更新
+
+本地同口径测试显示，MiniMax-M2.7 用作同步 planner 的端到端耗时明显高于聊天主链路预算：
+
+| 模型 | planner 模式 | 平均耗时 | P95 | 结论 |
+| --- | --- | ---: | ---: | --- |
+| DeepSeek `deepseek-v4-flash` | `thinking: disabled` + compact JSON | 约 `1.15s` | 约 `1.65s` | 适合同步 Fast Planner |
+| Kimi `kimi-k2.5` | `thinking: disabled` + compact JSON | 约 `1.85s` | 约 `2.54s` | 可作为 Fast Planner 备选，更擅长 fresh/tool 判断 |
+| MiniMax `MiniMax-M2.7` | `reasoning_split: true` + compact JSON | 约 `6.2s` | 约 `11.9s` | 不适合同步热路径 |
+
+关键结论：
+
+- MiniMax 慢不是因为当前同步 planner 在做 tool call；decision-only 请求没有传 `tools`。
+- MiniMax-M2.7 更适合 Agentic / Interleaved Thinking / 多轮 Function Call 场景。
+- 即使 `MiniMax-M2.7-highspeed` 能降低部分生成时间，也不能稳定压进 `2s` planner 预算。
+- 后续开发不要把 MiniMax-M2.7 放回每轮同步聊天链路；如果要用，必须是异步后台任务或用户可接受等待的深度计划任务。
+- 同步 planner 默认使用 `CHAT_FAST_PLANNER_PROVIDER=deepseek`，如需让模型更多承担 fresh/tool 判断，可切到 `kimi`。
 
 ## 2. 背景问题
 
 当前方向已经暴露出三个问题：
 
 1. 直接塞大历史给 DeepSeek 可以缓解失忆，但长期会增加输入 token、延迟和噪声。
-2. MiniMax Planner 如果每轮都进入热路径并做复杂工具 loop，会拖慢回复。
+2. MiniMax Planner 如果每轮都进入热路径，即使不做 tool loop，也会拖慢回复。
 3. 用户问“最新发生的事”时，DeepSeek 只能基于模型旧知识回答，需要一个联网 Researcher。
 
 DeepSeek 当前 `deepseek-v4-flash` / `deepseek-v4-pro` 官方上下文长度为 `1M`，最大输出为 `384K`，但 `/chat/completions` 多轮上下文仍需要请求侧传历史，服务端不会自动替业务保存会话记忆。
@@ -87,15 +108,57 @@ DeepSeek 当前 `deepseek-v4-flash` / `deepseek-v4-pro` 官方上下文长度为
 
 ## 4. 模型职责
 
-### 4.1 MiniMax Planner
+### 4.1 Fast Planner
 
-MiniMax 的职责不是判断“要不要查上下文”。上下文检索每轮都执行。MiniMax 只在需要增强计划时触发，例如：
+同步 Planner 的职责是快速判断本轮是否需要聊天记忆、人物资料、联网搜索或主动消息候选。
+
+默认配置：
 
 ```text
-用户问最新/今天/最近发生的事件
-用户要求稍后提醒、后续主动消息
+CHAT_PLANNER_ENABLED=true
+CHAT_PLANNER_MODE=decision
+CHAT_FAST_PLANNER_PROVIDER=deepseek
+CHAT_FAST_PLANNER_MODEL=deepseek-v4-flash
+CHAT_PLANNER_TIMEOUT_MS=2000
+```
+
+可选配置：
+
+```text
+CHAT_FAST_PLANNER_PROVIDER=kimi
+CHAT_FAST_PLANNER_MODEL=kimi-k2.5
+```
+
+Fast Planner 输出紧凑 JSON，后端再 normalize 成 `ChatTurnPlan`：
+
+```ts
+type FastTurnDecision = {
+  m: 0 | 1 | 2 | 3; // casual / domain / fact / high-risk
+  i: 0 | 1 | 2; // low / medium / high persona intensity
+  cm: boolean; // need chat memory
+  pk: boolean; // need persona knowledge
+  ws: boolean; // need web search
+  q: string | null; // web search query
+  pro: boolean; // proactive candidate
+};
+```
+
+本地 Hard Guard 只覆盖确定性场景：
+
+- 问今天、现在、今年、这个月、最新、新闻、上市、实时：强制 `needWebSearch=true`。
+- 问刚才、记得、我叫什么、我的偏好、之前说过什么：强制 `needChatMemory=true`。
+- 问提醒、稍后、几分钟后、下次继续：强制 `proactiveCandidate=true`。
+
+### 4.2 MiniMax Async Planner
+
+MiniMax 的职责不是同步判断“要不要查上下文”。上下文检索每轮都执行；Fast Planner 负责同步低延迟路由。MiniMax-M2.7 只适合放在异步深度计划中，例如：
+
+```text
 用户要求总结、比较、计划、复杂拆解
 用户明显希望 AI 连续多条回复
+后台复盘是否提取长期用户记忆
+后台判断是否生成 proactive job 候选
+后台总结对话主题、情绪和长期偏好
 ```
 
 MiniMax 输出：
@@ -129,9 +192,9 @@ Planner 约束：
 - 输出必须是 JSON，不输出自然语言回复。
 - 不直接调用 Kimi，不直接调用 DeepSeek。
 - 不直接发送用户可见消息。
-- 失败时跳过增强计划，继续使用已经完成的默认 retrieval context。
-- timeout 建议 `3000-5000ms`，不要让 Planner 拖垮聊天体感。
-- 普通闲聊不调用 Planner，直接走 retrieval + DeepSeek。
+- 不放入每轮同步聊天热路径。
+- 异步 timeout 可放宽到 `10000-15000ms`，但失败不能影响已经返回给用户的回复。
+- 如果未来必须在同步链路启用 MiniMax，需要明确产品接受等待，并在 trace 中记录 `plannerProvider=minimax`、latency 和 fallback。
 
 Planner 未触发或失败时的默认增强计划：
 
@@ -150,7 +213,7 @@ Planner 未触发或失败时的默认增强计划：
 }
 ```
 
-### 4.2 pgvector + FTS Retriever
+### 4.3 pgvector + FTS Retriever
 
 Retriever 负责确定性查上下文，不让 LLM 每轮凭感觉决定最终带什么内容。
 
@@ -182,7 +245,7 @@ type ContextPack = {
 };
 ```
 
-### 4.3 Kimi Researcher
+### 4.4 Kimi Researcher
 
 Kimi 只在 `TurnPlan.needWebSearch=true` 时触发，职责是联网查最新信息并整理成明文上下文。
 

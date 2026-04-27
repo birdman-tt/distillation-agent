@@ -10,6 +10,7 @@ import {
 } from "@hall-of-fame/contracts";
 import type { FastifyPluginAsync } from "fastify";
 
+import { enqueuePersonaVersionEmbeddings } from "../../services/embeddings/persona-embedding-scheduler.js";
 import { distillPersonaViaWorker, ingestUrlSourceViaWorker } from "../../services/worker-client.js";
 import {
     canManagePersona,
@@ -215,6 +216,21 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       if (!result) {
         return reply.code(404).send({ message: "Persona not found" });
       }
+      enqueuePersonaVersionEmbeddings(
+        {
+          version: {
+            id: result.version.id,
+            personaId: result.version.personaId,
+            profileJson: result.version.profileJson,
+            previewIntro: result.version.previewIntro,
+            sampleAnswers: result.version.sampleAnswers,
+            recommendedQuestions: result.version.recommendedQuestions,
+          },
+        },
+        {
+          logger: request.log,
+        },
+      );
       return personaVersionResponseSchema.parse({
         id: result.version.id,
         personaId: result.version.personaId,

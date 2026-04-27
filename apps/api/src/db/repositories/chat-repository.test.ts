@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { loadLocalEnv } from "@hall-of-fame/runtime-env";
+
 import { ensureDatabaseSchema } from "../bootstrap.js";
 import { resetSqlForTests, getSql } from "../client.js";
 import { appendPersistedChatMessages, savePersistedChatSession } from "./chat-repository.js";
@@ -9,6 +11,7 @@ const chatId = "11111111-1111-4111-8111-111111111111";
 const personaVersionId = "64c071d9-a7a6-4dad-8a67-dcb0370d03f8";
 
 test("appendPersistedChatMessages persists message metadata for assistant outputs", async () => {
+  await loadLocalEnv();
   const sql = getSql();
 
   try {
