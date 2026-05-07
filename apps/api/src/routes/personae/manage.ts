@@ -13,20 +13,33 @@ import type { FastifyPluginAsync } from "fastify";
 import { enqueuePersonaVersionEmbeddings } from "../../services/embeddings/persona-embedding-scheduler.js";
 import { distillPersonaViaWorker, ingestUrlSourceViaWorker } from "../../services/worker-client.js";
 import {
-    canManagePersona,
-    createPersona,
-    createTextSource,
-    createUrlSource,
-    getPersonaDetail,
-    getPersonaStatus,
-    listPersonaSources,
+  buildPersonaVersionResponse,
+  canAccessPersonaVersion,
+  canManagePersona,
+  createPersona,
+  createTextSource,
+  createUrlSource,
+  getPersonaDetail,
+  getPersonaStatus,
+  listPersonaSources,
   listPersonaVersions,
   persistDistilledVersion,
   persistUrlSourceIngestResult,
   prepareDistillInput,
   updatePersona,
 } from "../../store/persona-store.js";
-import { requireActorSession } from "../../utils/actor-session.js";
+import { getActorSession, requireActorSession } from "../../utils/actor-session.js";
+
+export const isLegacySyncPersonaManageEnabled = () => {
+  const flag = process.env.LEGACY_SYNC_PERSONA_MANAGE_ENABLED;
+  if (flag === "true") {
+    return true;
+  }
+  if (flag === "false") {
+    return false;
+  }
+  return process.env.NODE_ENV !== "production";
+};
 
 export const personaeManageRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/personae", async (request, reply) => {
@@ -93,22 +106,20 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { personaId: string } }>("/v1/personae/:personaId/versions", async (request) => {
+    const actor = getActorSession(request);
+    const versions = await listPersonaVersions(request.params.personaId);
+    const visibleVersions: Array<(typeof versions)[number]> = [];
+    for (const version of versions) {
+      if (await canAccessPersonaVersion(version.id, actor?.userId ?? null, actor?.role ?? null)) {
+        visibleVersions.push(version);
+      }
+    }
+
     return personaVersionListResponseSchema.parse({
-      items: (await listPersonaVersions(request.params.personaId)).map((version) =>
-        personaVersionResponseSchema.parse({
-          id: version.id,
-          personaId: version.personaId,
-          versionNumber: version.versionNumber,
-          status: version.status,
-          profileJson: version.profileJson,
-          previewIntro: version.previewIntro,
-          recommendedQuestions: version.recommendedQuestions,
-          sampleAnswers: version.sampleAnswers,
-          coverageScore: version.coverageScore,
-          groundingScore: version.groundingScore,
-          styleScore: version.styleScore,
-          riskScore: version.riskScore,
-        }),
+      items: await Promise.all(
+        visibleVersions.map(async (version) =>
+          personaVersionResponseSchema.parse(await buildPersonaVersionResponse(version, actor?.userId ?? null, actor?.role ?? null)),
+        ),
       ),
     });
   });
@@ -143,6 +154,12 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
 
     if (!(await canManagePersona(request.params.personaId, actor.userId, actor.role))) {
       return reply.code(403).send({ message: "You do not have access to this persona" });
+    }
+
+    if (!isLegacySyncPersonaManageEnabled()) {
+      return reply.code(410).send({
+        message: "这个旧资料接口已停用，请使用新的资料补充流程。",
+      });
     }
 
     try {
@@ -206,6 +223,12 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
       return reply.code(403).send({ message: "You do not have access to this persona" });
     }
 
+    if (!isLegacySyncPersonaManageEnabled()) {
+      return reply.code(410).send({
+        message: "这个旧蒸馏接口已停用，请使用新的创建流程。",
+      });
+    }
+
     try {
       const prepared = await prepareDistillInput(request.params.personaId);
       if (!prepared) {
@@ -231,20 +254,7 @@ export const personaeManageRoute: FastifyPluginAsync = async (app) => {
           logger: request.log,
         },
       );
-      return personaVersionResponseSchema.parse({
-        id: result.version.id,
-        personaId: result.version.personaId,
-        versionNumber: result.version.versionNumber,
-        status: result.version.status,
-        profileJson: result.version.profileJson,
-        previewIntro: result.version.previewIntro,
-        recommendedQuestions: result.version.recommendedQuestions,
-        sampleAnswers: result.version.sampleAnswers,
-        coverageScore: result.version.coverageScore,
-        groundingScore: result.version.groundingScore,
-        styleScore: result.version.styleScore,
-        riskScore: result.version.riskScore,
-      });
+      return personaVersionResponseSchema.parse(await buildPersonaVersionResponse(result.version, actor.userId, actor.role));
     } catch (error) {
       return reply.code(400).send({
         message: error instanceof Error ? error.message : "Unable to distill persona",

@@ -11,9 +11,64 @@ import {
   upsertUserMemoryFact,
 } from "../../db/repositories/chat-retrieval-repository.js";
 import { appendChatMessages, saveChatSession } from "../../store/chat-store.js";
-import { assembleChatContext } from "./assemble-chat-context.js";
+import {
+  assembleChatContext,
+  ChatQueryEmbeddingTimeoutError,
+  readChatQueryEmbeddingTimeoutMs,
+  requestQueryEmbeddingsWithTimeout,
+} from "./assemble-chat-context.js";
 
 const embedding1024 = (seed: number) => Array.from({ length: 1024 }, (_, index) => (index === seed ? 1 : 0));
+
+test("readChatQueryEmbeddingTimeoutMs falls back on blank or invalid env values", () => {
+  const previousTimeout = process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS;
+
+  try {
+    process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = "";
+    assert.equal(readChatQueryEmbeddingTimeoutMs(), 800);
+
+    process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = "abc";
+    assert.equal(readChatQueryEmbeddingTimeoutMs(), 800);
+
+    process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = "10";
+    assert.equal(readChatQueryEmbeddingTimeoutMs(), 50);
+
+    process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = "1200";
+    assert.equal(readChatQueryEmbeddingTimeoutMs(), 1200);
+  } finally {
+    if (previousTimeout === undefined) {
+      delete process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS;
+    } else {
+      process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = previousTimeout;
+    }
+  }
+});
+
+test("requestQueryEmbeddingsWithTimeout aborts a hanging query embedding request", async () => {
+  let aborted = false;
+
+  await assert.rejects(
+    requestQueryEmbeddingsWithTimeout(
+      {
+        model: "text-embedding-v4",
+        dimensions: 1024,
+        inputs: ["你好"],
+      },
+      {
+        timeoutMs: 10,
+        requestEmbeddings: async (request) => {
+          request.signal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+          return new Promise<number[][]>(() => {});
+        },
+      },
+    ),
+    ChatQueryEmbeddingTimeoutError,
+  );
+
+  assert.equal(aborted, true);
+});
 
 test("assembleChatContext keeps full chronological history while it is under the prompt budget", async () => {
   const apiApp = buildApiApp();
@@ -235,6 +290,80 @@ test("assembleChatContext adds semantic vector hits outside the recent window", 
       delete process.env.CHAT_CONTEXT_MAX_INPUT_TOKENS;
     } else {
       process.env.CHAT_CONTEXT_MAX_INPUT_TOKENS = previousBudget;
+    }
+  }
+});
+
+test("assembleChatContext falls back when query embedding times out", async () => {
+  const previousTimeout = process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS;
+  process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = "10";
+
+  const apiApp = buildApiApp();
+  await apiApp.ready();
+
+  const chatId = randomUUID();
+  const personaVersionId = "64c071d9-a7a6-4dad-8a67-dcb0370d03f8";
+  let aborted = false;
+
+  try {
+    await saveChatSession({
+      id: chatId,
+      targetType: "published_persona",
+      targetPersonaId: null,
+      targetPersonaVersionId: personaVersionId,
+      shareSlug: null,
+      messages: [],
+    });
+
+    const [latestUserMessage] = await appendChatMessages(chatId, [
+      {
+        id: randomUUID(),
+        role: "USER",
+        content: "聊聊你怎么看风险。",
+        basis: null,
+        basisSummary: null,
+        inferenceLevel: null,
+        conflictDetected: null,
+        refusalReason: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    assert.ok(latestUserMessage);
+
+    const context = await assembleChatContext(
+      {
+        chatId,
+        personaId: null,
+        personaVersionId,
+        query: "聊聊你怎么看风险。",
+        latestMessageId: latestUserMessage.messageId,
+        latestTurnIndex: latestUserMessage.turnIndex,
+        personaEvidence: [],
+      },
+      {
+        requestEmbeddings: async (request) => {
+          request.signal?.addEventListener("abort", () => {
+            aborted = true;
+          });
+          return new Promise<number[][]>(() => {});
+        },
+        isVectorRetrievalEnabled: () => true,
+      },
+    );
+
+    assert.equal(aborted, true);
+    assert.equal(context.diagnostics.vectorSearch.enabled, true);
+    assert.equal(context.diagnostics.vectorSearch.errorMessage, "query_embedding_timeout");
+    assert.equal(context.diagnostics.memorySearch.retrievalMode, "fts_only");
+    assert.deepEqual(context.retrievedMemories, []);
+    assert.deepEqual(context.personaChunks, []);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    if (previousTimeout === undefined) {
+      delete process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS;
+    } else {
+      process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS = previousTimeout;
     }
   }
 });

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export type ActorRole = "ANONYMOUS" | "USER" | "REVIEWER";
 export type SessionKind = "ANONYMOUS" | "AUTHENTICATED";
@@ -40,9 +40,17 @@ const identities = new Map<string, string>([[`reviewer:${reviewerIdentityKey}`, 
 
 const nowIso = () => new Date().toISOString();
 
-const createUser = (displayName: string | null) => {
+const uuidFromStableKey = (key: string) => {
+  const bytes = Buffer.from(createHash("sha256").update(key).digest()).subarray(0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+const createUser = (displayName: string | null, id: string = randomUUID()) => {
   const user: UserRecord = {
-    id: randomUUID(),
+    id,
     displayName,
     createdAt: nowIso(),
   };
@@ -80,13 +88,13 @@ const parseBearerToken = (authorizationHeader: string | undefined) => {
   return token;
 };
 
-const readIdentityUser = (key: string, displayName: string | null) => {
+const readIdentityUser = (key: string, displayName: string | null, createUserId?: () => string) => {
   const existingUserId = identities.get(key);
   if (existingUserId) {
     return existingUserId;
   }
 
-  const user = createUser(displayName);
+  const user = createUser(displayName, createUserId?.());
   identities.set(key, user.id);
   return user.id;
 };
@@ -102,7 +110,11 @@ const deriveMergeUserId = (accessToken: string | undefined) => {
 
 export const issueAnonymousSession = (deviceId?: string) => {
   const identityKey = deviceId ? `anonymous:${deviceId}` : `anonymous:${randomUUID()}`;
-  const userId = readIdentityUser(identityKey, "Guest Builder");
+  const userId = readIdentityUser(
+    identityKey,
+    "Guest Builder",
+    deviceId ? () => uuidFromStableKey(identityKey) : undefined,
+  );
   return createSession({
     userId,
     role: "ANONYMOUS",

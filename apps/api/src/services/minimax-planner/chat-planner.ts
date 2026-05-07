@@ -77,7 +77,7 @@ const readPlannerModel = (provider: PlannerProvider) => {
     return process.env.MINIMAX_PLANNER_MODEL ?? "MiniMax-M2.7";
   }
   if (provider === "kimi") {
-    return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.KIMI_MODEL ?? "kimi-k2.5";
+    return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.KIMI_MODEL ?? "kimi-k2.6";
   }
   return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
 };

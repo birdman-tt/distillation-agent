@@ -131,6 +131,7 @@ export const chatSessionSummarySchema = z.object({
   targetType: chatTargetTypeSchema,
   resumePersonaId: z.string().uuid().nullable(),
   targetPersonaVersionId: z.string().uuid(),
+  ownedObjectId: z.string().uuid().nullable(),
   shareSlug: z.string().nullable(),
   displayName: z.string(),
   latestMessage: z.string(),

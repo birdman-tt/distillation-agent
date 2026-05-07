@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import { getSql, resetSqlForTests } from "./db/client.js";
@@ -13,10 +14,20 @@ const createChatAndSendMessage = async (input?: {
 }) => {
   const { buildApiApp } = await import("./app.js");
   const apiApp = buildApiApp();
+  const anonymous = await apiApp.inject({
+    method: "POST",
+    url: "/v1/auth/anonymous",
+    payload: { deviceId: `chat-trace-${randomUUID()}` },
+  });
+  assert.equal(anonymous.statusCode, 200);
+  const accessToken = anonymous.json().accessToken as string;
 
   const chat = await apiApp.inject({
     method: "POST",
     url: "/v1/chats",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
     payload: {
       targetType: "published_persona",
       personaId: input?.personaId ?? "0f2610a1-34b2-46c8-b915-f92d928f06a1",
@@ -28,6 +39,9 @@ const createChatAndSendMessage = async (input?: {
   const reply = await apiApp.inject({
     method: "POST",
     url: `/v1/chats/${chatId}/messages`,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
     payload: {
       content: input?.content ?? "如果局势突然失控，你会先稳住什么？",
     },
@@ -85,9 +99,20 @@ test("chat traces can be listed back by chatId in reverse chronological order", 
   const apiApp = buildApiApp();
 
   try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-trace-list" },
+    });
+    assert.equal(anonymous.statusCode, 200);
+    const accessToken = anonymous.json().accessToken as string;
+
     const chat = await apiApp.inject({
       method: "POST",
       url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
       payload: {
         targetType: "published_persona",
         personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
@@ -99,6 +124,9 @@ test("chat traces can be listed back by chatId in reverse chronological order", 
     const firstReply = await apiApp.inject({
       method: "POST",
       url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
       payload: {
         content: "第一问：先看秩序还是先看人心？",
       },
@@ -108,6 +136,9 @@ test("chat traces can be listed back by chatId in reverse chronological order", 
     const secondReply = await apiApp.inject({
       method: "POST",
       url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
       payload: {
         content: "第二问：如果上一步没起效，你会怎么调整？",
       },
@@ -154,9 +185,20 @@ test("chat message returns accepted immediately when realtime is enabled", async
   const sql = getSql();
 
   try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-realtime-accepted" },
+    });
+    assert.equal(anonymous.statusCode, 200);
+    const accessToken = anonymous.json().accessToken as string;
+
     const chat = await apiApp.inject({
       method: "POST",
       url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
       payload: {
         targetType: "published_persona",
         personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
@@ -169,6 +211,9 @@ test("chat message returns accepted immediately when realtime is enabled", async
     const accepted = await apiApp.inject({
       method: "POST",
       url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
       payload: {
         content: "这条消息应该先落库再异步回复",
       },

@@ -80,7 +80,7 @@ test("Fast planner strips thinking blocks and fenced JSON before parsing", async
       provider: "kimi",
       apiKey: "kimi-key",
       baseUrl: "https://api.moonshot.cn/v1",
-      model: "kimi-k2.5",
+      model: "kimi-k2.6",
       systemPrompt: "return json",
       userPrompt: "我叫什么？",
     });

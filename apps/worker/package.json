@@ -13,6 +13,7 @@
     "@hall-of-fame/contracts": "workspace:*",
     "@hall-of-fame/deepseek-client": "workspace:*",
     "@hall-of-fame/domain": "workspace:*",
+    "@hall-of-fame/kimi-client": "workspace:*",
     "@hall-of-fame/prompt-kit": "workspace:*",
     "@hall-of-fame/runtime-env": "workspace:*",
     "fastify": "^5.4.0",

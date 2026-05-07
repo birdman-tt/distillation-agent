@@ -20,6 +20,7 @@ export const requestQwenEmbeddings = async (
   },
   deps: {
     fetch?: FetchLike;
+    signal?: AbortSignal;
   } = {},
 ) => {
   const fetchImpl = deps.fetch ?? fetch;
@@ -34,6 +35,7 @@ export const requestQwenEmbeddings = async (
       input: input.inputs,
       dimensions: input.dimensions,
     }),
+    signal: deps.signal,
   });
 
   if (!response.ok) {

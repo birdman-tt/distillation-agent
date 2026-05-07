@@ -34,6 +34,10 @@ import {
   type SourceRecord,
 } from "../db/repositories/dynamic-persona-repository.js";
 import {
+  discardPersonaVersion as discardDynamicPersonaVersion,
+  getPersonaVersionPresentation as getDistilledPersonaVersionPresentation,
+} from "../db/repositories/persona-distill-repository.js";
+import {
   findPersonaSeedByPersonaId,
   findPersonaSeedByShareSlug,
   findPersonaSeedByVersionId,
@@ -157,6 +161,7 @@ export const listPersonaVersions = async (personaId: string) => {
         groundingScore: 85,
         styleScore: 80,
         riskScore: 10,
+        sourceDistillJobId: null,
       },
     ];
   }
@@ -175,6 +180,7 @@ export const getPersonaVersion = async (versionId: string) => {
       groundingScore: 85,
       styleScore: 80,
       riskScore: 10,
+      sourceDistillJobId: null,
     };
   }
 
@@ -208,6 +214,83 @@ export const canAccessPersonaVersion = async (
   }
 
   return canAccessDynamicPersonaVersion(versionId, actorUserId);
+};
+
+export const getPersonaVersionPresentationForActor = async (
+  versionId: string,
+  actorUserId: string | null,
+  actorRole: "ANONYMOUS" | "USER" | "REVIEWER" | null = null,
+) => {
+  const officialSeed = findPersonaSeedByVersionId(versionId);
+  if (officialSeed) {
+    return {
+      publishGate: {
+        canPublishPublic: false,
+        canSavePrivate: false,
+        reasons: ["官方预置对象不需要发布操作"],
+      },
+      sourceDistillJobId: null,
+      ownerDisplayStatus: "PUBLIC" as const,
+      personaHref: `/persona/${officialSeed.persona.id}`,
+      shareHref: `/share/${officialSeed.share.shareSlug}`,
+      addSourcesHref: null,
+    };
+  }
+
+  return getDistilledPersonaVersionPresentation(versionId, actorUserId, actorRole);
+};
+
+type PersonaVersionResponseInput = {
+  id: string;
+  personaId: string;
+  versionNumber: number;
+  status: PersonaVersionRecord["status"];
+  profileJson: Record<string, unknown>;
+  previewIntro: string | null;
+  recommendedQuestions: string[];
+  sampleAnswers: string[];
+  coverageScore: number | null;
+  groundingScore: number | null;
+  styleScore: number | null;
+  riskScore: number | null;
+  sourceDistillJobId?: string | null;
+};
+
+export const buildPersonaVersionResponse = async (
+  version: PersonaVersionResponseInput,
+  actorUserId: string | null,
+  actorRole: "ANONYMOUS" | "USER" | "REVIEWER" | null = null,
+) => {
+  const presentation = await getPersonaVersionPresentationForActor(version.id, actorUserId, actorRole);
+  return {
+    id: version.id,
+    personaId: version.personaId,
+    versionNumber: version.versionNumber,
+    status: version.status,
+    profileJson: version.profileJson,
+    previewIntro: version.previewIntro,
+    recommendedQuestions: version.recommendedQuestions,
+    sampleAnswers: version.sampleAnswers,
+    ownerDisplayStatus: presentation?.ownerDisplayStatus ?? null,
+    personaHref: presentation?.personaHref ?? null,
+    shareHref: presentation?.shareHref ?? null,
+    addSourcesHref: presentation?.addSourcesHref ?? null,
+  };
+};
+
+export const discardPersonaVersion = async (
+  versionId: string,
+  actorUserId: string,
+  actorRole: "ANONYMOUS" | "USER" | "REVIEWER",
+) => {
+  if (actorRole === "REVIEWER") {
+    const version = await getDynamicPersonaVersion(versionId);
+    if (!version || version.status !== "CANDIDATE") {
+      return null;
+    }
+  }
+
+  return discardDynamicPersonaVersion(versionId, actorUserId);
 };
 
 export const transferPersonaOwnership = async (fromUserId: string, toUserId: string) => {
@@ -583,6 +666,43 @@ type ChatClassification = {
   shouldEscalateToModelJudge: boolean;
 };
 
+const isNameQuestion = (value: string | undefined) => {
+  const text = value?.trim() ?? "";
+  return /你.*(叫|名字|是谁)|怎么称呼你|你是哪位/u.test(text);
+};
+
+const buildDynamicFallbackAnswer = (input: {
+  mode: ChatClassification["category"];
+  displayName: string;
+  previewIntro: string | null;
+  primaryLens: string;
+  secondaryLens: string;
+  hasBasis: boolean;
+  userContent?: string;
+}) => {
+  if (isNameQuestion(input.userContent)) {
+    return `你可以叫我${input.displayName}。`;
+  }
+
+  if (input.mode === "HIGH_RISK") {
+    return "这类现实代价很高的事，我会先把风险边界、承受力和长期后果看清，再决定该不该动，不会鼓励你凭一时冲动下重手。";
+  }
+
+  if (!input.hasBasis) {
+    return `如果按我的一贯取向来想，我会先从${input.primaryLens}和${input.secondaryLens}去判断，再决定动作轻重，而不会急着把话说死。`;
+  }
+
+  if (input.mode === "FACT_SPECIFIC") {
+    return `若不把没确认的细节说成定论，我更愿意把重点放在${input.primaryLens}与${input.secondaryLens}上；真到具体事实，还得回到当时处境再看。`;
+  }
+
+  if (input.mode === "OPEN_ENDED") {
+    return `如果顺着我一贯的判断走，我会先抓住${input.primaryLens}，再用${input.secondaryLens}去校正动作，不会只盯着表面的输赢。`;
+  }
+
+  return `如果沿着现有主线来回答，我会先从${input.primaryLens}入手，再把${input.secondaryLens}压进去，尽量让判断和动作保持同一把尺度。`;
+};
+
 export const createDynamicReply = async (versionId: string, content: string, classification?: ChatClassification) => {
   const version = await getDynamicPersonaVersion(versionId);
   if (!version) {
@@ -590,9 +710,9 @@ export const createDynamicReply = async (versionId: string, content: string, cla
   }
 
   const approvedSources = (await listDynamicPersonaSources(version.personaId)).filter((item) => item.reviewStatus !== "REJECTED");
+  const displayName = await getPersonaName(version.personaId);
   const firstSource = approvedSources[0];
   const mode = classification?.category ?? "THEME_ANCHORED";
-  const normalizedIntro = (version.previewIntro ?? "当前蒸馏对象").replace(/[。.]+$/u, "");
   const primaryLens = version.distillFocus[0] ?? "判断尺度";
   const secondaryLens = version.distillFocus[1] ?? "行动边界";
   const basis = firstSource
@@ -606,7 +726,15 @@ export const createDynamicReply = async (versionId: string, content: string, cla
 
   if (mode === "HIGH_RISK") {
     return {
-      answer: `${normalizedIntro}。真碰到这类现实代价很高的事，我会先把风险边界、承受力和长期后果看清，再决定该不该动，不会鼓励你凭一时冲动下重手。`,
+      answer: buildDynamicFallbackAnswer({
+        mode,
+        displayName,
+        previewIntro: version.previewIntro,
+        primaryLens,
+        secondaryLens,
+        hasBasis: basis.length > 0,
+        userContent: content,
+      }),
       basis,
       basisSummary: {
         mode: "INFERRED" as const,
@@ -620,7 +748,15 @@ export const createDynamicReply = async (versionId: string, content: string, cla
 
   if (basis.length === 0) {
     return {
-      answer: `${normalizedIntro}。若只按我一贯的取向来想，我会先从${primaryLens}和${secondaryLens}去判断，再决定动作轻重，而不会急着把话说死。`,
+      answer: buildDynamicFallbackAnswer({
+        mode,
+        displayName,
+        previewIntro: version.previewIntro,
+        primaryLens,
+        secondaryLens,
+        hasBasis: false,
+        userContent: content,
+      }),
       basis: [],
       basisSummary: {
         mode: "INFERRED" as const,
@@ -633,12 +769,15 @@ export const createDynamicReply = async (versionId: string, content: string, cla
   }
 
   return {
-    answer:
-      mode === "FACT_SPECIFIC"
-        ? `${normalizedIntro}。若不把未经坐实的细节说成定论，我更愿意把重点放在${primaryLens}与${secondaryLens}上；真到具体事实，还得回到当时处境再看。`
-        : mode === "OPEN_ENDED"
-          ? `${normalizedIntro}。若顺着我一贯的判断走，我会先抓住${primaryLens}，再用${secondaryLens}去校正动作，不会只盯着表面的输赢。`
-          : `${normalizedIntro}。如果沿着现有材料里的主线来回答，我会先从${primaryLens}入手，再把${secondaryLens}压进去，尽量让判断和动作保持同一把尺度。`,
+    answer: buildDynamicFallbackAnswer({
+      mode,
+      displayName,
+      previewIntro: version.previewIntro,
+      primaryLens,
+      secondaryLens,
+      hasBasis: true,
+      userContent: content,
+    }),
     basis,
     basisSummary: {
       mode: mode === "THEME_ANCHORED" ? ("SUPPORTED" as const) : ("INFERRED" as const),
@@ -653,6 +792,10 @@ export const createDynamicReply = async (versionId: string, content: string, cla
     conflictDetected: false,
     refusalReason: "none" as const,
   };
+};
+
+export const __internal = {
+  buildDynamicFallbackAnswer,
 };
 
 export const addFeedback = async (input: {

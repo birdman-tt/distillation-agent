@@ -6,6 +6,11 @@ export class DeepSeekNotConfiguredError extends Error {
 
 export const isDeepSeekConfigured = (apiKey?: string | null) => Boolean(apiKey && apiKey.trim().length > 0);
 
+type DeepSeekThinkingConfig = {
+  type: "enabled" | "disabled";
+  reasoning_effort?: "high" | "max";
+};
+
 export const requestStructuredJson = async <T>(input: {
   apiKey?: string | null;
   baseUrl?: string;
@@ -17,6 +22,7 @@ export const requestStructuredJson = async <T>(input: {
   };
   temperature?: number;
   maxTokens?: number;
+  thinking?: DeepSeekThinkingConfig;
   telemetry?: {
     onResponse?: (payload: {
       status: number;
@@ -44,6 +50,7 @@ export const requestStructuredJson = async <T>(input: {
       response_format: {
         type: "json_object",
       },
+      ...(input.thinking ? { thinking: input.thinking } : {}),
       messages: [
         {
           role: "system",
@@ -68,6 +75,7 @@ export const requestStructuredJson = async <T>(input: {
     };
   };
   const content = payload.choices?.[0]?.message?.content ?? null;
+  const trimmedContent = typeof content === "string" ? content.trim() : "";
 
   input.telemetry?.onResponse?.({
     status: response.status,
@@ -80,15 +88,24 @@ export const requestStructuredJson = async <T>(input: {
     throw new Error(payload.error?.message ?? `DeepSeek request failed with ${response.status}`);
   }
 
-  if (!content) {
+  if (!trimmedContent) {
     throw new Error("DeepSeek returned an empty JSON response");
   }
 
-  const parsedJson = JSON.parse(content);
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(trimmedContent);
+  } catch (error) {
+    const preview = trimmedContent.slice(0, 600);
+    throw new Error(
+      `DeepSeek returned invalid JSON content: ${error instanceof Error ? error.message : "unknown parse error"}; raw=${preview}`,
+    );
+  }
+
   try {
     return input.schema.parse(parsedJson);
   } catch (error) {
-    const preview = content.slice(0, 600);
+    const preview = trimmedContent.slice(0, 600);
     throw new Error(
       `DeepSeek returned invalid structured JSON: ${error instanceof Error ? error.message : "unknown schema error"}; raw=${preview}`,
     );

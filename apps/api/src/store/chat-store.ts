@@ -4,6 +4,7 @@ import { chatSessionSchema } from "@hall-of-fame/contracts";
 
 import {
   appendPersistedChatMessages,
+  getPersistedChatSessionAccess,
   getPersistedChatSession,
   listPersistedChatSessionSummariesByCreator,
   listPersistedChatMessagesForSearch,
@@ -24,6 +25,8 @@ export const saveChatSession = async (
 ) => savePersistedChatSession(session, input);
 
 export const getChatSession = async (chatId: string) => getPersistedChatSession(chatId);
+
+export const getChatSessionAccess = async (chatId: string) => getPersistedChatSessionAccess(chatId);
 
 export const listChatSessionSummariesByCreator = async (input: {
   createdByUserId: string;

@@ -33,7 +33,8 @@
     "dev:api": "pnpm --filter @hall-of-fame/api dev",
     "dev:worker": "pnpm --filter @hall-of-fame/worker dev",
     "dev:client:h5": "pnpm --filter @hall-of-fame/client dev:h5",
-    "dev:client:weapp": "pnpm --filter @hall-of-fame/client dev:weapp"
+    "dev:client:weapp": "pnpm --filter @hall-of-fame/client dev:weapp",
+    "check:kimi-search": "tsx scripts/check-kimi-web-search.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

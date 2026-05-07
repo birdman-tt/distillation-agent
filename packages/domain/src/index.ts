@@ -1,4 +1,5 @@
 export * from "./chat.js";
+export * from "./distill-source-discovery.js";
 export * from "./persona.js";
 export * from "./persona-profile.js";
 export * from "./review.js";

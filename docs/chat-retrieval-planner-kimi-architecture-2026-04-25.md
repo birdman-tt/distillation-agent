@@ -32,7 +32,7 @@ Vector DB: 当前 Supabase/PostgreSQL 直接启用 pgvector
 Retrieval: 每轮默认执行 recent + user facts + vector + FTS/exact
 Fast Planner: 默认 DeepSeek `deepseek-v4-flash`，关闭 thinking，输出紧凑 JSON
 MiniMax Planner: 不放同步主链路；只做异步深度复盘、复杂 proactive 候选
-Kimi: V1 直接接入，只做最新信息 Researcher，模型 kimi-k2.5
+Kimi: V1 直接接入，只做最新信息 Researcher，模型 kimi-k2.6
 DeepSeek: 唯一最终回复模型
 user_memory_facts: V1 后端能力，V1.1 用户可见管理入口
 ```
@@ -44,7 +44,7 @@ user_memory_facts: V1 后端能力，V1.1 用户可见管理入口
 | 模型 | planner 模式 | 平均耗时 | P95 | 结论 |
 | --- | --- | ---: | ---: | --- |
 | DeepSeek `deepseek-v4-flash` | `thinking: disabled` + compact JSON | 约 `1.15s` | 约 `1.65s` | 适合同步 Fast Planner |
-| Kimi `kimi-k2.5` | `thinking: disabled` + compact JSON | 约 `1.85s` | 约 `2.54s` | 可作为 Fast Planner 备选，更擅长 fresh/tool 判断 |
+| Kimi `kimi-k2.6` | `thinking: disabled` + compact JSON | 约 `1.85s` | 约 `2.54s` | 可作为 Fast Planner 备选，更擅长 fresh/tool 判断 |
 | MiniMax `MiniMax-M2.7` | `reasoning_split: true` + compact JSON | 约 `6.2s` | 约 `11.9s` | 不适合同步热路径 |
 
 关键结论：
@@ -126,7 +126,7 @@ CHAT_PLANNER_TIMEOUT_MS=2000
 
 ```text
 CHAT_FAST_PLANNER_PROVIDER=kimi
-CHAT_FAST_PLANNER_MODEL=kimi-k2.5
+CHAT_FAST_PLANNER_MODEL=kimi-k2.6
 ```
 
 Fast Planner 输出紧凑 JSON，后端再 normalize 成 `ChatTurnPlan`：
@@ -567,7 +567,7 @@ Kimi：
 ```env
 KIMI_API_KEY=
 KIMI_BASE_URL=https://api.moonshot.cn/v1
-KIMI_MODEL=kimi-k2.5
+KIMI_MODEL=kimi-k2.6
 KIMI_WEB_SEARCH_ENABLED=true
 KIMI_WEB_SEARCH_FORMULA_URI=moonshot/web-search:latest
 KIMI_TIMEOUT_MS=12000
@@ -704,7 +704,7 @@ trace 记录 Kimi failed
 - 接入 Kimi official web-search。
 - 输出 `WebContext`。
 - 只在 `needWebSearch=true` 时调用。
-- V1 直接接入，默认模型使用 `kimi-k2.5`。
+- V1 直接接入，默认模型使用 `kimi-k2.6`。
 
 ### Phase 6: 评估与调参
 
@@ -773,7 +773,7 @@ trace 记录 Kimi failed
 - user facts 基础抽取。
 - ContextPack prompt。
 - MiniMax Planner gated 输出 `TurnPlan`。
-- Kimi Researcher 第一版接入，默认使用 `kimi-k2.5`。
+- Kimi Researcher 第一版接入，默认使用 `kimi-k2.6`。
 
 ## 16. 最终 V1 决策
 
@@ -782,7 +782,7 @@ Embedding 使用 Qwen text-embedding-v4，维度 1024。
 pgvector 直接在当前 Supabase/PostgreSQL 启用。
 Retrieval 每轮默认执行，不由 Planner 决定。
 MiniMax 不每轮调用，只在联网/主动消息/复杂计划时输出 TurnPlan。
-Kimi 只做最新信息 Researcher，第一版直接接入，默认使用 kimi-k2.5。
+Kimi 只做最新信息 Researcher，第一版直接接入，默认使用 kimi-k2.6。
 DeepSeek 继续做唯一最终回复模型。
 user_memory_facts 进入 V1 后端能力。
 用户可见记忆管理入口放到 V1.1。

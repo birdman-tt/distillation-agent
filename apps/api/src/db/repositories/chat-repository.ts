@@ -27,10 +27,18 @@ export type PersistedChatSessionSummaryRecord = {
   targetType: ChatSession["targetType"];
   targetPersonaId: string | null;
   targetPersonaVersionId: string;
+  ownedObjectId: string | null;
   shareSlug: string | null;
   dynamicDisplayName: string | null;
   latestMessage: string;
   updatedAt: string;
+};
+
+export type PersistedChatSessionAccessRecord = {
+  chatId: string;
+  createdByUserId: string | null;
+  targetType: ChatSession["targetType"];
+  canAppendMessages: boolean;
 };
 
 const mapMessage = (row: {
@@ -281,6 +289,7 @@ export const listPersistedChatSessionSummariesByCreator = async (input: {
     targetType: ChatSession["targetType"];
     targetPersonaId: string | null;
     targetPersonaVersionId: string;
+    ownedObjectId: string | null;
     shareSlug: string | null;
     dynamicDisplayName: string | null;
     latestMessage: string;
@@ -291,6 +300,7 @@ export const listPersistedChatSessionSummariesByCreator = async (input: {
       c.target_type as "targetType",
       c.target_persona_id as "targetPersonaId",
       c.target_persona_version_id as "targetPersonaVersionId",
+      opo.id as "ownedObjectId",
       s.share_slug as "shareSlug",
       p.display_name as "dynamicDisplayName",
       latest.content as "latestMessage",
@@ -299,6 +309,11 @@ export const listPersistedChatSessionSummariesByCreator = async (input: {
     left join share_links s on s.id = c.share_link_id
     left join persona_versions pv on pv.id = c.target_persona_version_id
     left join personae p on p.id = coalesce(c.target_persona_id, pv.persona_id)
+    left join owned_persona_objects opo
+      on opo.owner_user_id = c.created_by_user_id
+     and opo.active_persona_version_id = c.target_persona_version_id
+     and opo.deleted_at is null
+     and opo.status in ('READY', 'PUBLIC')
     inner join lateral (
       select
         m.content,
@@ -381,4 +396,28 @@ export const getPersistedChatSession = async (chatId: string) => {
     ...chat,
     messages: messageRows.map(mapMessage),
   });
+};
+
+export const getPersistedChatSessionAccess = async (chatId: string) => {
+  const sql = getSql();
+  const rows = await sql<PersistedChatSessionAccessRecord[]>`
+    select
+      c.id as "chatId",
+      c.created_by_user_id as "createdByUserId",
+      c.target_type as "targetType",
+      case
+        when c.target_type <> 'draft_version_preview' then true
+        else active_object.id is not null
+      end as "canAppendMessages"
+    from chats c
+    left join owned_persona_objects active_object
+      on active_object.owner_user_id = c.created_by_user_id
+     and active_object.active_persona_version_id = c.target_persona_version_id
+     and active_object.deleted_at is null
+     and active_object.status in ('READY', 'PUBLIC')
+    where c.id = ${chatId}::uuid
+    limit 1
+  `;
+
+  return rows[0] ?? null;
 };

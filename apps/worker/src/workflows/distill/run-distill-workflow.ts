@@ -44,9 +44,10 @@ export const runDistillWorkflow = (input: {
   void prompt;
 
   const primaryFocus = input.distillFocus[0] ?? "观点";
+  const focusText = input.distillFocus.join("、") || "人物观点";
   const profile = personaProfileSchema.parse({
-    summary: `${input.displayName} 当前被蒸馏成一个强调 ${input.distillFocus.join("、") || "人物观点"} 的对象。`,
-    roles: ["蒸馏对象"],
+    summary: `${input.displayName} 的回应倾向围绕 ${focusText} 展开。`,
+    roles: ["对话人格"],
     coreBeliefs: [`优先从 ${primaryFocus} 解释问题`],
     reasoningPatterns: ["先界定问题，再给出偏好性结论"],
     speakingStyle: ["克制", "结构化", "偏判断型"],
@@ -59,7 +60,7 @@ export const runDistillWorkflow = (input: {
   return distillOutputSchema.parse({
     profile,
     preview: {
-      previewIntro: `基于 ${normalizedSources.length} 份已审核资料蒸馏出的 ${input.displayName} 对象，当前更偏 ${input.distillFocus.join("、")}。`,
+      previewIntro: `${input.displayName} 的回应会更侧重${focusText}。`,
       recommendedQuestions: [
         `如果从 ${primaryFocus} 来看，${input.displayName} 会怎么回答？`,
         `${input.displayName} 在面对冲突时会先考虑什么？`,
@@ -67,7 +68,7 @@ export const runDistillWorkflow = (input: {
       ],
       sampleAnswers: [
         `${input.displayName} 会先用 ${primaryFocus} 的框架界定问题，再给出偏好性判断。`,
-        `如果证据还不够，当前对象会倾向给出边界而不是给出确定答案。`,
+        "如果信息还不够，我会先给出边界，而不是贸然下定论。",
       ],
     },
     scores: {

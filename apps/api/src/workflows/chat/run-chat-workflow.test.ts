@@ -347,6 +347,93 @@ test("chat workflow uses a larger structured JSON budget for web-context answers
   assert.equal(capturedMaxTokens, 1400);
 });
 
+test("chat workflow disables DeepSeek V4 thinking for structured JSON replies", async () => {
+  const originalModel = process.env.DEEPSEEK_CHAT_MODEL;
+  const originalThinking = process.env.DEEPSEEK_CHAT_THINKING;
+  process.env.DEEPSEEK_CHAT_MODEL = "deepseek-v4-flash";
+  delete process.env.DEEPSEEK_CHAT_THINKING;
+
+  const seed = findPersonaSeedByPersonaId("0f2610a1-34b2-46c8-b915-f92d928f06a1");
+  assert.ok(seed);
+  let capturedThinking: unknown;
+
+  try {
+    const reply = await runChatWorkflow(
+      {
+        content: "你觉得曲风像吗？",
+        seed,
+      },
+      {
+        requestStructuredJson: async (input) => {
+          capturedThinking = input.thinking;
+          return {
+            answer: "有些地方像，主要是气口和松弛感接近，但每个人落点还是不一样。",
+            basisSummary: {
+              mode: "INFERRED" as const,
+              summary: "依据闲聊语境自然回应。",
+            },
+            inferenceLevel: "inferred" as const,
+            conflictDetected: false,
+            refusalReason: "none",
+          };
+        },
+      },
+    );
+
+    assert.ok(reply);
+    assert.deepEqual(capturedThinking, { type: "disabled" });
+  } finally {
+    if (originalModel === undefined) {
+      delete process.env.DEEPSEEK_CHAT_MODEL;
+    } else {
+      process.env.DEEPSEEK_CHAT_MODEL = originalModel;
+    }
+    if (originalThinking === undefined) {
+      delete process.env.DEEPSEEK_CHAT_THINKING;
+    } else {
+      process.env.DEEPSEEK_CHAT_THINKING = originalThinking;
+    }
+  }
+});
+
+test("dynamic persona prompt does not expose distill metadata to the responder model", async () => {
+  let capturedSystemPrompt = "";
+  const reply = await runChatWorkflow(
+    {
+      content: "你的名字叫什么？",
+      dynamicContext: {
+        personaVersionId: "11111111-1111-4111-8111-111111111111",
+        displayName: "进击的巨人里面的艾尔文团长",
+        previewIntro: "基于 3 份已审核资料蒸馏出的 进击的巨人里面的艾尔文团长 对象，当前更偏 说话方式、思考方式、价值判断。",
+        profileSummary: "进击的巨人里面的艾尔文团长 当前被蒸馏成一个强调 说话方式、思考方式、价值判断 的对象。",
+        styleExamples: [],
+        focusKeywords: ["说话方式", "思考方式", "价值判断"],
+        evidence: [],
+      },
+    },
+    {
+      requestStructuredJson: async (input) => {
+        capturedSystemPrompt = input.systemPrompt;
+        return {
+          answer: "你可以叫我艾尔文。",
+          basisSummary: {
+            mode: "INFERRED" as const,
+            summary: "以人物称呼自然回应。",
+          },
+          inferenceLevel: "inferred" as const,
+          conflictDetected: false,
+          refusalReason: "none",
+        };
+      },
+    },
+  );
+
+  assert.ok(reply);
+  assert.doesNotMatch(capturedSystemPrompt, /基于 \d+ 份已审核资料/);
+  assert.doesNotMatch(capturedSystemPrompt, /蒸馏出的|被蒸馏成|对象，当前更偏/);
+  assert.match(capturedSystemPrompt, /请只输出 json/u);
+});
+
 test("chat workflow retries once when the draft answer is too close to a recent assistant reply", async () => {
   const seed = findPersonaSeedByPersonaId("0f2610a1-34b2-46c8-b915-f92d928f06a1");
   assert.ok(seed);

@@ -4,7 +4,8 @@ import test from "node:test";
 import { runKimiResearcher } from "./kimi-researcher.js";
 
 test("runKimiResearcher executes Kimi web search tool loop and returns WebContext", async () => {
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const requests: Array<{ url: string; body: Record<string, unknown>; signal: AbortSignal | undefined }> = [];
+  const abortController = new AbortController();
   const webContext = await runKimiResearcher(
     {
       userMessage: "今天 OpenAI 有什么最新消息？",
@@ -16,11 +17,12 @@ test("runKimiResearcher executes Kimi web search tool loop and returns WebContex
     {
       apiKey: "test-key",
       baseUrl: "https://api.moonshot.cn/v1",
-      model: "kimi-k2.5",
+      model: "kimi-k2.6",
       maxToolCalls: 2,
+      signal: abortController.signal,
       fetchImpl: async (url, init) => {
         const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
-        requests.push({ url: String(url), body });
+        requests.push({ url: String(url), body, signal: init?.signal as AbortSignal | undefined });
 
         if (requests.length === 1) {
           return new Response(
@@ -93,6 +95,7 @@ test("runKimiResearcher executes Kimi web search tool loop and returns WebContex
       },
     },
   ]);
+  assert.equal(requests[0]?.signal, abortController.signal);
   const secondMessages = requests[1]?.body.messages as Array<{ role: string; content?: string }>;
   assert.equal(secondMessages.at(-1)?.role, "tool");
   assert.equal(secondMessages.at(-1)?.content, "{\"query\":\"OpenAI latest news today\"}");
@@ -110,7 +113,7 @@ test("runKimiResearcher normalizes object findings from real model responses", a
     {
       apiKey: "test-key",
       baseUrl: "https://api.moonshot.cn/v1",
-      model: "kimi-k2.5",
+      model: "kimi-k2.6",
       maxToolCalls: 1,
       fetchImpl: async () =>
         new Response(
@@ -178,7 +181,7 @@ test("runKimiResearcher sends research plan instead of an ambiguous raw user que
     {
       apiKey: "test-key",
       baseUrl: "https://api.moonshot.cn/v1",
-      model: "kimi-k2.5",
+      model: "kimi-k2.6",
       maxToolCalls: 1,
       fetchImpl: async (_url, init) => {
         const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;

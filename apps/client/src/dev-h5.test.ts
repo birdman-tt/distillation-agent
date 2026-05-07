@@ -5,10 +5,19 @@ import {
   buildCreatePageBody,
   buildFeaturedListBody,
   buildHistoryPageBody,
+  buildMyObjectChatPageBody,
+  buildMyObjectDetailPageBody,
+  buildMyObjectsPageBody,
   buildPersonaPageBody,
   buildProfilePageBody,
   buildReplyInspectorHtml,
+  renderMyObjectChatPage,
 } from "./h5-app.js";
+
+const extractLastInlineScript = (html: string) => {
+  const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g));
+  return scripts.at(-1)?.[1] ?? "";
+};
 
 test("reply inspector hides raw system adjudication wording by default", () => {
   const markup = buildReplyInspectorHtml({
@@ -41,6 +50,7 @@ test("home shell uses a bottom shuttle nav instead of top pills", () => {
   assert.match(body, />列表</);
   assert.match(body, />创建</);
   assert.match(body, />我的</);
+  assert.match(body, /class="shuttle-item is-active" href="\/"/);
   assert.doesNotMatch(body, />审核</);
   assert.doesNotMatch(body, /share\/demo/);
   assert.doesNotMatch(body, /top-nav|nav-link/);
@@ -153,7 +163,10 @@ test("history page renders as a single chat list tab", () => {
   assert.match(body, /history-item/);
   assert.match(body, /history-snippet/);
   assert.match(body, /刚刚/);
+  assert.match(body, />聊天</);
   assert.match(body, />列表</);
+  assert.match(body, /href="\/history"/);
+  assert.match(body, /class="shuttle-item is-active" href="\/history"/);
   assert.doesNotMatch(body, /最近开口|历史记录|继续聊|返回聊天/);
 });
 
@@ -162,14 +175,55 @@ test("supporting pages inherit the same dark-chat shell", () => {
   const profilePage = buildProfilePageBody();
 
   assert.match(createPage, /bottom-shuttle/);
-  assert.match(createPage, /一句话简介/);
-  assert.match(createPage, /风格/);
+  assert.match(createPage, /对象名称/);
+  assert.match(createPage, /资料确认/);
+  assert.match(createPage, /data-start-distill/);
   assert.match(createPage, /data-create-success/);
   assert.match(createPage, /data-create-workbench/);
   assert.doesNotMatch(createPage, /top-nav|Step 1|share\/demo/);
 
-  assert.match(profilePage, /切换亮暗模式/);
   assert.doesNotMatch(profilePage, /审核入口|最近对象/);
-  assert.match(profilePage, /data-profile-persona-list/);
+  assert.match(profilePage, /href="\/profile\/objects"/);
+  assert.match(profilePage, /href="\/history"/);
+  assert.match(profilePage, /href="\/create"/);
+  assert.doesNotMatch(profilePage, /data-profile-persona-list|data-profile-draft-count|data-profile-published-count/);
   assert.doesNotMatch(profilePage, /主题切换|data-theme-state|data-theme-choice|>浅色<|>深色</);
+});
+
+test("my objects page renders as the object list entry", () => {
+  const body = buildMyObjectsPageBody();
+
+  assert.match(body, /我的对象/);
+  assert.match(body, /data-my-objects-list/);
+  assert.match(body, /进入对象详情后再管理/);
+  assert.match(body, /class="shuttle-item is-active" href="\/profile"/);
+  assert.doesNotMatch(body, /data-my-object-actions|data-profile-persona-list/);
+});
+
+test("my object detail page renders the management surface", () => {
+  const body = buildMyObjectDetailPageBody("object-1");
+
+  assert.match(body, /data-my-object-detail/);
+  assert.match(body, /data-my-object-actions/);
+  assert.match(body, /data-my-object-edit-form/);
+  assert.match(body, /返回列表/);
+  assert.doesNotMatch(body, /quality|coverage|publishGate/);
+});
+
+test("my object chat page is pure chat", () => {
+  const body = buildMyObjectChatPageBody("object-1");
+
+  assert.match(body, /data-chat-form/);
+  assert.match(body, /href="\/profile\/objects\/object-1">返回/);
+  assert.match(body, /data-my-object-chat/);
+  assert.doesNotMatch(body, /data-my-object-actions|data-my-object-edit-form|补资料|公开分享|删除/);
+});
+
+test("my object chat page inline script is syntactically valid", () => {
+  const chatId = "11111111-1111-4111-8111-111111111111";
+  const html = renderMyObjectChatPage("object-1", { chatId });
+  const script = extractLastInlineScript(html);
+
+  assert.match(script, new RegExp(`const initialChatId = "${chatId}"`));
+  assert.doesNotThrow(() => new Function(script));
 });

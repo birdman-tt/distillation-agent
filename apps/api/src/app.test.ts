@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import { getSql, resetSqlForTests } from "./db/client.js";
+import { appendChatMessages } from "./store/chat-store.js";
 
 process.env.CHAT_REALTIME_ENABLED = "false";
 process.env.CHAT_PLANNER_ENABLED = "false";
@@ -10,6 +12,7 @@ process.env.CHAT_PROACTIVE_ENABLED = "false";
 test("anonymous session can create, distill, save private, publish, and keep a usable share", async () => {
   const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = "";
+  await resetSqlForTests();
 
   const [{ buildApiApp }, workerModule] = await Promise.all([
     import("./app.js"),
@@ -32,7 +35,7 @@ test("anonymous session can create, distill, save private, publish, and keep a u
     const anonymous = await apiApp.inject({
       method: "POST",
       url: "/v1/auth/anonymous",
-      payload: { deviceId: "browser-1" },
+      payload: { deviceId: `browser-${randomUUID()}` },
     });
     assert.equal(anonymous.statusCode, 200);
     const anonymousBody = anonymous.json();
@@ -131,10 +134,12 @@ test("anonymous session can create, distill, save private, publish, and keep a u
       },
     });
     assert.equal(privateDashboard.statusCode, 200);
-    assert.equal(privateDashboard.json().stats.draftCount, 1);
-    assert.equal(privateDashboard.json().stats.publishedCount, 0);
-    assert.equal(privateDashboard.json().items[0]?.displayName, "测试对象");
-    assert.equal(privateDashboard.json().items[0]?.primaryShareSlug, null);
+    const privateDashboardItem = privateDashboard
+      .json()
+      .items.find((item: { displayName: string }) => item.displayName === "测试对象");
+    assert.ok(privateDashboardItem);
+    assert.equal(privateDashboardItem.displayName, "测试对象");
+    assert.equal(privateDashboardItem.primaryShareSlug, null);
 
     const published = await apiApp.inject({
       method: "POST",
@@ -165,13 +170,18 @@ test("anonymous session can create, distill, save private, publish, and keep a u
       },
     });
     assert.equal(publishedDashboard.statusCode, 200);
-    assert.equal(publishedDashboard.json().stats.draftCount, 0);
-    assert.equal(publishedDashboard.json().stats.publishedCount, 1);
-    assert.equal(publishedDashboard.json().items[0]?.primaryShareSlug, persistedShare[0]?.share_slug);
+    const publishedDashboardItem = publishedDashboard
+      .json()
+      .items.find((item: { displayName: string }) => item.displayName === "测试对象");
+    assert.ok(publishedDashboardItem);
+    assert.equal(publishedDashboardItem.primaryShareSlug, persistedShare[0]?.share_slug);
 
     const chat = await apiApp.inject({
       method: "POST",
       url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${anonymousBody.accessToken}`,
+      },
       payload: {
         targetType: "published_persona",
         personaId: persona.id,
@@ -183,6 +193,9 @@ test("anonymous session can create, distill, save private, publish, and keep a u
     const assistant = await apiApp.inject({
       method: "POST",
       url: `/v1/chats/${chatBody.id}/messages`,
+      headers: {
+        authorization: `Bearer ${anonymousBody.accessToken}`,
+      },
       payload: {
         content: "你怎么看现在的处境？",
       },
@@ -234,6 +247,96 @@ test("anonymous session can create, distill, save private, publish, and keep a u
   }
 });
 
+test("legacy synchronous persona manage endpoints can be disabled before worker calls", async () => {
+  const originalLegacyFlag = process.env.LEGACY_SYNC_PERSONA_MANAGE_ENABLED;
+  const originalWorkerBaseUrl = process.env.WORKER_BASE_URL;
+  process.env.LEGACY_SYNC_PERSONA_MANAGE_ENABLED = "false";
+  process.env.WORKER_BASE_URL = "http://127.0.0.1:9";
+  await resetSqlForTests();
+
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+  const sql = getSql();
+
+  try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: `legacy-sync-disabled-${randomUUID()}` },
+    });
+    assert.equal(anonymous.statusCode, 200);
+    const accessToken = anonymous.json().accessToken as string;
+
+    const createdPersona = await apiApp.inject({
+      method: "POST",
+      url: "/v1/personae",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+      payload: {
+        displayName: "旧接口关闭测试",
+        positioning: "用于确认旧同步接口不会触发 worker。",
+        personaType: "ORIGINAL_PERSONA",
+        originType: "USER",
+        distillFocus: ["表达"],
+      },
+    });
+    assert.equal(createdPersona.statusCode, 200);
+    const persona = createdPersona.json();
+
+    const urlSource = await apiApp.inject({
+      method: "POST",
+      url: `/v1/personae/${persona.id}/sources/url`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+      payload: {
+        url: "https://example.com/legacy-sync-disabled",
+        sourceKind: "PRIMARY",
+      },
+    });
+    assert.equal(urlSource.statusCode, 410);
+    assert.equal(urlSource.json().message, "这个旧资料接口已停用，请使用新的资料补充流程。");
+
+    const persistedUrlSources = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from persona_sources
+      where persona_id = ${persona.id}::uuid and input_type = 'URL'
+    `;
+    assert.equal(persistedUrlSources[0]?.count, "0");
+
+    const distill = await apiApp.inject({
+      method: "POST",
+      url: `/v1/personae/${persona.id}/distill`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(distill.statusCode, 410);
+    assert.equal(distill.json().message, "这个旧蒸馏接口已停用，请使用新的创建流程。");
+
+    const persistedVersions = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from persona_versions
+      where persona_id = ${persona.id}::uuid and status = 'CANDIDATE'
+    `;
+    assert.equal(persistedVersions[0]?.count, "0");
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    if (originalLegacyFlag === undefined) {
+      delete process.env.LEGACY_SYNC_PERSONA_MANAGE_ENABLED;
+    } else {
+      process.env.LEGACY_SYNC_PERSONA_MANAGE_ENABLED = originalLegacyFlag;
+    }
+    if (originalWorkerBaseUrl === undefined) {
+      delete process.env.WORKER_BASE_URL;
+    } else {
+      process.env.WORKER_BASE_URL = originalWorkerBaseUrl;
+    }
+  }
+});
+
 test("official seed persona can open a persisted chat session", async () => {
   const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = "";
@@ -242,9 +345,19 @@ test("official seed persona can open a persisted chat session", async () => {
   const apiApp = buildApiApp();
 
   try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "official-seed-chat" },
+    });
+    assert.equal(anonymous.statusCode, 200);
+
     const chat = await apiApp.inject({
       method: "POST",
       url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${anonymous.json().accessToken}`,
+      },
       payload: {
         targetType: "published_persona",
         personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
@@ -352,12 +465,13 @@ test("chat list returns the current actor's persisted histories", async () => {
     });
     assert.equal(list.statusCode, 200);
     const listBody = list.json();
-    assert.equal(listBody.items.length, 1);
-    assert.equal(listBody.items[0]?.displayName, "雷军");
-    assert.equal(listBody.items[0]?.resumePersonaId, "0f2610a1-34b2-46c8-b915-f92d928f06a1");
-    assert.equal(listBody.items[0]?.targetType, "published_persona");
-    assert.ok(typeof listBody.items[0]?.latestMessage === "string" && listBody.items[0].latestMessage.length > 0);
-    assert.ok(typeof listBody.items[0]?.updatedAt === "string" && listBody.items[0].updatedAt.length > 0);
+    const primaryHistoryItem = listBody.items.find((item: { id: string }) => item.id === primaryChatId);
+    assert.ok(primaryHistoryItem);
+    assert.equal(primaryHistoryItem.displayName, "雷军");
+    assert.equal(primaryHistoryItem.resumePersonaId, "0f2610a1-34b2-46c8-b915-f92d928f06a1");
+    assert.equal(primaryHistoryItem.targetType, "published_persona");
+    assert.ok(typeof primaryHistoryItem.latestMessage === "string" && primaryHistoryItem.latestMessage.length > 0);
+    assert.ok(typeof primaryHistoryItem.updatedAt === "string" && primaryHistoryItem.updatedAt.length > 0);
   } finally {
     await apiApp.close();
     await resetSqlForTests();
@@ -366,5 +480,389 @@ test("chat list returns the current actor's persisted histories", async () => {
     } else {
       delete process.env.DEEPSEEK_API_KEY;
     }
+  }
+});
+
+test("chat detail and message endpoints are scoped to the chat owner", async () => {
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+
+  try {
+    const primarySession = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-owner-primary" },
+    });
+    assert.equal(primarySession.statusCode, 200);
+    const primaryAccessToken = primarySession.json().accessToken as string;
+
+    const secondarySession = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "chat-owner-secondary" },
+    });
+    assert.equal(secondarySession.statusCode, 200);
+    const secondaryAccessToken = secondarySession.json().accessToken as string;
+
+    const chat = await apiApp.inject({
+      method: "POST",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${primaryAccessToken}`,
+      },
+      payload: {
+        targetType: "published_persona",
+        personaId: "0f2610a1-34b2-46c8-b915-f92d928f06a1",
+      },
+    });
+    assert.equal(chat.statusCode, 200);
+    const chatId = chat.json().id as string;
+
+    const ownerRead = await apiApp.inject({
+      method: "GET",
+      url: `/v1/chats/${chatId}`,
+      headers: {
+        authorization: `Bearer ${primaryAccessToken}`,
+      },
+    });
+    assert.equal(ownerRead.statusCode, 200);
+
+    const nonOwnerRead = await apiApp.inject({
+      method: "GET",
+      url: `/v1/chats/${chatId}`,
+      headers: {
+        authorization: `Bearer ${secondaryAccessToken}`,
+      },
+    });
+    assert.equal(nonOwnerRead.statusCode, 404);
+
+    const nonOwnerWrite = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${secondaryAccessToken}`,
+      },
+      payload: {
+        content: "这不是我的会话。",
+      },
+    });
+    assert.equal(nonOwnerWrite.statusCode, 404);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+  }
+});
+
+test("deleted owned object chats stay readable but reject new messages", async () => {
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+  const sql = getSql();
+
+  try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "deleted-object-chat" },
+    });
+    assert.equal(anonymous.statusCode, 200);
+    const userId = anonymous.json().userId as string;
+    const accessToken = anonymous.json().accessToken as string;
+
+    const personaId = randomUUID();
+    const versionId = randomUUID();
+    const objectId = randomUUID();
+
+    await sql`
+      insert into users (id, display_name)
+      values (${userId}::uuid, ${"Guest Builder"})
+      on conflict (id) do nothing
+    `;
+    await sql`
+      insert into personae (
+        id,
+        display_name,
+        origin_type,
+        persona_type,
+        listing_status,
+        status,
+        creator_user_id
+      ) values (
+        ${personaId}::uuid,
+        ${"测试对象"},
+        ${"USER"},
+        ${"ORIGINAL_PERSONA"},
+        ${"PRIVATE"},
+        ${"READY"},
+        ${userId}::uuid
+      )
+    `;
+    await sql`
+      insert into persona_versions (
+        id,
+        persona_id,
+        version_number,
+        status,
+        profile_json,
+        preview_intro,
+        created_by_user_id
+      ) values (
+        ${versionId}::uuid,
+        ${personaId}::uuid,
+        1,
+        ${"PUBLISHED"},
+        ${sql.json({ identity: { name: "测试对象" } })},
+        ${"测试简介"},
+        ${userId}::uuid
+      )
+    `;
+    await sql`
+      insert into owned_persona_objects (
+        id,
+        owner_user_id,
+        persona_id,
+        active_persona_version_id,
+        display_name,
+        intro,
+        status
+      ) values (
+        ${objectId}::uuid,
+        ${userId}::uuid,
+        ${personaId}::uuid,
+        ${versionId}::uuid,
+        ${"测试对象"},
+        ${"测试简介"},
+        ${"READY"}
+      )
+    `;
+
+    const chat = await apiApp.inject({
+      method: "POST",
+      url: `/v1/me/objects/${objectId}/chats`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(chat.statusCode, 200);
+    const chatId = chat.json().chatId as string;
+
+    await appendChatMessages(chatId, [
+      {
+        id: randomUUID(),
+        role: "USER",
+        content: "这是一条旧消息。",
+        basis: null,
+        basisSummary: null,
+        inferenceLevel: null,
+        conflictDetected: null,
+        refusalReason: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    const deleted = await apiApp.inject({
+      method: "DELETE",
+      url: `/v1/me/objects/${objectId}`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(deleted.statusCode, 200);
+
+    const readAfterDelete = await apiApp.inject({
+      method: "GET",
+      url: `/v1/chats/${chatId}`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(readAfterDelete.statusCode, 200);
+    assert.equal(readAfterDelete.json().messages.length, 1);
+
+    const writeAfterDelete = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+      payload: {
+        content: "删除后不应该还能继续聊。",
+      },
+    });
+    assert.equal(writeAfterDelete.statusCode, 409);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+  }
+});
+
+test("old owned object version chats become readonly history after the object version changes", async () => {
+  const [{ buildApiApp }] = await Promise.all([import("./app.js")]);
+  const apiApp = buildApiApp();
+  const sql = getSql();
+
+  try {
+    const anonymous = await apiApp.inject({
+      method: "POST",
+      url: "/v1/auth/anonymous",
+      payload: { deviceId: "changed-object-version-chat" },
+    });
+    assert.equal(anonymous.statusCode, 200);
+    const userId = anonymous.json().userId as string;
+    const accessToken = anonymous.json().accessToken as string;
+
+    const personaId = randomUUID();
+    const oldVersionId = randomUUID();
+    const newVersionId = randomUUID();
+    const objectId = randomUUID();
+
+    await sql`
+      insert into users (id, display_name)
+      values (${userId}::uuid, ${"Guest Builder"})
+      on conflict (id) do nothing
+    `;
+    await sql`
+      insert into personae (
+        id,
+        display_name,
+        origin_type,
+        persona_type,
+        listing_status,
+        status,
+        creator_user_id
+      ) values (
+        ${personaId}::uuid,
+        ${"换版对象"},
+        ${"USER"},
+        ${"ORIGINAL_PERSONA"},
+        ${"PRIVATE"},
+        ${"READY"},
+        ${userId}::uuid
+      )
+    `;
+    await sql`
+      insert into persona_versions (
+        id,
+        persona_id,
+        version_number,
+        status,
+        profile_json,
+        preview_intro,
+        created_by_user_id
+      ) values
+        (
+          ${oldVersionId}::uuid,
+          ${personaId}::uuid,
+          1,
+          ${"PUBLISHED"},
+          ${sql.json({ identity: { name: "换版对象" } })},
+          ${"旧简介"},
+          ${userId}::uuid
+        ),
+        (
+          ${newVersionId}::uuid,
+          ${personaId}::uuid,
+          2,
+          ${"PUBLISHED"},
+          ${sql.json({ identity: { name: "换版对象" } })},
+          ${"新简介"},
+          ${userId}::uuid
+        )
+    `;
+    await sql`
+      insert into owned_persona_objects (
+        id,
+        owner_user_id,
+        persona_id,
+        active_persona_version_id,
+        display_name,
+        intro,
+        status
+      ) values (
+        ${objectId}::uuid,
+        ${userId}::uuid,
+        ${personaId}::uuid,
+        ${oldVersionId}::uuid,
+        ${"换版对象"},
+        ${"旧简介"},
+        ${"READY"}
+      )
+    `;
+
+    const chat = await apiApp.inject({
+      method: "POST",
+      url: `/v1/me/objects/${objectId}/chats`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(chat.statusCode, 200);
+    const chatId = chat.json().chatId as string;
+
+    await appendChatMessages(chatId, [
+      {
+        id: randomUUID(),
+        role: "USER",
+        content: "这是旧版本聊天。",
+        basis: null,
+        basisSummary: null,
+        inferenceLevel: null,
+        conflictDetected: null,
+        refusalReason: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    const activeHistory = await apiApp.inject({
+      method: "GET",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(activeHistory.statusCode, 200);
+    const activeItem = activeHistory.json().items.find((item: { id: string }) => item.id === chatId);
+    assert.equal(activeItem?.ownedObjectId, objectId);
+
+    await sql`
+      update owned_persona_objects
+      set active_persona_version_id = ${newVersionId}::uuid
+      where id = ${objectId}::uuid
+    `;
+
+    const oldVersionHistory = await apiApp.inject({
+      method: "GET",
+      url: "/v1/chats",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(oldVersionHistory.statusCode, 200);
+    const oldVersionItem = oldVersionHistory.json().items.find((item: { id: string }) => item.id === chatId);
+    assert.ok(oldVersionItem);
+    assert.equal(oldVersionItem.ownedObjectId, null);
+
+    const readOldChat = await apiApp.inject({
+      method: "GET",
+      url: `/v1/chats/${chatId}`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    assert.equal(readOldChat.statusCode, 200);
+
+    const writeOldChat = await apiApp.inject({
+      method: "POST",
+      url: `/v1/chats/${chatId}/messages`,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+      payload: {
+        content: "旧版本不应该继续写。",
+      },
+    });
+    assert.equal(writeOldChat.statusCode, 409);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
   }
 });

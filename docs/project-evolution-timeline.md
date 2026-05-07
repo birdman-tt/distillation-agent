@@ -200,7 +200,51 @@ H5 页面
 | `9f83ca7` 2026-04-25 | 增加 realtime chat planner foundation | chat panel 承接 realtime/proactive 基础 | realtime route/hub/presence/PG listener、MiniMax planner、turn router、chat proactive worker | 聊天架构开始准备 realtime、主动消息、planner/tool 化 |
 | `0f5e339` 2026-04-27 | 增加 retrieval planner researcher pipeline | chat panel 把发送成功和 AI 正在输入拆开，避免 loading 含义错位 | pgvector schema、Qwen embedding、chat/persona retrieval repository、user memory facts、Fast Planner、Kimi Researcher、research plan sanitizer、runtime 时间注入 | 聊天主链路形成 retrieval-first + low-latency planner + researcher + DeepSeek responder 的分层 |
 
-## 9. 下一阶段观察点
+## 9. 2026-05-07 分支开发过程记录
+
+本节记录 `codex/nuwa-distill-profile-v2` 分支的提交前开发过程。该分支把“一键蒸馏”从同步创建表单扩展为可观测、可轮询、可管理的对象创建流程，同时补齐“我的对象”作为蒸馏后对象的归宿。
+
+### 9.1 本次解决的问题
+
+- 创建流程原先缺少稳定的用户对象归宿，蒸馏完成后只能进入预览或聊天，用户难以从“我的”中继续管理对象。
+- 资料发现和蒸馏任务原先容易落到同步接口等待，用户请求会被 Kimi 搜索、模型抽取或 worker 执行阻塞。
+- 蒸馏过程缺少端到端日志，排查“为什么对象还在创建中”“为什么回复像模板”时只能从局部接口猜测。
+- DeepSeek V4 结构化 JSON 回复存在 thinking 兼容风险，空内容或非 JSON 内容会让聊天链路表现为重复、模板化或 fallback。
+- Kimi 聊天搜索原 8 秒超时对异步消息体验偏短，容易出现 planner 决定搜索但搜索结果来不及进入上下文。
+
+### 9.2 主要改动范围
+
+- 产品与前端：补齐“我的对象”列表、对象详情、对象聊天入口、删除和补资料等用户侧管理路径；创建完成后回到用户能理解的对象归属，而不是展示内部蒸馏细节。
+- 后端接口：增加一键蒸馏 V2 的 intent、source discovery job、distill job、my objects、对象聊天等接口；资料发现接口改为创建后台 job 后立即返回，前端通过轮询读取状态。
+- 数据库：新增 `persona_distill_*`、`owned_persona_objects`、distill artifacts/tool runs 等表和索引，支撑 source discovery、distill job、对象库存和可观测日志。
+- Worker：新增 source discovery polling job 和 distill polling job，把 Kimi 搜索、资料清洗、证据抽取、profile 生成和版本持久化放入后台执行。
+- 模型与工具底座：蒸馏流程按 tool function 封装，业务语言负责调度和状态落库；模型负责风险判断、资料抽取、证据组织、profile 合成等更适合模型的步骤。
+- Chat 链路：DeepSeek 结构化 JSON 请求支持 `thinking` 配置，V4 默认关闭 thinking；Kimi 聊天搜索默认超时提高到 30 秒，并在 trace 中记录 search/timeout 结果。
+- 可观测性：蒸馏 job 每一步写入 artifacts/tool runs，输入、输出、工具调用、错误信息和状态流转可以从日志和内部接口复盘。
+- 文档：补充 Nuwa skill 分析、一键蒸馏 V2 方案、产品缺口、前后端接口流、后端蒸馏架构、异步 source discovery 与同步阻塞排查计划。
+
+### 9.3 验证记录
+
+- `pnpm -r typecheck`：通过。
+- `pnpm -r --if-present test`：首次按默认并发运行时，API 用例与本地 dev API/worker/H5 服务共同占用 Supabase session pool，出现 `EMAXCONNSESSION` 连接池耗尽并挂在 API 长尾用例；该 run 已中断，不作为代码逻辑失败结论。
+- `node --import tsx --test --test-concurrency=1 "src/**/*.test.ts"`（`apps/api`）：通过，109 个 API 用例全部通过；该命令用于规避 Supabase pooler 并发限制。
+- `pnpm --filter @hall-of-fame/client test`：通过，35 个前端 H5 行为用例全部通过。
+- `pnpm --filter @hall-of-fame/contracts test`：通过，11 个合同用例全部通过。
+- `pnpm --filter @hall-of-fame/domain test`：通过，5 个领域用例全部通过。
+- `pnpm --filter @hall-of-fame/prompt-kit test`：通过，10 个 prompt 用例全部通过。
+- `pnpm --filter @hall-of-fame/kimi-client test`：通过，3 个 Kimi client 用例全部通过。
+- `pnpm --filter @hall-of-fame/runtime-env test`：通过，当前 0 个测试。
+- `pnpm --filter @hall-of-fame/ui-tokens test`：通过，2 个 UI token 用例全部通过。
+- `@hall-of-fame/worker`、`@hall-of-fame/api-client`、`@hall-of-fame/deepseek-client` 当前没有可执行 test 脚本输出；其类型检查已由 `pnpm -r typecheck` 覆盖。
+
+### 9.4 已知风险和后续决策
+
+- Planner 是否搜索仍应由模型判断，而不是继续叠加规则；当前 prompt 对“歌词、原话、台词、具体引用”等应触发搜索的场景提示不足，需要下一步改 planner prompt 和测试。
+- API 全量测试默认并发与当前 Supabase session pool 不匹配，后续需要为 API 测试加串行脚本或本地测试库，避免每次全量验证被环境连接数干扰。
+- 真实 Kimi web search 仍依赖供应商可用性；source discovery 已异步化，但前端需要把失败、重试、等待状态表达得足够简单。
+- 产品 UI 必须继续遵守“只给用户看有用信息”的 rule，蒸馏证据、tool logs、内部评分默认只用于调试和管理，不进入普通用户聊天界面。
+
+## 10. 下一阶段观察点
 
 当前主线已经纳入 retrieval / planner / researcher 基础，后续建议重点观察这些方向：
 
@@ -210,8 +254,12 @@ H5 页面
 | 用户记忆治理 | `user_memory_facts`、后续前端管理入口 | V1 已有后端抽取和读取，V1.1 需要补用户可见删除/纠错能力 |
 | Embedding 运维 | `services/embeddings/*`、Supabase pgvector | 需要关注向量写入成本、失败重试、embedding model 迁移和索引策略 |
 | Planner 延迟 | `fast-planner-client`、MiniMax async planner 文档 | 同步链路继续保持 low-latency；MiniMax 只适合异步深度计划 |
+| 一键蒸馏对象归宿 | `routes/my-objects`、`persona_distill_jobs`、`owned_persona_objects` | 蒸馏成功后对象必须回到“我的对象”，并支持聊天、补资料、删除、编辑 |
+| 异步任务体验 | `persona_distill_source_discovery_jobs`、worker polling、H5 create flow | 长任务只返回 job，前端轮询状态；同步接口只保留极快操作 |
+| 蒸馏日志可观测性 | `persona_distill_artifacts`、`persona_distill_tool_runs` | 每一步输入输出要可查，但不能暴露给普通用户 UI |
+| Planner 搜索判断 | `services/minimax-planner/chat-planner.ts`、chat trace | 搜索是否发生应由模型决策，下一步要补 prompt 和测试覆盖引用/歌词/最新事实场景 |
 
-## 10. 自检结论
+## 11. 自检结论
 
 这版结构相对原方案做了两个关键调整：
 

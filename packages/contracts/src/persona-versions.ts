@@ -16,10 +16,10 @@ export const personaVersionResponseSchema = z.object({
   previewIntro: z.string().nullable(),
   recommendedQuestions: z.array(z.string()),
   sampleAnswers: z.array(z.string()),
-  coverageScore: z.number().int().nullable(),
-  groundingScore: z.number().int().nullable(),
-  styleScore: z.number().int().nullable(),
-  riskScore: z.number().int().nullable(),
+  ownerDisplayStatus: z.enum(["CANDIDATE", "PRIVATE", "PUBLIC"]).nullable(),
+  personaHref: z.string().nullable(),
+  shareHref: z.string().nullable(),
+  addSourcesHref: z.string().nullable(),
 });
 
 export const personaVersionListResponseSchema = z.object({

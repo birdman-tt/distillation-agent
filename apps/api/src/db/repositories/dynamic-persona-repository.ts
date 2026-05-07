@@ -33,6 +33,7 @@ export type PersonaVersionRecord = {
   groundingScore: number | null;
   styleScore: number | null;
   riskScore: number | null;
+  sourceDistillJobId: string | null;
   createdByUserId: string | null;
   submittedForPublishAt: string | null;
   publishedAt: string | null;
@@ -161,6 +162,7 @@ type PersonaVersionRow = {
   groundingScore: number | null;
   styleScore: number | null;
   riskScore: number | null;
+  sourceDistillJobId: string | null;
   createdByUserId: string | null;
   submittedForPublishAt: Date | null;
   publishedAt: Date | null;
@@ -312,6 +314,7 @@ const selectPersonaVersionColumns = `
   grounding_score as "groundingScore",
   style_score as "styleScore",
   risk_score as "riskScore",
+  source_distill_job_id as "sourceDistillJobId",
   created_by_user_id as "createdByUserId",
   submitted_for_publish_at as "submittedForPublishAt",
   published_at as "publishedAt",
@@ -1252,6 +1255,16 @@ export const publishDynamicPersonaVersion = async (input: {
         throw new Error("Only preview versions can be saved for private use");
       }
 
+      if (persona.currentDraftVersionId && persona.currentDraftVersionId !== version.id) {
+        await sql`
+          update persona_versions
+             set status = 'SUPERSEDED',
+                 superseded_at = ${createdAt}
+           where id = ${persona.currentDraftVersionId}::uuid
+             and status = 'CANDIDATE'
+        `;
+      }
+
       await sql`
         update personae
            set current_draft_version_id = ${version.id}::uuid,
@@ -1260,6 +1273,18 @@ export const publishDynamicPersonaVersion = async (input: {
                updated_at = ${createdAt}
          where id = ${persona.id}::uuid
       `;
+      if (persona.creatorUserId) {
+        await sql`
+          update owned_persona_objects
+             set active_persona_version_id = ${version.id}::uuid,
+                 intro = coalesce(intro, ${version.previewIntro}),
+                 status = 'READY',
+                 updated_at = ${createdAt}
+           where owner_user_id = ${persona.creatorUserId}::uuid
+             and persona_id = ${persona.id}::uuid
+             and deleted_at is null
+        `;
+      }
 
       const updatedVersion = (await sql.unsafe<PersonaVersionRow[]>(
         `select ${selectPersonaVersionColumns} from persona_versions where id = $1`,
@@ -1276,6 +1301,16 @@ export const publishDynamicPersonaVersion = async (input: {
 
     if (version.status !== "CANDIDATE" && version.status !== "PUBLISHED") {
       throw new Error("Only preview versions can be published");
+    }
+
+    if (persona.currentDraftVersionId && persona.currentDraftVersionId !== version.id) {
+      await sql`
+        update persona_versions
+           set status = 'SUPERSEDED',
+               superseded_at = ${createdAt}
+         where id = ${persona.currentDraftVersionId}::uuid
+           and status = 'CANDIDATE'
+      `;
     }
 
     if (persona.currentPublishedVersionId && persona.currentPublishedVersionId !== version.id) {
@@ -1305,6 +1340,18 @@ export const publishDynamicPersonaVersion = async (input: {
              updated_at = ${createdAt}
        where id = ${persona.id}::uuid
     `;
+    if (persona.creatorUserId) {
+      await sql`
+        update owned_persona_objects
+           set active_persona_version_id = ${version.id}::uuid,
+               intro = coalesce(intro, ${version.previewIntro}),
+               status = 'PUBLIC',
+               updated_at = ${createdAt}
+         where owner_user_id = ${persona.creatorUserId}::uuid
+           and persona_id = ${persona.id}::uuid
+           and deleted_at is null
+      `;
+    }
 
     const updatedVersion = (await sql.unsafe<PersonaVersionRow[]>(
       `select ${selectPersonaVersionColumns} from persona_versions where id = $1`,

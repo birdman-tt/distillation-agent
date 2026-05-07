@@ -803,6 +803,20 @@ const pageStyles = `
     gap: 10px;
   }
 
+  .debug-json {
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(0, 0, 0, 0.18);
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   .stage-grid,
   .profile-grid,
   .review-grid {
@@ -1510,11 +1524,14 @@ const renderHistoryListScript = () => `
     const appendHistorySource = (href) =>
       href + "?chatId=" + encodeURIComponent(item.id) + "&from=history";
 
+    if (item.ownedObjectId) {
+      return appendHistorySource("/profile/objects/" + encodeURIComponent(item.ownedObjectId) + "/chat");
+    }
     if (item.targetType === "published_persona" && item.resumePersonaId) {
       return appendHistorySource("/persona/" + encodeURIComponent(item.resumePersonaId));
     }
     if (item.targetType === "draft_version_preview") {
-      return appendHistorySource("/preview/" + encodeURIComponent(item.targetPersonaVersionId));
+      return "/history/" + encodeURIComponent(item.id);
     }
     if (item.targetType === "share_link" && item.shareSlug) {
       return appendHistorySource("/share/" + encodeURIComponent(item.shareSlug));
@@ -1815,78 +1832,59 @@ export const buildCreatePageBody = () => `
   <div class="page-stage">
     ${renderPageHeader({
       eyebrow: "创建",
-      title: "先创建对象",
-      subtitle: "先建一个，再慢慢补全。",
+      title: "蒸馏一个对象",
+      subtitle: "输入名字，先确认资料，再生成候选。",
     })}
 
     <section class="shell-panel" data-create-light-start>
-      <div class="mini-eyebrow">创建</div>
-      <h2 class="section-title">创建新对象</h2>
-      <p class="body-copy">先填名字、简介和风格。</p>
+      <div class="mini-eyebrow">对象</div>
+      <h2 class="section-title">你想和谁聊天</h2>
+      <p class="body-copy">真实人物或虚拟角色都可以。系统会先做风险判断，再找可用资料。</p>
       <form data-create-form class="field-stack">
         <label class="field-block">
-          <span class="field-label">名称</span>
-          <input name="displayName" placeholder="例如：王阳明式教练" />
-        </label>
-        <label class="field-block">
-          <span class="field-label">一句话简介</span>
-          <textarea name="positioning" placeholder="例如：清醒直接，擅长理清思路"></textarea>
+          <span class="field-label">对象名称</span>
+          <input name="query" placeholder="例如：王阳明、庆帝、芙莉莲" />
         </label>
         <div class="field-block">
-          <span class="field-label">风格</span>
+          <span class="field-label">更想像哪一面</span>
           <div class="tag-row">
-            <button type="button" class="tag-chip" data-tag-value="清醒">清醒</button>
-            <button type="button" class="tag-chip" data-tag-value="锋利">锋利</button>
-            <button type="button" class="tag-chip" data-tag-value="克制">克制</button>
-            <button type="button" class="tag-chip" data-tag-value="判断">判断</button>
-            <button type="button" class="tag-chip" data-tag-value="表达">表达</button>
-            <button type="button" class="tag-chip" data-tag-value="行动">行动</button>
+            <button type="button" class="tag-chip is-active" data-tag-value="说话方式">说话方式</button>
+            <button type="button" class="tag-chip is-active" data-tag-value="思考方式">思考方式</button>
+            <button type="button" class="tag-chip" data-tag-value="价值判断">价值判断</button>
+            <button type="button" class="tag-chip" data-tag-value="情绪反应">情绪反应</button>
+            <button type="button" class="tag-chip" data-tag-value="关键经历">关键经历</button>
+            <button type="button" class="tag-chip" data-tag-value="边界禁区">边界禁区</button>
           </div>
-          <input name="customTags" placeholder="自定义标签，逗号分隔" />
+          <input name="customTags" placeholder="也可以补充关注点，逗号分隔" />
         </div>
         <div class="actions">
-          <button type="submit">创建</button>
+          <button type="submit">搜索资料</button>
         </div>
       </form>
       <div class="status-line" data-create-status></div>
+      <div class="actions source-discovery-actions" data-source-discovery-actions></div>
     </section>
 
     <section class="shell-panel" data-create-success hidden>
-      <div class="mini-eyebrow">创建成功</div>
-      <h2 class="section-title">创建好了</h2>
-      <p class="body-copy">先补资料，再去预览。</p>
+      <div class="mini-eyebrow">资料确认</div>
+      <h2 class="section-title" data-created-name>资料找到了</h2>
+      <p class="body-copy">默认会选中推荐资料。你可以取消，也可以自己补充资料。</p>
       <div class="summary-card">
-        <strong data-created-name>新对象</strong>
+        <strong data-discovery-name>待确认对象</strong>
+        <p class="summary-copy" data-discovery-risk>风险判断中</p>
       </div>
-      <div class="actions">
-        <button type="button" data-open-workbench>添加资料</button>
-      </div>
-    </section>
-
-    <section class="workbench-shell" data-create-workbench hidden>
-      <div class="stage-strip" aria-label="创建阶段">
-        <span class="stage-pill is-done">对象定义</span>
-        <span class="stage-pill is-active">资料管理</span>
-        <span class="stage-pill">预览</span>
-        <span class="stage-pill">发布</span>
-      </div>
-
-      <section class="summary-card">
-        <div class="mini-eyebrow">对象定义</div>
-        <h2 class="section-title" data-definition-name>未创建</h2>
-        <p class="summary-copy" data-definition-positioning>创建后会在这里看到简介。</p>
-        <div class="pill-row" data-definition-tags><span class="mini-tag">暂无标签</span></div>
-        <div class="actions">
-          <button type="button" class="secondary" data-edit-definition>修改定义</button>
-        </div>
-      </section>
-
       <div class="stage-grid">
         <section class="stage-card is-active">
-          <div class="mini-eyebrow">资料管理</div>
-          <h2 class="section-title">先把资料喂进去</h2>
-          <p class="body-copy">文本和链接都能加，但主推文本资料，先把最低门槛的动作做顺。</p>
-          <p class="meta">当前对象：<span data-persona-id>未创建</span></p>
+          <div class="mini-eyebrow">系统资料</div>
+          <h2 class="section-title">确认资料来源</h2>
+          <p class="body-copy">这些资料会进入蒸馏流程，用来提取说话习惯、思维方式和边界。</p>
+          <ul class="source-list" data-discovery-source-list><li class="empty-state">加载中...</li></ul>
+        </section>
+
+        <section class="stage-card">
+          <div class="mini-eyebrow">补充资料</div>
+          <h2 class="section-title">你也可以加资料</h2>
+          <p class="body-copy">最好补原文、访谈、设定集或片段，不要只写主观评价。</p>
           <form data-text-source-form class="field-stack">
             <label class="field-block">
               <span class="field-label">资料标题</span>
@@ -1905,7 +1903,7 @@ export const buildCreatePageBody = () => `
               <textarea name="content" placeholder="粘贴资料内容"></textarea>
             </label>
             <div class="actions">
-              <button type="submit">添加文本</button>
+              <button type="submit">添加资料</button>
             </div>
           </form>
 
@@ -1927,31 +1925,61 @@ export const buildCreatePageBody = () => `
               </select>
             </label>
             <div class="actions">
-              <button type="submit" class="secondary">导入链接</button>
+              <button type="submit" class="secondary">添加链接</button>
             </div>
           </form>
 
           <div class="status-line" data-source-status></div>
-          <ul class="source-list" data-source-list><li class="empty-state">还没有资料</li></ul>
+          <ul class="source-list" data-extra-source-list><li class="empty-state">还没有补充资料</li></ul>
         </section>
 
         <div class="list-stack">
           <section class="stage-card">
-            <div class="mini-eyebrow">预览</div>
-            <h3 class="card-title">先听它怎么开口</h3>
-            <p class="body-copy">资料补完后先预览，确认像它，再决定怎么使用。</p>
+            <div class="mini-eyebrow">详情</div>
+            <h3 class="card-title">生成候选对象</h3>
+            <p class="body-copy">蒸馏完成后会进入对象详情，确认后再保存或公开。</p>
             <div class="actions">
-              <button type="button" data-open-preview>进入预览</button>
+              <button type="button" data-start-distill>开始蒸馏</button>
             </div>
           </section>
 
           <section class="stage-card">
             <div class="mini-eyebrow">使用方式</div>
-            <h3 class="card-title">预览后再决定</h3>
-            <p class="body-copy">你可以选择仅自己使用，也可以直接公开分享。</p>
+            <h3 class="card-title">确认后再使用</h3>
+            <p class="body-copy">候选会先出现在我的对象，不会自动公开。</p>
           </section>
         </div>
       </div>
+    </section>
+
+    <section class="workbench-shell" data-create-workbench hidden>
+      <div class="stage-strip" aria-label="创建阶段">
+        <span class="stage-pill is-done">对象识别</span>
+        <span class="stage-pill is-done">资料确认</span>
+        <span class="stage-pill is-active">蒸馏中</span>
+        <span class="stage-pill">详情</span>
+      </div>
+      <section class="summary-card">
+        <div class="mini-eyebrow">任务</div>
+        <h2 class="section-title" data-job-title>正在蒸馏</h2>
+        <p class="summary-copy" data-job-status>准备资料</p>
+      </section>
+      <section class="stage-card">
+        <div class="mini-eyebrow">进度</div>
+        <h3 class="card-title" data-job-progress>0%</h3>
+        <p class="body-copy">完成后会自动进入对象详情。如果离开页面，可以在我的对象里继续查看。</p>
+        <div class="actions">
+          <a class="utility-link secondary" href="/profile/objects">去我的对象</a>
+        </div>
+      </section>
+      <section class="stage-card" data-distill-debug-panel hidden>
+        <div class="mini-eyebrow">调试日志</div>
+        <h3 class="card-title">蒸馏流程</h3>
+        <p class="body-copy">仅调试模式显示，用来排查每一步输入、输出和工具调用。</p>
+        <ul class="source-list" data-distill-debug-list>
+          <li class="empty-state">暂无日志</li>
+        </ul>
+      </section>
     </section>
 
     ${renderBottomShuttle("create")}
@@ -1996,7 +2024,7 @@ export const buildProfilePageBody = () => `
     ${renderPageHeader({
       eyebrow: "My",
       title: "我的",
-      subtitle: "你的设置和对象都在这里。",
+      subtitle: "对象、聊天和创建入口。",
     })}
 
     <section class="profile-card">
@@ -2009,33 +2037,134 @@ export const buildProfilePageBody = () => `
       </div>
     </section>
 
-    <div class="stat-grid">
-      <section class="stat-card">
-        <div class="mini-eyebrow">草稿</div>
-        <div class="stat-number" data-profile-draft-count>0</div>
-      </section>
-      <section class="stat-card">
-        <div class="mini-eyebrow">已发布</div>
-        <div class="stat-number" data-profile-published-count>0</div>
-      </section>
-    </div>
-
     <section class="profile-card">
-      <div class="mini-eyebrow">我的对象</div>
-      <div class="list-stack" data-profile-persona-list>
-        <div class="empty-state">加载中...</div>
-      </div>
-    </section>
-
-    <section class="profile-card">
-      <div class="mini-eyebrow">常用操作</div>
       <div class="list-stack">
-        <a class="utility-link" href="/create">去创建</a>
-        <a class="utility-link secondary" href="/">回到聊天</a>
+        <a class="utility-link" href="/profile/objects">我的对象</a>
+        <a class="utility-link secondary" href="/history">聊天列表</a>
+        <a class="utility-link secondary" href="/create">创建对象</a>
       </div>
     </section>
 
     ${renderBottomShuttle("profile")}
+  </div>
+`;
+
+export const buildMyObjectsPageBody = () => `
+  <div class="page-stage history-stage">
+    ${renderPageHeader({
+      eyebrow: "Objects",
+      title: "我的对象",
+      subtitle: "进入对象详情后再管理。",
+      extra: '<a class="mini-link" href="/profile">返回我的</a>',
+    })}
+    <section class="history-section">
+      <ul class="history-list" data-my-objects-list>
+        <li class="empty-state">加载中...</li>
+      </ul>
+    </section>
+    ${renderBottomShuttle("profile")}
+  </div>
+`;
+
+export const buildMyObjectDetailPageBody = (objectId: string) => `
+  <div class="page-stage" data-my-object-detail data-object-id="${escapeHtml(objectId)}">
+    ${renderPageHeader({
+      eyebrow: "Object",
+      title: "对象详情",
+      subtitle: "管理放在这里，聊天保持干净。",
+      titleAttrs: "data-my-object-title",
+      subtitleAttrs: "data-my-object-subtitle",
+      extra: '<a class="mini-link" href="/profile/objects">返回列表</a>',
+    })}
+
+    <section class="profile-card">
+      <div class="mini-eyebrow" data-my-object-status>加载中</div>
+      <h2 class="section-title" data-my-object-name>对象</h2>
+      <p class="body-copy" data-my-object-intro>正在加载...</p>
+      <div class="status-line" data-my-object-message></div>
+    </section>
+
+    <section class="profile-card">
+      <div class="mini-eyebrow">操作</div>
+      <div class="actions" data-my-object-actions></div>
+      <div class="status-line" data-my-object-action-status></div>
+    </section>
+
+    <section class="profile-card" data-my-object-edit-panel hidden>
+      <div class="mini-eyebrow">编辑</div>
+      <form class="field-stack" data-my-object-edit-form>
+        <label class="field-block">
+          <span class="field-label">名称</span>
+          <input name="displayName" maxlength="40" required />
+        </label>
+        <label class="field-block">
+          <span class="field-label">简介</span>
+          <textarea name="intro" maxlength="120"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">保存</button>
+          <button type="button" class="secondary" data-my-object-edit-cancel>取消</button>
+        </div>
+      </form>
+    </section>
+
+    ${renderBottomShuttle("profile")}
+  </div>
+`;
+
+export const buildMyObjectChatPageBody = (objectId: string) => `
+  <div class="page-stage chat-stage chat-focused" data-my-object-chat data-object-id="${escapeHtml(objectId)}">
+    ${renderPageHeader({
+      eyebrow: "聊天",
+      title: "对象",
+      subtitle: "等你开口",
+      titleAttrs: "data-thread-name",
+      subtitleAttrs: "data-thread-status",
+      subtitleClass: "thread-status",
+      extra: `<div class="thread-typing" data-thread-typing aria-label="正在输入中"></div><a class="mini-link" href="/profile/objects/${escapeHtml(objectId)}">返回</a>`,
+    })}
+    <section class="thread-screen">
+      <div class="message-list" data-chat-log data-chat-assistant-name="对象">
+        ${renderStaticBubble({
+          role: "assistant",
+          label: "对象",
+          content: "想聊什么？",
+        })}
+      </div>
+      <section class="composer-shell">
+        <form data-chat-form class="composer">
+          <textarea placeholder="输入你想说的话"></textarea>
+          <div class="composer-actions">
+            <button type="submit">发送</button>
+          </div>
+        </form>
+        <div class="status-line" data-chat-status></div>
+      </section>
+    </section>
+  </div>
+`;
+
+export const buildReadOnlyHistoryChatPageBody = (chatId: string) => `
+  <div class="page-stage chat-stage chat-focused" data-history-chat data-chat-id="${escapeHtml(chatId)}">
+    ${renderPageHeader({
+      eyebrow: "记录",
+      title: "聊天记录",
+      subtitle: "旧会话只能查看。",
+      titleAttrs: "data-thread-name",
+      subtitleAttrs: "data-thread-status",
+      subtitleClass: "thread-status",
+      extra: '<a class="mini-link" href="/history">返回列表</a>',
+    })}
+    <section class="thread-screen">
+      <div class="message-list" data-chat-log data-chat-assistant-name="对象">
+        ${renderStaticBubble({
+          role: "assistant",
+          label: "对象",
+          content: "正在加载记录。",
+        })}
+      </div>
+      <div class="status-line" data-chat-status>旧会话只保留记录，不能继续发送。</div>
+    </section>
   </div>
 `;
 
@@ -2060,12 +2189,64 @@ const renderHistoryPage = async () => {
   });
 };
 
-const renderChatScript = (input: {
-  targetType: "published_persona" | "draft_version_preview" | "share_link";
-  targetValue: string;
-  assistantName?: string;
-  initialChatId?: string | null;
-}) => `
+const renderReadOnlyHistoryChatPage = (chatId: string) =>
+  renderShell({
+    title: "聊天记录",
+    body: buildReadOnlyHistoryChatPageBody(chatId),
+    script: renderChatScript({
+      targetType: "history_chat",
+      assistantName: "对象",
+      initialChatId: chatId,
+    }),
+  });
+
+type ChatScriptInput =
+  | {
+      targetType: "published_persona" | "draft_version_preview" | "share_link";
+      targetValue: string;
+      assistantName?: string;
+      initialChatId?: string | null;
+    }
+  | {
+      targetType: "history_chat";
+      assistantName?: string;
+      initialChatId: string;
+    }
+  | {
+      targetType: "owned_object";
+      objectId: string;
+      assistantName?: string;
+      initialChatId?: string | null;
+    };
+
+const renderChatScript = (input: ChatScriptInput) => {
+  const createChatSessionExpression = (() => {
+    if (input.targetType === "owned_object") {
+      return `HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(${JSON.stringify(input.objectId)}) + "/chats", {
+          method: "POST",
+        }).then((created) => created.chatId)`;
+    }
+    if (input.targetType === "history_chat") {
+      return `Promise.reject(new Error("旧会话不能继续发送。"))`;
+    }
+
+    const payload =
+      input.targetType === "published_persona"
+        ? `{ targetType: "published_persona", personaId: "${input.targetValue}" }`
+        : input.targetType === "draft_version_preview"
+          ? `{ targetType: "draft_version_preview", personaVersionId: "${input.targetValue}" }`
+          : `{ targetType: "share_link", shareSlug: "${input.targetValue}" }`;
+
+    return `(() => {
+          const payload = ${payload};
+          return HallOfFameClient.requestJson("/v1/chats", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          }).then((created) => created.id);
+        })()`;
+  })();
+
+  return `
   const form = document.querySelector("[data-chat-form]");
   const log = document.querySelector("[data-chat-log]");
   const status = document.querySelector("[data-chat-status]");
@@ -2075,7 +2256,8 @@ const renderChatScript = (input: {
   let chatCreation = null;
   let pendingAssistantReplies = 0;
   const assistantReplyWaitTimers = [];
-  const assistantName = ${JSON.stringify(input.assistantName ?? null)}
+  const getAssistantName = () =>
+    ${JSON.stringify(input.assistantName ?? null)}
     || log?.getAttribute("data-chat-assistant-name")
     || document.querySelector("[data-thread-name]")?.textContent?.trim()
     || "对象";
@@ -2261,7 +2443,7 @@ const renderChatScript = (input: {
     if (role === "ASSISTANT") {
       const label = document.createElement("div");
       label.className = "bubble-label";
-      label.textContent = assistantName;
+      label.textContent = getAssistantName();
       bubble.append(label);
     }
 
@@ -2382,18 +2564,9 @@ const renderChatScript = (input: {
 
     await HallOfFameClient.ensureAnonymousSession();
 
-    const payload = ${input.targetType === "published_persona"
-      ? `{ targetType: "published_persona", personaId: "${input.targetValue}" }`
-      : input.targetType === "draft_version_preview"
-        ? `{ targetType: "draft_version_preview", personaVersionId: "${input.targetValue}" }`
-        : `{ targetType: "share_link", shareSlug: "${input.targetValue}" }`};
-
-    chatCreation = HallOfFameClient.requestJson("/v1/chats", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
-      .then((created) => {
-        chatId = created.id;
+    chatCreation = ${createChatSessionExpression}
+      .then((createdId) => {
+        chatId = createdId;
         connectRealtime(chatId);
         return chatId;
       })
@@ -2457,6 +2630,7 @@ const renderChatScript = (input: {
   syncComposerHeight();
   void loadExistingChat();
 `;
+};
 
 const getSingleQueryValue = (value: unknown) => {
   if (Array.isArray(value)) {
@@ -2563,20 +2737,61 @@ const renderCreatePage = () =>
     body: buildCreatePageBody(),
     script: `
       const createStatus = document.querySelector("[data-create-status]");
+      const sourceDiscoveryActions = document.querySelector("[data-source-discovery-actions]");
+      const createForm = document.querySelector("[data-create-form]");
+      const createSubmitButton = createForm?.querySelector("button[type='submit']");
       const sourceStatus = document.querySelector("[data-source-status]");
       const lightStartShell = document.querySelector("[data-create-light-start]");
       const successShell = document.querySelector("[data-create-success]");
       const workbenchShell = document.querySelector("[data-create-workbench]");
-      const personaSlot = document.querySelector("[data-persona-id]");
-      const sourceList = document.querySelector("[data-source-list]");
       const createdNameSlot = document.querySelector("[data-created-name]");
-      const definitionNameSlot = document.querySelector("[data-definition-name]");
-      const definitionPositioningSlot = document.querySelector("[data-definition-positioning]");
-      const definitionTagsSlot = document.querySelector("[data-definition-tags]");
+      const discoveryNameSlot = document.querySelector("[data-discovery-name]");
+      const discoveryRiskSlot = document.querySelector("[data-discovery-risk]");
+      const discoverySourceList = document.querySelector("[data-discovery-source-list]");
+      const extraSourceList = document.querySelector("[data-extra-source-list]");
+      const jobTitleSlot = document.querySelector("[data-job-title]");
+      const jobStatusSlot = document.querySelector("[data-job-status]");
+      const jobProgressSlot = document.querySelector("[data-job-progress]");
+      const distillDebugPanel = document.querySelector("[data-distill-debug-panel]");
+      const distillDebugList = document.querySelector("[data-distill-debug-list]");
       const tagButtons = Array.from(document.querySelectorAll("[data-tag-value]"));
-      const initialPersonaId = new URLSearchParams(window.location.search).get("personaId");
+      const createParams = new URLSearchParams(window.location.search);
+      const initialJobId = createParams.get("jobId");
+      const initialSourceDiscoveryJobId = createParams.get("sourceDiscoveryJobId");
+      const shouldAddSources = createParams.get("mode") === "addSources";
+      const DISTILL_DEBUG_KEY = "hof-distill-debug";
+      let intentId = null;
+      let discoveryId = null;
+      let jobId = initialJobId || null;
+      let sourceDiscoveryJobId = initialSourceDiscoveryJobId || null;
+      let normalizedName = "";
+      let sourceCandidates = [];
+      let extraSources = [];
+      let selectedSourceCandidateIdsFromJob = [];
+      let pollTimer = null;
+      let sourceDiscoveryPollTimer = null;
+      let isSourceDiscoverySubmitting = false;
       let personaId = null;
-      let openedFromExistingPersona = false;
+
+      const shouldShowDistillDebug = () => {
+        try {
+          return createParams.get("debug") === "distill" || window.localStorage.getItem(DISTILL_DEBUG_KEY) === "true";
+        } catch {
+          return createParams.get("debug") === "distill";
+        }
+      };
+
+      const buildCreateUrl = () => (shouldShowDistillDebug() ? "/create?debug=distill" : "/create");
+      const buildCreateJobUrl = (nextJobId) =>
+        "/create?jobId=" + encodeURIComponent(nextJobId) + (shouldShowDistillDebug() ? "&debug=distill" : "");
+      const buildCreateSourceDiscoveryJobUrl = (nextSourceDiscoveryJobId) =>
+        "/create?sourceDiscoveryJobId=" +
+        encodeURIComponent(nextSourceDiscoveryJobId) +
+        (shouldShowDistillDebug() ? "&debug=distill" : "");
+
+      if (distillDebugPanel) {
+        distillDebugPanel.hidden = !shouldShowDistillDebug();
+      }
 
       const collectTags = () => {
         const selected = tagButtons
@@ -2590,95 +2805,375 @@ const renderCreatePage = () =>
         return Array.from(new Set([...selected, ...custom])).slice(0, 4);
       };
 
-      const storeCurrentPersona = (input) => {
-        HallOfFameClient.writeCurrentPersonaSelection({
-          id: input.personaId,
-          displayName: input.displayName,
-          positioning: input.positioning,
-          tags: input.tags,
-        });
-      };
-
-      const renderDefinitionSummary = (displayName, positioning, tags) => {
-        if (createdNameSlot) createdNameSlot.textContent = displayName;
-        if (definitionNameSlot) definitionNameSlot.textContent = displayName;
-        if (definitionPositioningSlot) definitionPositioningSlot.textContent = positioning;
-        if (personaSlot) personaSlot.textContent = personaId || "未创建";
-        if (definitionTagsSlot) {
-          definitionTagsSlot.innerHTML = tags.length
-            ? tags.map((tag) => "<span class='mini-tag'>" + HallOfFameClient.escapeHtml(tag) + "</span>").join("")
-            : "<span class='mini-tag'>暂无标签</span>";
-        }
-      };
-
       const showState = (state) => {
         if (lightStartShell) lightStartShell.hidden = state !== "light-start";
         if (successShell) successShell.hidden = state !== "success";
         if (workbenchShell) workbenchShell.hidden = state !== "workbench";
       };
 
-      const refreshSources = async () => {
-        if (!sourceList) return;
-        if (!personaId) {
-          sourceList.innerHTML = "<li class='empty-state'>还没有资料</li>";
+      const renderDiscoverySources = () => {
+        if (!discoverySourceList) return;
+        if (!sourceCandidates.length) {
+          discoverySourceList.innerHTML = "<li class='empty-state'>没有找到可用资料。可以先补充资料。</li>";
           return;
         }
 
-        try {
-          const result = await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/sources");
-          const items = result.items || [];
-          sourceList.innerHTML = items.length
-            ? items
-                .map(
-                  (item) =>
-                    "<li class='source-item'><strong>" +
-                    HallOfFameClient.escapeHtml(item.sourceTitle || item.id) +
-                    "</strong><div class='meta'>" +
-                    HallOfFameClient.escapeHtml(item.inputType + " / " + item.sourceKind + " / 可预览") +
-                    "</div><p class='body-copy'>" +
-                    HallOfFameClient.escapeHtml(item.sourceSummary || "") +
-                    "</p></li>",
-                )
-                .join("")
-            : "<li class='empty-state'>还没有资料</li>";
-        } catch (error) {
-          sourceList.innerHTML = "<li class='empty-state'>" + HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) + "</li>";
+        discoverySourceList.innerHTML = sourceCandidates
+          .map((item) => {
+            const checked =
+              (selectedSourceCandidateIdsFromJob.length
+                ? selectedSourceCandidateIdsFromJob.includes(item.sourceCandidateId)
+                : item.recommended && (!Array.isArray(item.riskFlags) || item.riskFlags.length === 0))
+                ? "checked"
+                : "";
+            const riskCopy = Array.isArray(item.riskFlags) && item.riskFlags.length
+              ? "<div class='meta'>风险：" + HallOfFameClient.escapeHtml(item.riskFlags.join("、")) + "</div>"
+              : "";
+            return (
+              "<li class='source-item'>" +
+              "<label class='check-row'>" +
+              "<input type='checkbox' data-source-candidate='" +
+              HallOfFameClient.escapeHtml(item.sourceCandidateId) +
+              "' " +
+              checked +
+              " />" +
+              "<span><strong>" +
+              HallOfFameClient.escapeHtml(item.title) +
+              "</strong><div class='meta'>" +
+              HallOfFameClient.escapeHtml(item.bucket + " / " + item.sourceKind + " / " + item.trustLevel) +
+              "</div><p class='body-copy'>" +
+              HallOfFameClient.escapeHtml(item.snippet || "") +
+              "</p>" +
+              riskCopy +
+              "</span></label></li>"
+            );
+          })
+          .join("");
+      };
+
+      const renderExtraSources = () => {
+        if (!extraSourceList) return;
+        if (!extraSources.length) {
+          extraSourceList.innerHTML = "<li class='empty-state'>还没有补充资料</li>";
+          return;
+        }
+
+        extraSourceList.innerHTML = extraSources
+          .map((item) => {
+            const statusCopy = item.status === "USABLE" ? "可用" : item.status === "REJECTED" ? "已拒绝" : "处理中";
+            return (
+              "<li class='source-item'><strong>" +
+              HallOfFameClient.escapeHtml(item.title) +
+              "</strong><div class='meta'>" +
+              HallOfFameClient.escapeHtml(statusCopy + " / " + item.sourceKind) +
+              "</div><p class='body-copy'>" +
+              HallOfFameClient.escapeHtml(item.snippet || item.rejectionReason || "") +
+              "</p></li>"
+            );
+          })
+          .join("");
+      };
+
+      const collectSelectedSourceIds = () =>
+        Array.from(document.querySelectorAll("[data-source-candidate]:checked"))
+          .map((input) => input.getAttribute("data-source-candidate") || "")
+          .filter(Boolean);
+
+      const collectSelectedExtraSourceIds = () =>
+        extraSources
+          .filter((item) => item.status === "USABLE")
+          .map((item) => item.extraSourceId)
+          .filter(Boolean);
+
+      const renderDiscovery = (discovery) => {
+        discoveryId = discovery.discoveryId;
+        sourceCandidates = discovery.sourceCandidates || [];
+        if (createdNameSlot) createdNameSlot.textContent = discovery.normalizedName;
+        if (discoveryNameSlot) discoveryNameSlot.textContent = discovery.normalizedName;
+        if (discoveryRiskSlot) {
+          discoveryRiskSlot.textContent =
+            discovery.riskDecision === "ALLOW"
+              ? "可蒸馏，已找到 " + sourceCandidates.length + " 条资料"
+              : "需要确认：" + discovery.riskDecision;
+        }
+        renderDiscoverySources();
+        renderExtraSources();
+      };
+
+      const setCreateSubmitDisabled = (isDisabled) => {
+        if (createSubmitButton) {
+          createSubmitButton.disabled = isDisabled;
+          createSubmitButton.textContent = isDisabled ? "搜索中" : "搜索资料";
         }
       };
 
-      const loadManagedPersona = async () => {
-        if (!initialPersonaId) {
+      const clearSourceDiscoveryActions = () => {
+        if (sourceDiscoveryActions) {
+          sourceDiscoveryActions.innerHTML = "";
+        }
+      };
+
+      const renderSourceDiscoveryRetryAction = () => {
+        if (!sourceDiscoveryActions) return;
+        sourceDiscoveryActions.innerHTML =
+          "<button type='button' class='secondary' data-retry-source-discovery>重试搜索</button>";
+      };
+
+      const renderSourceDiscoveryJob = (job) => {
+        if (!job) return;
+        intentId = job.intentId || intentId;
+
+        if (job.status === "SUCCEEDED") {
+          setCreateSubmitDisabled(false);
+          clearSourceDiscoveryActions();
+          if (createStatus) createStatus.textContent = "";
           return;
         }
 
+        if (job.status === "FAILED" || job.status === "BLOCKED") {
+          setCreateSubmitDisabled(false);
+          if (createStatus) {
+            createStatus.textContent = job.error?.message || "资料搜索失败，可以重试。";
+          }
+          if (job.status === "FAILED" && job.error?.retryable) {
+            renderSourceDiscoveryRetryAction();
+          } else {
+            clearSourceDiscoveryActions();
+          }
+          return;
+        }
+
+        setCreateSubmitDisabled(true);
+        clearSourceDiscoveryActions();
+        if (createStatus) {
+          createStatus.textContent = job.currentStep || "正在搜索资料…";
+        }
+      };
+
+      const loadSourceDiscoveryJob = async () => {
+        if (!sourceDiscoveryJobId) return null;
+        return HallOfFameClient.requestJson(
+          "/v1/persona-distill-source-discovery-jobs/" + encodeURIComponent(sourceDiscoveryJobId),
+          {
+            method: "GET",
+          },
+        );
+      };
+
+      const stopSourceDiscoveryPolling = () => {
+        if (sourceDiscoveryPollTimer) {
+          window.clearTimeout(sourceDiscoveryPollTimer);
+          sourceDiscoveryPollTimer = null;
+        }
+      };
+
+      const pollSourceDiscoveryJob = async () => {
+        if (!sourceDiscoveryJobId) return;
         try {
-          const dashboard = await HallOfFameClient.requestJson("/v1/me/personae", { method: "GET" });
-          const current = (dashboard.items || []).find((item) => item.personaId === initialPersonaId);
-          if (!current) {
-            if (createStatus) {
-              createStatus.textContent = "没有找到这个对象。";
+          const job = await loadSourceDiscoveryJob();
+          renderSourceDiscoveryJob(job);
+          if (job?.status === "SUCCEEDED") {
+            stopSourceDiscoveryPolling();
+            if (job.discovery) {
+              renderDiscovery(job.discovery);
+              showState("success");
+              window.history.replaceState({}, "", buildCreateSourceDiscoveryJobUrl(sourceDiscoveryJobId));
+            } else if (createStatus) {
+              createStatus.textContent = "资料已找到，但结果为空，请重试。";
+              renderSourceDiscoveryRetryAction();
             }
             return;
           }
-
-          openedFromExistingPersona = true;
-          personaId = current.personaId;
-          storeCurrentPersona({
-            personaId: current.personaId,
-            displayName: current.displayName,
-            positioning: current.positioning || current.previewIntro || "",
-            tags: current.distillFocus || [],
-          });
-          renderDefinitionSummary(current.displayName, current.positioning || current.previewIntro || "继续补资料后再预览。", current.distillFocus || []);
-          showState("workbench");
-          if (sourceStatus) {
-            sourceStatus.textContent = current.currentPublishedVersionId ? "继续补资料或重新预览。" : "继续补资料。";
+          if (job?.status === "FAILED" || job?.status === "BLOCKED") {
+            stopSourceDiscoveryPolling();
+            showState("light-start");
+            return;
           }
-          await refreshSources();
+          sourceDiscoveryPollTimer = window.setTimeout(pollSourceDiscoveryJob, 1500);
         } catch (error) {
           if (createStatus) {
-            createStatus.textContent = error instanceof Error ? error.message : String(error);
+            console.warn("source discovery poll failed", error);
+            createStatus.textContent = "资料搜索暂时不可用，正在重试。";
           }
+          sourceDiscoveryPollTimer = window.setTimeout(pollSourceDiscoveryJob, 2500);
+        }
+      };
+
+      const retrySourceDiscoveryJob = async () => {
+        if (!sourceDiscoveryJobId) return;
+        clearSourceDiscoveryActions();
+        setCreateSubmitDisabled(true);
+        if (createStatus) createStatus.textContent = "重新搜索中…";
+        try {
+          const job = await HallOfFameClient.requestJson(
+            "/v1/persona-distill-source-discovery-jobs/" +
+              encodeURIComponent(sourceDiscoveryJobId) +
+              "/retry",
+            {
+              method: "POST",
+            },
+          );
+          sourceDiscoveryJobId = job.sourceDiscoveryJobId;
+          window.history.replaceState({}, "", buildCreateSourceDiscoveryJobUrl(sourceDiscoveryJobId));
+          renderSourceDiscoveryJob(job);
+          showState("light-start");
+          stopSourceDiscoveryPolling();
+          sourceDiscoveryPollTimer = window.setTimeout(pollSourceDiscoveryJob, 800);
+        } catch (error) {
+          setCreateSubmitDisabled(false);
+          if (createStatus) {
+            createStatus.textContent = error instanceof Error ? error.message : "重试失败，请稍后再试。";
+          }
+          renderSourceDiscoveryRetryAction();
+        }
+      };
+
+      const loadJob = async () => {
+        if (!jobId) return null;
+        return HallOfFameClient.requestJson("/v1/persona-distill-jobs/" + jobId, {
+          method: "GET",
+        });
+      };
+
+      const formatTraceTime = (value) => {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      };
+
+      const stringifyDebugJson = (value) => {
+        const text = JSON.stringify(value ?? null, null, 2);
+        return text.length > 1800 ? text.slice(0, 1800) + "...<truncated>" : text;
+      };
+
+      const renderDistillTrace = (trace) => {
+        if (!distillDebugPanel || !distillDebugList || !shouldShowDistillDebug()) return;
+        distillDebugPanel.hidden = false;
+        const events = Array.isArray(trace?.events) ? trace.events : [];
+        const runs = Array.isArray(trace?.runs) ? trace.runs : [];
+        const artifacts = Array.isArray(trace?.artifacts) ? trace.artifacts : [];
+        if (!events.length && !runs.length && !artifacts.length) {
+          distillDebugList.innerHTML = "<li class='empty-state'>暂无日志</li>";
+          return;
+        }
+
+        const eventItems = events.map((event) =>
+          "<li class='source-item'><strong>" +
+          HallOfFameClient.escapeHtml(event.label || event.kind) +
+          "</strong><div class='meta'>" +
+          HallOfFameClient.escapeHtml(
+            formatTraceTime(event.at) +
+              (event.toolName ? " / " + event.toolName : "") +
+              (event.status ? " / " + event.status : ""),
+          ) +
+          "</div>" +
+          (event.summary ? "<p class='body-copy'>" + HallOfFameClient.escapeHtml(event.summary) + "</p>" : "") +
+          "</li>",
+        );
+
+        const runItems = runs.map((run) => {
+          const inputJson = HallOfFameClient.escapeHtml(stringifyDebugJson(run.input));
+          const outputJson = HallOfFameClient.escapeHtml(stringifyDebugJson(run.output));
+          return (
+            "<li class='source-item'><details>" +
+            "<summary>" +
+            HallOfFameClient.escapeHtml(String(run.seq) + ". " + run.toolName + " / " + run.status) +
+            "</summary>" +
+            "<div class='meta'>" +
+            HallOfFameClient.escapeHtml(
+              formatTraceTime(run.startedAt) +
+                (run.durationMs === null || run.durationMs === undefined ? "" : " / " + run.durationMs + "ms"),
+            ) +
+            "</div>" +
+            (run.errorMessage ? "<p class='body-copy'>" + HallOfFameClient.escapeHtml(run.errorMessage) + "</p>" : "") +
+            "<pre class='debug-json'>输入\\n" +
+            inputJson +
+            "\\n\\n输出\\n" +
+            outputJson +
+            "</pre>" +
+            "</details></li>"
+          );
+        });
+
+        const artifactItems = artifacts.map((artifact) =>
+          "<li class='source-item'><details><summary>" +
+          HallOfFameClient.escapeHtml("artifact / " + artifact.stage) +
+          "</summary><div class='meta'>" +
+          HallOfFameClient.escapeHtml(formatTraceTime(artifact.createdAt)) +
+          "</div><pre class='debug-json'>" +
+          HallOfFameClient.escapeHtml(stringifyDebugJson(artifact.artifact)) +
+          "</pre></details></li>",
+        );
+
+        distillDebugList.innerHTML = [...eventItems, ...runItems, ...artifactItems].join("");
+      };
+
+      const loadDistillTrace = async () => {
+        if (!jobId || !shouldShowDistillDebug()) return;
+        try {
+          const trace = await HallOfFameClient.requestJson("/v1/persona-distill-jobs/" + encodeURIComponent(jobId) + "/trace", {
+            method: "GET",
+          });
+          renderDistillTrace(trace);
+        } catch (error) {
+          if (distillDebugPanel) distillDebugPanel.hidden = false;
+          if (distillDebugList) {
+            distillDebugList.innerHTML =
+              "<li class='empty-state'>" +
+              HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) +
+              "</li>";
+          }
+        }
+      };
+
+      const renderJob = (job) => {
+        if (!job) return;
+        personaId = job.personaId || personaId;
+        if (jobTitleSlot) jobTitleSlot.textContent = job.intent?.normalizedName || normalizedName || "正在蒸馏";
+        if (jobStatusSlot) jobStatusSlot.textContent = job.currentStep || job.status;
+        if (jobProgressSlot) jobProgressSlot.textContent = String(job.progress || 0) + "%";
+      };
+
+      const stopPolling = () => {
+        if (pollTimer) {
+          window.clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      };
+
+      const getJobObjectHref = (job) =>
+        typeof job?.objectHref === "string" && job.objectHref
+          ? job.objectHref
+          : job?.objectId
+            ? "/profile/objects/" + encodeURIComponent(job.objectId)
+            : "/profile/objects";
+
+      const pollJob = async () => {
+        if (!jobId) return;
+        try {
+          const job = await loadJob();
+          renderJob(job);
+          await loadDistillTrace();
+          if (job.status === "SUCCEEDED") {
+            stopPolling();
+            window.location.href = getJobObjectHref(job);
+            return;
+          }
+          if (job.status === "FAILED" || job.status === "BLOCKED" || job.status === "NEEDS_MORE_SOURCES" || job.status === "SUPERSEDED") {
+            stopPolling();
+            if (jobStatusSlot) {
+              jobStatusSlot.textContent =
+                job.status === "SUPERSEDED"
+                  ? "已被新的蒸馏任务替代"
+                  : job.error?.message || (job.missingRequirements || []).join("；") || "需要补充资料";
+            }
+            return;
+          }
+          pollTimer = window.setTimeout(pollJob, 1500);
+        } catch (error) {
+          if (jobStatusSlot) jobStatusSlot.textContent = error instanceof Error ? error.message : String(error);
+          pollTimer = window.setTimeout(pollJob, 2500);
         }
       };
 
@@ -2688,91 +3183,110 @@ const renderCreatePage = () =>
         });
       });
 
-      document.querySelector("[data-create-form]")?.addEventListener("submit", async (event) => {
+      sourceDiscoveryActions?.addEventListener("click", (event) => {
+        const retryButton = event.target.closest("[data-retry-source-discovery]");
+        if (!retryButton) return;
+        void retrySourceDiscoveryJob();
+      });
+
+      createForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
-        await HallOfFameClient.ensureAnonymousSession();
         const form = event.currentTarget;
-        const displayName = String(new FormData(form).get("displayName") || "").trim();
-        const positioning = String(new FormData(form).get("positioning") || "").trim();
+        const query = String(new FormData(form).get("query") || "").trim();
         const tags = collectTags();
 
-        if (!displayName) {
-          createStatus.textContent = "请填写名称";
-          return;
-        }
-        if (!positioning) {
-          createStatus.textContent = "请填写一句话简介";
-          return;
-        }
-        if (!tags.length) {
-          createStatus.textContent = "至少选择一个风格";
+        if (!query) {
+          createStatus.textContent = "请填写对象名称";
           return;
         }
 
-        createStatus.textContent = "创建中…";
+        if (isSourceDiscoverySubmitting || createSubmitButton?.disabled) {
+          return;
+        }
+
+        isSourceDiscoverySubmitting = true;
+        stopSourceDiscoveryPolling();
+        stopPolling();
+        clearSourceDiscoveryActions();
+        sourceDiscoveryJobId = null;
+        discoveryId = null;
+        sourceCandidates = [];
+        extraSources = [];
+        createStatus.textContent = "识别对象中…";
+        setCreateSubmitDisabled(true);
 
         try {
-          const result = await HallOfFameClient.requestJson("/v1/personae", {
+          await HallOfFameClient.ensureAnonymousSession();
+          const intent = await HallOfFameClient.requestJson("/v1/persona-distill-intents", {
             method: "POST",
             body: JSON.stringify({
-              displayName,
-              positioning,
-              personaType: "ORIGINAL_PERSONA",
-              originType: "USER",
-              distillFocus: tags,
+              query,
+              usageIntent: "chat_companion",
+              focus: tags,
             }),
           });
 
-          personaId = result.id;
-          storeCurrentPersona({
-            personaId,
-            displayName,
-            positioning,
-            tags,
+          intentId = intent.intentId;
+          normalizedName = intent.normalizedName;
+          if (intent.nextStep !== "DISCOVER_SOURCES") {
+            createStatus.textContent = intent.riskReasons?.join("；") || "这个对象暂时不能蒸馏";
+            isSourceDiscoverySubmitting = false;
+            setCreateSubmitDisabled(false);
+            return;
+          }
+
+          createStatus.textContent = "搜索资料中…";
+          const sourceDiscoveryJob = await HallOfFameClient.requestJson("/v1/persona-distill-source-discovery", {
+            method: "POST",
+            body: JSON.stringify({
+              intentId,
+              preferredLanguage: "zh-CN",
+              maxSourcesPerBucket: 4,
+            }),
           });
-          window.history.replaceState({}, "", "/create?personaId=" + encodeURIComponent(personaId));
-          renderDefinitionSummary(displayName, positioning, tags);
-          createStatus.textContent = "";
-          showState("success");
+
+          sourceDiscoveryJobId = sourceDiscoveryJob.sourceDiscoveryJobId;
+          window.history.replaceState({}, "", buildCreateSourceDiscoveryJobUrl(sourceDiscoveryJobId));
+          isSourceDiscoverySubmitting = false;
+          renderSourceDiscoveryJob(sourceDiscoveryJob);
+          showState("light-start");
+          sourceDiscoveryPollTimer = window.setTimeout(pollSourceDiscoveryJob, 800);
         } catch (error) {
           createStatus.textContent = error instanceof Error ? error.message : String(error);
+          isSourceDiscoverySubmitting = false;
+          setCreateSubmitDisabled(false);
         }
-      });
-
-      document.querySelector("[data-open-workbench]")?.addEventListener("click", async () => {
-        showState("workbench");
-        if (sourceStatus) sourceStatus.textContent = "先添加资料";
-        await refreshSources();
-      });
-
-      document.querySelector("[data-edit-definition]")?.addEventListener("click", () => {
-        if (openedFromExistingPersona) {
-          sourceStatus.textContent = "当前阶段先继续补资料，回改定义后续再补。";
-          return;
-        }
-        showState("light-start");
       });
 
       document.querySelector("[data-text-source-form]")?.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (!personaId) {
-          sourceStatus.textContent = "请先创建对象。";
+        if (!discoveryId) {
+          sourceStatus.textContent = "请先搜索资料。";
           return;
         }
-        const form = new FormData(event.currentTarget);
+        const textSourceForm = event.currentTarget;
+        const form = new FormData(textSourceForm);
         sourceStatus.textContent = "添加中…";
         try {
-          await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/sources/text", {
+          const result = await HallOfFameClient.requestJson("/v1/persona-distill-discoveries/" + discoveryId + "/extra-sources", {
             method: "POST",
             body: JSON.stringify({
-              title: String(form.get("title") || ""),
-              sourceKind: String(form.get("sourceKind") || "PRIMARY"),
-              content: String(form.get("content") || ""),
+              extraTextSources: [
+                {
+                  title: String(form.get("title") || ""),
+                  sourceKind: String(form.get("sourceKind") || "PRIMARY"),
+                  content: String(form.get("content") || ""),
+                },
+              ],
+              extraUrlSources: [],
             }),
           });
-          sourceStatus.textContent = "已添加，可用于预览。";
-          event.currentTarget.reset();
-          await refreshSources();
+          sourceCandidates = result.sourceCandidates || sourceCandidates;
+          extraSources = result.pendingExtraSources || [];
+          sourceStatus.textContent = "已添加。";
+          textSourceForm.reset();
+          renderDiscoverySources();
+          renderExtraSources();
         } catch (error) {
           sourceStatus.textContent = error instanceof Error ? error.message : String(error);
         }
@@ -2780,200 +3294,220 @@ const renderCreatePage = () =>
 
       document.querySelector("[data-url-source-form]")?.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (!personaId) {
-          sourceStatus.textContent = "请先创建对象。";
+        if (!discoveryId) {
+          sourceStatus.textContent = "请先搜索资料。";
           return;
         }
-        const form = new FormData(event.currentTarget);
-        sourceStatus.textContent = "链接处理中…";
+        const urlSourceForm = event.currentTarget;
+        const form = new FormData(urlSourceForm);
+        sourceStatus.textContent = "添加链接中…";
         try {
-          await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/sources/url", {
+          const result = await HallOfFameClient.requestJson("/v1/persona-distill-discoveries/" + discoveryId + "/extra-sources", {
             method: "POST",
             body: JSON.stringify({
-              url: String(form.get("url") || ""),
-              title: String(form.get("title") || ""),
-              sourceKind: String(form.get("sourceKind") || "PRIMARY"),
+              extraTextSources: [],
+              extraUrlSources: [
+                {
+                  url: String(form.get("url") || ""),
+                  title: String(form.get("title") || ""),
+                  sourceKind: String(form.get("sourceKind") || "SECONDARY"),
+                },
+              ],
             }),
           });
-          sourceStatus.textContent = "已添加，可用于预览。";
-          event.currentTarget.reset();
-          await refreshSources();
+          sourceCandidates = result.sourceCandidates || sourceCandidates;
+          extraSources = result.pendingExtraSources || [];
+          sourceStatus.textContent = "已添加。";
+          urlSourceForm.reset();
+          renderDiscoverySources();
+          renderExtraSources();
         } catch (error) {
           sourceStatus.textContent = error instanceof Error ? error.message : String(error);
         }
       });
 
-      document.querySelector("[data-open-preview]")?.addEventListener("click", async () => {
-        if (!personaId) {
-          sourceStatus.textContent = "请先创建对象。";
+      document.querySelector("[data-start-distill]")?.addEventListener("click", async () => {
+        if (!intentId || !discoveryId) {
+          sourceStatus.textContent = "请先确认资料。";
           return;
         }
-        sourceStatus.textContent = "生成中…";
+        const selectedSourceCandidateIds = collectSelectedSourceIds();
+        if (!selectedSourceCandidateIds.length && !collectSelectedExtraSourceIds().length) {
+          sourceStatus.textContent = "至少选择一条资料。";
+          return;
+        }
+        sourceStatus.textContent = "任务创建中…";
         try {
-          const version = await HallOfFameClient.requestJson("/v1/personae/" + personaId + "/distill", {
+          const job = await HallOfFameClient.requestJson("/v1/persona-distill-jobs", {
             method: "POST",
+            body: JSON.stringify({
+              intentId,
+              discoveryId,
+              selectedSourceCandidateIds,
+              selectedExtraSourceIds: collectSelectedExtraSourceIds(),
+            }),
           });
-          window.location.href = "/preview/" + version.id;
+          jobId = job.jobId;
+          personaId = job.personaId || null;
+          window.history.replaceState({}, "", buildCreateJobUrl(jobId));
+          renderJob(job);
+          await loadDistillTrace();
+          showState("workbench");
+          sourceStatus.textContent = "";
+          stopSourceDiscoveryPolling();
+          stopPolling();
+          pollTimer = window.setTimeout(pollJob, 800);
         } catch (error) {
           sourceStatus.textContent = error instanceof Error ? error.message : String(error);
         }
       });
 
-      void HallOfFameClient.ensureAnonymousSession().then(loadManagedPersona);
+      void HallOfFameClient.ensureAnonymousSession().then(async () => {
+        if (initialSourceDiscoveryJobId) {
+          const sourceDiscoveryJob = await loadSourceDiscoveryJob();
+          renderSourceDiscoveryJob(sourceDiscoveryJob);
+          if (sourceDiscoveryJob?.status === "SUCCEEDED") {
+            if (sourceDiscoveryJob.discovery) {
+              renderDiscovery(sourceDiscoveryJob.discovery);
+              showState("success");
+            } else if (createStatus) {
+              createStatus.textContent = "资料已找到，但结果为空，请重试。";
+              renderSourceDiscoveryRetryAction();
+              showState("light-start");
+            }
+            return;
+          }
+          if (sourceDiscoveryJob?.status === "FAILED" || sourceDiscoveryJob?.status === "BLOCKED") {
+            showState("light-start");
+            return;
+          }
+          showState("light-start");
+          sourceDiscoveryPollTimer = window.setTimeout(pollSourceDiscoveryJob, 800);
+          return;
+        }
+        if (!initialJobId) return;
+        const job = await loadJob();
+        if (job?.status === "SUCCEEDED" && shouldAddSources) {
+          intentId = job.intent?.intentId || null;
+          normalizedName = job.intent?.normalizedName || "";
+          selectedSourceCandidateIdsFromJob = job.selectedSourceCandidateIds || [];
+          extraSources = job.pendingExtraSources || [];
+          renderDiscovery(job.discovery);
+          if (sourceStatus) sourceStatus.textContent = "可以补充资料后重新蒸馏。";
+          showState("success");
+          return;
+        }
+        if (job?.status === "SUPERSEDED") {
+          if (sourceStatus) sourceStatus.textContent = "这个任务已被新的蒸馏任务替代，请从“我的”查看最新对象。";
+          showState("light-start");
+          return;
+        }
+        if (job?.status === "NEEDS_MORE_SOURCES" || job?.status === "FAILED" || job?.status === "BLOCKED") {
+          intentId = job.intent?.intentId || null;
+          normalizedName = job.intent?.normalizedName || "";
+          selectedSourceCandidateIdsFromJob = job.selectedSourceCandidateIds || [];
+          extraSources = job.pendingExtraSources || [];
+          renderDiscovery(job.discovery);
+          if (sourceStatus) {
+            sourceStatus.textContent = job.error?.message || (job.missingRequirements || []).join("；") || "需要补充资料后重试。";
+          }
+          showState("success");
+          return;
+        }
+        showState("workbench");
+        renderJob(job);
+        await loadDistillTrace();
+        if (job?.status === "SUCCEEDED") {
+          window.location.href = getJobObjectHref(job);
+          return;
+        }
+        pollTimer = window.setTimeout(pollJob, 800);
+      });
     `,
   });
 
 const renderPreviewPage = async (personaVersionId: string) =>
   renderShell({
-    title: "预览",
+    title: "打开对象",
     body: `
       <div class="page-stage">
         ${renderPageHeader({
-          eyebrow: "Preview",
-          title: "先听它怎么开口",
-          subtitle: "先预览，确认后再发布。",
-          extra: '<a class="mini-link" href="/create">返回创建</a>',
+          eyebrow: "对象入口",
+          title: "正在打开对象",
+          subtitle: "如果没有自动跳转，可以回到我的对象。",
+          extra: '<a class="mini-link" href="/profile/objects">我的对象</a>',
         })}
-        <div class="stage-strip" aria-label="创建阶段">
-          <span class="stage-pill is-done">对象定义</span>
-          <span class="stage-pill is-done">资料管理</span>
-          <span class="stage-pill is-active">预览</span>
-          <span class="stage-pill">发布</span>
-        </div>
-        <div class="stage-grid">
-          <section class="thread-screen">
-            <header class="thread-header">
-              <div class="thread-header-copy">
-                <h2 class="thread-name" data-thread-name>预览聊天</h2>
-                <p class="thread-status" data-thread-status>先试聊，再决定是私用还是公开分享。</p>
-              </div>
-              <div class="thread-typing" data-thread-typing aria-label="正在输入中"></div>
-            </header>
-            <div class="message-list" data-chat-log data-chat-assistant-name="预览对象">
-              ${renderStaticBubble({
-                role: "assistant",
-                label: "预览对象",
-                content: "不够像，就先别发布。",
-              })}
-            </div>
-            <section class="composer-shell">
-              <form data-chat-form class="composer">
-                <textarea placeholder="输入一个问题"></textarea>
-                <div class="composer-actions">
-                  <button type="submit">发送</button>
-                </div>
-              </form>
-              <div class="status-line" data-chat-status></div>
-            </section>
-          </section>
-
-          <div class="list-stack">
-            <section class="stage-card">
-              <div class="mini-eyebrow">当前状态</div>
-              <h3 class="card-title">预览简介</h3>
-              <div class="body-copy" data-version-summary>加载中...</div>
-            </section>
-            <section class="stage-card">
-              <div class="mini-eyebrow">推荐问题</div>
-              <ul class="question-list" data-preview-questions><li class="empty-state">加载中...</li></ul>
-            </section>
-            <section class="stage-card">
-              <div class="mini-eyebrow">示例回答</div>
-              <ul class="question-list" data-preview-answers><li class="empty-state">加载中...</li></ul>
-            </section>
-            <section class="stage-card">
-              <div class="mini-eyebrow">使用方式</div>
-              <h3 class="card-title">确认后再决定</h3>
-              <p class="body-copy">可以先仅自己使用，也可以直接公开分享。</p>
-              <div class="actions">
-                <button type="button" data-publish-private>仅自己使用</button>
-                <button type="button" class="secondary" data-publish-public>公开分享</button>
-              </div>
-              <div class="status-line" data-preview-status></div>
-              <div class="list-stack" data-preview-result></div>
-            </section>
-          </div>
-        </div>
-        ${renderBottomShuttle("create")}
+        <section class="stage-card">
+          <h3 class="card-title">正在定位对象</h3>
+          <p class="body-copy" data-preview-status>稍等一下。</p>
+          <div class="actions" data-preview-actions></div>
+        </section>
       </div>
     `,
     script: `
       const versionId = ${JSON.stringify(personaVersionId)};
-      const summarySlot = document.querySelector("[data-version-summary]");
-      const questionsSlot = document.querySelector("[data-preview-questions]");
-      const answersSlot = document.querySelector("[data-preview-answers]");
       const previewStatus = document.querySelector("[data-preview-status]");
-      const previewResult = document.querySelector("[data-preview-result]");
+      const previewActions = document.querySelector("[data-preview-actions]");
 
-      const loadVersion = async () => {
+      const renderFallback = (message, href, label) => {
+        if (previewStatus) {
+          previewStatus.textContent = message;
+        }
+        if (previewActions) {
+          previewActions.innerHTML =
+            "<a class='utility-link' href='" +
+            HallOfFameClient.escapeHtml(href) +
+            "'>" +
+            HallOfFameClient.escapeHtml(label) +
+            "</a>";
+        }
+      };
+
+      const findOwnedObject = async () => {
+        try {
+          const dashboard = await HallOfFameClient.requestJson("/v1/me/persona-inventory", {
+            method: "GET",
+          });
+          const items = Array.isArray(dashboard?.items) ? dashboard.items : [];
+          return items.find((entry) => entry?.personaVersionId === versionId) || null;
+        } catch {
+          return null;
+        }
+      };
+
+      const openVersion = async () => {
         await HallOfFameClient.ensureAnonymousSession();
+        const ownedItem = await findOwnedObject();
+        if (ownedItem?.objectId) {
+          window.location.replace("/profile/objects/" + encodeURIComponent(ownedItem.objectId));
+          return;
+        }
+
         try {
           const version = await HallOfFameClient.requestJson("/v1/persona-versions/" + versionId, {
             method: "GET",
           });
-          summarySlot.textContent = version.previewIntro || ("当前状态：" + version.status);
-          questionsSlot.innerHTML = version.recommendedQuestions.length
-            ? version.recommendedQuestions.map((item) => "<li class='question-slip'>" + HallOfFameClient.escapeHtml(item) + "</li>").join("")
-            : "<li class='empty-state'>暂无推荐问题</li>";
-          answersSlot.innerHTML = version.sampleAnswers.length
-            ? version.sampleAnswers.map((item) => "<li class='answer-note'>" + HallOfFameClient.escapeHtml(item) + "</li>").join("")
-            : "<li class='empty-state'>暂无示例回答</li>";
-        } catch (error) {
-          summarySlot.textContent = error instanceof Error ? error.message : String(error);
-        }
-      };
-
-      const renderPublishResult = (result) => {
-        if (!previewResult) return;
-
-        if (result.share) {
-          previewResult.innerHTML =
-            "<a class='utility-link' href='/share/" +
-            encodeURIComponent(result.share.shareSlug) +
-            "'>查看分享页</a>" +
-            "<a class='utility-link secondary' href='/profile'>回到我的</a>" +
-            "<div class='meta'>" +
-            HallOfFameClient.escapeHtml(result.share.canonicalUrl) +
-            "</div>";
+          if (version?.ownerDisplayStatus === "PUBLIC" && version.personaHref) {
+            window.location.replace(version.personaHref);
+            return;
+          }
+          if (version?.shareHref) {
+            window.location.replace(version.shareHref);
+            return;
+          }
+          if (version?.addSourcesHref) {
+            renderFallback("这个对象还需要补资料。", version.addSourcesHref, "继续补资料");
+            return;
+          }
+          renderFallback("这个对象暂时不能打开。", "/profile/objects", "回到我的对象");
+        } catch {
+          renderFallback("这个对象暂时不能打开。", "/profile/objects", "回到我的对象");
           return;
         }
-
-        previewResult.innerHTML =
-          "<a class='utility-link' href='/profile'>回到我的</a>" +
-          "<a class='utility-link secondary' href='/create'>继续编辑</a>";
       };
 
-      const publishVersion = async (visibility) => {
-        previewStatus.textContent = visibility === "PUBLIC" ? "发布中…" : "保存中…";
-        if (previewResult) {
-          previewResult.innerHTML = "";
-        }
-        try {
-          const result = await HallOfFameClient.requestJson("/v1/persona-versions/" + versionId + "/publish", {
-            method: "POST",
-            body: JSON.stringify({ visibility }),
-          });
-          previewStatus.textContent = visibility === "PUBLIC" ? "已公开分享。" : "已保存为仅自己使用。";
-          renderPublishResult(result);
-        } catch (error) {
-          previewStatus.textContent = error instanceof Error ? error.message : String(error);
-        }
-      };
-
-      document.querySelector("[data-publish-private]")?.addEventListener("click", async () => {
-        await publishVersion("PRIVATE");
-      });
-
-      document.querySelector("[data-publish-public]")?.addEventListener("click", async () => {
-        await publishVersion("PUBLIC");
-      });
-
-      void loadVersion();
-    ` + renderChatScript({
-      targetType: "draft_version_preview",
-      targetValue: personaVersionId,
-      assistantName: "预览对象",
-    }),
+      void openVersion();
+    `,
   });
 
 const renderProfilePage = () =>
@@ -2981,63 +3515,8 @@ const renderProfilePage = () =>
     title: "我的",
     body: buildProfilePageBody(),
     script: `
-      const draftCountSlot = document.querySelector("[data-profile-draft-count]");
-      const publishedCountSlot = document.querySelector("[data-profile-published-count]");
       const sessionCopySlot = document.querySelector("[data-profile-session-copy]");
-      const personaListSlot = document.querySelector("[data-profile-persona-list]");
-      let personae = [];
-
-      const renderPersonaList = (items) => {
-        if (!personaListSlot) return;
-
-        if (!items.length) {
-          personaListSlot.innerHTML = "<div class='empty-state'>还没有对象，先去创建一个。</div>";
-          return;
-        }
-
-        personaListSlot.innerHTML = items
-          .map((item) => {
-            const statusCopy = item.status === "PUBLISHED" ? "已公开" : item.listingStatus === "PRIVATE" ? "仅自己使用" : "继续编辑中";
-            const tags = (item.distillFocus || []).length
-              ? "<div class='pill-row'>" + item.distillFocus
-                  .map((tag) => "<span class='mini-tag'>" + HallOfFameClient.escapeHtml(tag) + "</span>")
-                  .join("") + "</div>"
-              : "";
-            const primaryAction =
-              "<a class='utility-link' href='/create?personaId=" +
-              encodeURIComponent(item.personaId) +
-              "' data-profile-edit='" +
-              HallOfFameClient.escapeHtml(item.personaId) +
-              "'>继续编辑</a>";
-            const shareAction = item.primaryShareSlug
-              ? "<a class='utility-link secondary' href='/share/" +
-                encodeURIComponent(item.primaryShareSlug) +
-                "'>查看分享</a>"
-              : "";
-
-            return (
-              "<section class='summary-card'>" +
-              "<div class='mini-eyebrow'>" +
-              HallOfFameClient.escapeHtml(statusCopy) +
-              "</div>" +
-              "<strong>" +
-              HallOfFameClient.escapeHtml(item.displayName) +
-              "</strong>" +
-              "<p class='summary-copy'>" +
-              HallOfFameClient.escapeHtml(item.positioning || item.previewIntro || "继续补资料后再预览。") +
-              "</p>" +
-              tags +
-              "<div class='actions'>" +
-              primaryAction +
-              shareAction +
-              "</div>" +
-              "</section>"
-            );
-          })
-          .join("");
-      };
-
-      const loadProfile = async () => {
+      const loadProfileSession = async () => {
         await HallOfFameClient.ensureAnonymousSession();
         const session = HallOfFameClient.readSession();
         if (sessionCopySlot) {
@@ -3048,45 +3527,328 @@ const renderProfilePage = () =>
                 ? "已登录"
               : "匿名体验";
         }
+      };
 
+      void loadProfileSession();
+    `,
+  });
+
+const renderMyObjectsPage = () =>
+  renderShell({
+    title: "我的对象",
+    body: buildMyObjectsPageBody(),
+    script: `
+      const listSlot = document.querySelector("[data-my-objects-list]");
+      const statusCopy = {
+        CREATING: "创建中",
+        NEEDS_SOURCES: "需要补资料",
+        FAILED: "生成失败",
+        PENDING_CONFIRM: "待确认",
+        READY: "可聊天",
+        PUBLIC: "已公开",
+      };
+
+      const formatObjectTime = (value) => {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const diff = Date.now() - date.getTime();
+        if (diff >= 0 && diff < 60 * 60 * 1000) return "刚刚";
+        return new Intl.DateTimeFormat("zh-CN", {
+          month: "2-digit",
+          day: "2-digit",
+        }).format(date);
+      };
+
+      const renderObjectItem = (item) => (
+        "<li><a class='history-item' href='/profile/objects/" +
+        encodeURIComponent(item.objectId) +
+        "'>" +
+        "<div class='history-avatar' aria-hidden='true'>" +
+        HallOfFameClient.escapeHtml((item.displayName || "对象").slice(0, 1)) +
+        "</div>" +
+        "<div class='history-main'>" +
+        "<div class='history-head'>" +
+        "<h3 class='history-name'>" +
+        HallOfFameClient.escapeHtml(item.displayName || "对象") +
+        "</h3>" +
+        "<span class='history-time'>" +
+        HallOfFameClient.escapeHtml(formatObjectTime(item.updatedAt)) +
+        "</span>" +
+        "</div>" +
+        "<p class='history-snippet'>" +
+        HallOfFameClient.escapeHtml((statusCopy[item.status] || "处理中") + " · " + (item.intro || "还没有简介。")) +
+        "</p>" +
+        "</div>" +
+        "</a></li>"
+      );
+
+      const renderObjectGroups = (groups) => {
+        if (!listSlot) return;
+        const sections = [
+          ["needsAttention", "需要处理", groups?.needsAttention || []],
+          ["creating", "创建中", groups?.creating || []],
+          ["ready", "可聊天", groups?.ready || []],
+          ["public", "已公开", groups?.public || []],
+        ];
+        const visibleSections = sections.filter((section) => section[2].length > 0);
+        if (!visibleSections.length) {
+          listSlot.innerHTML = "<li class='empty-state'>还没有对象，先创建一个。</li>";
+          return;
+        }
+
+        listSlot.innerHTML = visibleSections
+          .map((section) => {
+            const key = section[0];
+            const title = section[1];
+            const items = section[2];
+            return (
+              "<li class='mini-eyebrow' data-inventory-group='" +
+              HallOfFameClient.escapeHtml(key) +
+              "'>" +
+              HallOfFameClient.escapeHtml(title) +
+              "</li>" +
+              items.map(renderObjectItem).join("")
+            );
+          })
+          .join("");
+      };
+
+      const loadObjects = async () => {
+        await HallOfFameClient.ensureAnonymousSession();
         try {
-          const dashboard = await HallOfFameClient.requestJson("/v1/me/personae", {
+          const dashboard = await HallOfFameClient.requestJson("/v1/me/persona-inventory", {
             method: "GET",
           });
-          personae = dashboard.items || [];
-          if (draftCountSlot) draftCountSlot.textContent = String(dashboard.stats?.draftCount ?? 0);
-          if (publishedCountSlot) publishedCountSlot.textContent = String(dashboard.stats?.publishedCount ?? 0);
-          renderPersonaList(personae);
+          renderObjectGroups(dashboard.groups);
         } catch (error) {
-          if (draftCountSlot) draftCountSlot.textContent = "0";
-          if (publishedCountSlot) publishedCountSlot.textContent = "0";
-          if (personaListSlot) {
-            personaListSlot.innerHTML = "<div class='empty-state'>" + HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) + "</div>";
+          if (listSlot) {
+            listSlot.innerHTML = "<li class='empty-state'>" + HallOfFameClient.escapeHtml(error instanceof Error ? error.message : String(error)) + "</li>";
           }
         }
       };
 
-      personaListSlot?.addEventListener("click", (event) => {
-        const editLink = event.target.closest("[data-profile-edit]");
-        if (!editLink) {
+      void loadObjects();
+    `,
+  });
+
+const renderMyObjectDetailPage = (objectId: string) =>
+  renderShell({
+    title: "对象详情",
+    body: buildMyObjectDetailPageBody(objectId),
+    script: `
+      const objectId = ${JSON.stringify(objectId)};
+      const titleSlot = document.querySelector("[data-my-object-title]");
+      const subtitleSlot = document.querySelector("[data-my-object-subtitle]");
+      const nameSlot = document.querySelector("[data-my-object-name]");
+      const introSlot = document.querySelector("[data-my-object-intro]");
+      const statusSlot = document.querySelector("[data-my-object-status]");
+      const messageSlot = document.querySelector("[data-my-object-message]");
+      const actionsSlot = document.querySelector("[data-my-object-actions]");
+      const actionStatus = document.querySelector("[data-my-object-action-status]");
+      const editPanel = document.querySelector("[data-my-object-edit-panel]");
+      const editForm = document.querySelector("[data-my-object-edit-form]");
+      const editCancel = document.querySelector("[data-my-object-edit-cancel]");
+      let currentObject = null;
+
+      const statusCopy = {
+        CREATING: "创建中",
+        NEEDS_SOURCES: "需要补资料",
+        FAILED: "生成失败",
+        PENDING_CONFIRM: "待确认",
+        READY: "可聊天",
+        PUBLIC: "已公开",
+      };
+      const actionCopy = {
+        CHAT: "聊天",
+        EDIT: "编辑",
+        ADD_SOURCES: "补资料",
+        DELETE: "删除",
+        CONFIRM: "保存到我的",
+        PUBLISH: "公开分享",
+        SHARE: "查看分享",
+        RETRY: "重新生成",
+      };
+
+      const setActionStatus = (content) => {
+        if (actionStatus) actionStatus.textContent = content || "";
+      };
+
+      const renderAction = (action, object) => {
+        const copy = actionCopy[action] || "打开";
+        if (action === "CHAT") {
+          return object.chatHref
+            ? "<a class='utility-link' href='" + HallOfFameClient.escapeHtml(object.chatHref) + "'>" + copy + "</a>"
+            : "";
+        }
+        if (action === "ADD_SOURCES" || action === "RETRY") {
+          return "<a class='utility-link secondary' href='" + HallOfFameClient.escapeHtml(object.addSourcesHref || "/create") + "'>" + copy + "</a>";
+        }
+        if (action === "SHARE") {
+          return object.shareHref
+            ? "<a class='utility-link secondary' href='" + HallOfFameClient.escapeHtml(object.shareHref) + "'>" + copy + "</a>"
+            : "";
+        }
+        const buttonClass = action === "DELETE" ? "danger" : "secondary";
+        return "<button type='button' class='" + buttonClass + "' data-my-object-action='" + HallOfFameClient.escapeHtml(action) + "'>" + copy + "</button>";
+      };
+
+      const renderObject = (object) => {
+        currentObject = object;
+        if (titleSlot) titleSlot.textContent = object.displayName || "对象详情";
+        if (subtitleSlot) subtitleSlot.textContent = statusCopy[object.status] || "处理中";
+        if (nameSlot) nameSlot.textContent = object.displayName || "对象";
+        if (introSlot) introSlot.textContent = object.intro || "还没有简介。";
+        if (statusSlot) statusSlot.textContent = statusCopy[object.status] || "处理中";
+        if (messageSlot) messageSlot.textContent = object.userMessage || "";
+        if (actionsSlot) {
+          const html = (object.availableActions || []).map((action) => renderAction(action, object)).filter(Boolean).join("");
+          actionsSlot.innerHTML = html || "<div class='empty-state'>现在还没有可操作的内容。</div>";
+        }
+        if (editForm) {
+          editForm.elements.displayName.value = object.displayName || "";
+          editForm.elements.intro.value = object.intro || "";
+        }
+      };
+
+      const loadObject = async () => {
+        await HallOfFameClient.ensureAnonymousSession();
+        try {
+          const object = await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId), {
+            method: "GET",
+          });
+          renderObject(object);
+        } catch (error) {
+          if (nameSlot) nameSlot.textContent = "对象不存在或已删除。";
+          if (introSlot) introSlot.textContent = "返回我的对象重新选择。";
+          if (statusSlot) statusSlot.textContent = "不可用";
+          if (actionsSlot) actionsSlot.innerHTML = "<a class='utility-link' href='/profile/objects'>返回我的对象</a>";
+        }
+      };
+
+      actionsSlot?.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-my-object-action]");
+        if (!button || !currentObject) return;
+        const action = button.getAttribute("data-my-object-action");
+        event.preventDefault();
+
+        if (action === "EDIT") {
+          if (editPanel) editPanel.hidden = false;
+          setActionStatus("");
           return;
         }
 
-        const persona = personae.find((item) => item.personaId === editLink.getAttribute("data-profile-edit"));
-        if (!persona) {
-          return;
+        try {
+          if (action === "CONFIRM") {
+            setActionStatus("保存中...");
+            const result = await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId) + "/confirm", {
+              method: "POST",
+            });
+            setActionStatus(result.message || "已保存。");
+            renderObject(result.object);
+            return;
+          }
+          if (action === "PUBLISH") {
+            setActionStatus("公开中...");
+            const result = await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId) + "/publish", {
+              method: "POST",
+            });
+            setActionStatus(result.message || "已公开。");
+            renderObject(result.object);
+            return;
+          }
+          if (action === "DELETE") {
+            if (!window.confirm("删除后会从我的对象移除。")) return;
+            setActionStatus("删除中...");
+            await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId), {
+              method: "DELETE",
+            });
+            window.location.href = "/profile/objects";
+          }
+        } catch (error) {
+          setActionStatus(error instanceof Error ? error.message : String(error));
         }
-
-        HallOfFameClient.writeCurrentPersonaSelection({
-          id: persona.personaId,
-          displayName: persona.displayName,
-          positioning: persona.positioning || persona.previewIntro || "",
-          tags: persona.distillFocus || [],
-        });
       });
 
-      void loadProfile();
+      editCancel?.addEventListener("click", () => {
+        if (editPanel) editPanel.hidden = true;
+      });
+
+      editForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          setActionStatus("保存中...");
+          const formData = new FormData(editForm);
+          const result = await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId), {
+            method: "PATCH",
+            body: JSON.stringify({
+              displayName: String(formData.get("displayName") || "").trim(),
+              intro: String(formData.get("intro") || "").trim() || null,
+            }),
+          });
+          if (editPanel) editPanel.hidden = true;
+          setActionStatus(result.message || "已更新。");
+          renderObject(result.object);
+        } catch (error) {
+          setActionStatus(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+      void loadObject();
     `,
+  });
+
+export const renderMyObjectChatPage = (
+  objectId: string,
+  query: {
+    chatId?: string | string[];
+  } = {},
+) =>
+  renderShell({
+    title: "对象聊天",
+    body: buildMyObjectChatPageBody(objectId),
+    shellClass: "chat-only",
+    script:
+      `
+        (() => {
+          const objectId = ${JSON.stringify(objectId)};
+          const threadName = document.querySelector("[data-thread-name]");
+          const threadStatus = document.querySelector("[data-thread-status]");
+          const objectChatLog = document.querySelector("[data-chat-log]");
+          const objectChatForm = document.querySelector("[data-chat-form]");
+          const loadObjectForChat = async () => {
+            await HallOfFameClient.ensureAnonymousSession();
+            try {
+              const object = await HallOfFameClient.requestJson("/v1/me/objects/" + encodeURIComponent(objectId), {
+                method: "GET",
+              });
+              if (!object.chatHref || !["READY", "PUBLIC"].includes(object.status)) {
+                if (threadStatus) threadStatus.textContent = "现在还不能聊天";
+                if (objectChatForm) objectChatForm.hidden = true;
+                return;
+              }
+              if (threadName) threadName.textContent = object.displayName || "对象";
+              if (threadStatus) threadStatus.textContent = "等你开口";
+              if (objectChatLog) {
+                objectChatLog.setAttribute("data-chat-assistant-name", object.displayName || "对象");
+                const label = objectChatLog.querySelector(".bubble-label");
+                if (label) label.textContent = object.displayName || "对象";
+                const copy = objectChatLog.querySelector(".bubble-copy");
+                if (copy) copy.textContent = object.intro || "想聊什么？";
+              }
+            } catch (error) {
+              if (threadStatus) threadStatus.textContent = "对象不存在或已删除";
+              if (objectChatForm) objectChatForm.hidden = true;
+            }
+          };
+          void loadObjectForChat();
+        })();
+      ` +
+      renderChatScript({
+        targetType: "owned_object",
+        objectId,
+        initialChatId: getSingleQueryValue(query.chatId),
+      }),
   });
 
 const renderReviewPage = () =>
@@ -3229,9 +3991,13 @@ export const buildH5Server = () => {
     ok: true,
     service: "hall-of-fame-h5",
   }));
+  app.get("/favicon.ico", async (_request, reply) => reply.status(204).send());
 
   app.get("/", async (_request, reply) => sendHtml(reply, await renderFeaturedList()));
   app.get("/history", async (_request, reply) => sendHtml(reply, await renderHistoryPage()));
+  app.get<{ Params: { chatId: string } }>("/history/:chatId", async (request, reply) =>
+    sendHtml(reply, renderReadOnlyHistoryChatPage(request.params.chatId)),
+  );
   app.get<{ Params: { personaId: string }; Querystring: { chatId?: string; from?: string } }>(
     "/persona/:personaId",
     async (request, reply) => sendHtml(reply, await renderPersonaPage(request.params.personaId, request.query)),
@@ -3244,6 +4010,14 @@ export const buildH5Server = () => {
     sendHtml(reply, await renderPreviewPage(request.params.personaVersionId)),
   );
   app.get("/profile", async (_request, reply) => sendHtml(reply, renderProfilePage()));
+  app.get("/profile/objects", async (_request, reply) => sendHtml(reply, renderMyObjectsPage()));
+  app.get<{ Params: { objectId: string }; Querystring: { chatId?: string | string[] } }>(
+    "/profile/objects/:objectId/chat",
+    async (request, reply) => sendHtml(reply, renderMyObjectChatPage(request.params.objectId, request.query)),
+  );
+  app.get<{ Params: { objectId: string } }>("/profile/objects/:objectId", async (request, reply) =>
+    sendHtml(reply, renderMyObjectDetailPage(request.params.objectId)),
+  );
 
   return app;
 };

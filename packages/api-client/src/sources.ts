@@ -18,6 +18,7 @@ export const createTextSource = async (
   return response.json();
 };
 
+/** @deprecated Legacy synchronous URL ingest endpoint. New create flows must use discovery/extra-source jobs. */
 export const createUrlSource = async (
   baseUrl: string,
   personaId: string,

@@ -186,6 +186,29 @@ const previewText = (value: string | null | undefined, limit = 280) => {
   return `${normalized.slice(0, limit)}...`;
 };
 
+const extractDistillFocusText = (value: string) => {
+  const currentFocus = value.match(/当前更偏\s*([^。.]+)/u)?.[1]?.trim();
+  if (currentFocus) {
+    return currentFocus;
+  }
+
+  return value.match(/强调\s*([^。.]+?)\s*的对象/u)?.[1]?.trim() ?? null;
+};
+
+const sanitizePromptPersonaText = (value: string | null | undefined) => {
+  const text = value?.replace(/\s+/g, " ").trim();
+  if (!text) {
+    return null;
+  }
+
+  if (/蒸馏|已审核资料|当前更偏/u.test(text)) {
+    const focusText = extractDistillFocusText(text);
+    return focusText ? `倾向从${focusText}来组织回应。` : null;
+  }
+
+  return text;
+};
+
 const normalizeInferenceLevel = (input: {
   rawLevel: string | number;
   classificationCategory: RuntimeClassification["category"];
@@ -259,6 +282,18 @@ export const readChatMaxTokens = () => {
   }
 
   return Math.min(4000, Math.max(700, Math.floor(value)));
+};
+
+const readStructuredJsonThinkingConfig = (model: string) => {
+  const configured = process.env.DEEPSEEK_CHAT_THINKING?.trim().toLowerCase();
+  if (configured === "enabled") {
+    return { type: "enabled" as const };
+  }
+  if (configured === "disabled") {
+    return { type: "disabled" as const };
+  }
+
+  return /^deepseek-v4(?:-|$)/u.test(model) ? { type: "disabled" as const } : undefined;
 };
 
 const readRuntimeTimeZone = () => process.env.CHAT_RUNTIME_TIME_ZONE ?? "Asia/Shanghai";
@@ -359,10 +394,12 @@ export const runChatWorkflow = async (input: {
 
   const replyMode = input.turnRouting?.replyMode ?? defaultReplyModeForClassification(classification);
   const personaIntensity = input.turnRouting?.personaIntensity ?? defaultPersonaIntensityForMode(replyMode);
+  const promptPreviewIntro = sanitizePromptPersonaText(runtimeContext.previewIntro);
+  const promptProfileSummary = sanitizePromptPersonaText(runtimeContext.profileSummary);
   const systemPrompt = buildChatSystemPrompt({
     displayName: runtimeContext.displayName,
-    previewIntro: runtimeContext.previewIntro,
-    profileSummary: runtimeContext.profileSummary,
+    previewIntro: promptPreviewIntro,
+    profileSummary: promptProfileSummary,
     styleExamples: runtimeContext.styleExamples,
     requiredInferenceLevel,
     replyMode,
@@ -424,6 +461,7 @@ export const runChatWorkflow = async (input: {
   const model = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat";
   const temperature = readChatTemperature();
   const maxTokens = readChatMaxTokens();
+  const thinking = readStructuredJsonThinkingConfig(model);
   const requestModelReply = async (attempt: number, extraInstruction?: string) => {
     const finalSystemPrompt = extraInstruction ? `${systemPrompt}\n${extraInstruction}` : systemPrompt;
     const startedAt = Date.now();
@@ -437,6 +475,7 @@ export const runChatWorkflow = async (input: {
         model,
         temperature,
         maxTokens,
+        thinking: thinking?.type ?? null,
       },
     });
 
@@ -459,6 +498,7 @@ export const runChatWorkflow = async (input: {
         userPrompt,
         schema: chatModelReplySchema,
         maxTokens,
+        thinking,
         telemetry: {
           onResponse: (payload) => {
             telemetryResponse = payload;
@@ -477,6 +517,7 @@ export const runChatWorkflow = async (input: {
           model,
           temperature,
           maxTokens,
+          thinking: thinking?.type ?? null,
           httpStatus: telemetryResponse?.status ?? null,
           parsedOk: true,
           rawResponsePreview: previewText(telemetryResponse?.rawContent),
@@ -506,6 +547,7 @@ export const runChatWorkflow = async (input: {
           model,
           temperature,
           maxTokens,
+          thinking: thinking?.type ?? null,
           httpStatus: telemetryResponse?.status ?? null,
           errorMessage: error instanceof Error ? error.message : "unknown error",
         },

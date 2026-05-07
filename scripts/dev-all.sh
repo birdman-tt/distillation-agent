@@ -55,7 +55,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-start_service "worker" pnpm dev:worker
+start_service "worker" env PERSONA_DISTILL_POLLING_ENABLED=true pnpm dev:worker
 start_service "api" pnpm dev:api
 start_service "h5" pnpm dev:client:h5
 

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyPluginAsync } from "fastify";
 
 import { getSessionByAccessToken } from "../store/auth-store.js";
-import { getChatSession } from "../store/chat-store.js";
+import { getChatSessionAccess } from "../store/chat-store.js";
 import { chatRealtimeHub } from "../services/realtime/realtime-hub.js";
 import { expireChatRealtimePresence, upsertChatRealtimePresence } from "../services/realtime/presence-repository.js";
 import { isChatRealtimeEnabled } from "../services/realtime/realtime-pg-listener.js";
@@ -52,8 +52,8 @@ export const realtimeRoute: FastifyPluginAsync = async (app) => {
           return;
         }
 
-        const chat = await getChatSession(parsed.chatId);
-        if (!chat) {
+        const access = await getChatSessionAccess(parsed.chatId);
+        if (!access || access.createdByUserId !== actor.userId) {
           closeWithError("Chat not found");
           return;
         }

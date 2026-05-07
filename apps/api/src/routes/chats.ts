@@ -7,6 +7,7 @@ import {
   createChatMessageSchema,
   createChatSchema,
 } from "@hall-of-fame/contracts";
+import { runKimiResearcher, type WebContext } from "@hall-of-fame/kimi-client";
 import type { FastifyPluginAsync } from "fastify";
 
 import { createChatProactiveJob } from "../db/repositories/chat-proactive-repository.js";
@@ -16,13 +17,13 @@ import { persistChatTraceRecord } from "../observability/chat-trace/repository.j
 import { resolvePersonaSeed } from "../seed/official-personae.js";
 import {
   appendChatMessages,
+  getChatSessionAccess,
   getChatSession,
   listChatSessionSummariesByCreator,
   saveChatSession,
 } from "../store/chat-store.js";
 import { assembleChatContext } from "../services/chat-memory/assemble-chat-context.js";
 import { enqueueChatMessageEmbedding } from "../services/embeddings/chat-message-embedding-scheduler.js";
-import { runKimiResearcher, type WebContext } from "../services/kimi/kimi-researcher.js";
 import { runUserMemoryFactExtractionJob } from "../services/memory/user-memory-fact-extractor.js";
 import {
   buildPlannerRuntimeContext,
@@ -41,7 +42,7 @@ import {
   listApprovedSourceEvidence,
   resolveChatTarget,
 } from "../store/persona-store.js";
-import { getActorSession, requireActorSession } from "../utils/actor-session.js";
+import { requireActorSession } from "../utils/actor-session.js";
 import { enforceWindowRateLimit } from "../utils/rate-limit.js";
 import { readChatMaxTokens, runChatWorkflow } from "../workflows/chat/index.js";
 import { routeChatTurn } from "../workflows/chat/turn-router.js";
@@ -85,6 +86,59 @@ const toPublicChatMessage = <T extends object>(message: T): Omit<T, "messageMeta
 };
 
 const isKimiWebSearchEnabled = () => process.env.KIMI_WEB_SEARCH_ENABLED === "true";
+export const CHAT_WEB_CONTEXT_UNAVAILABLE_COPY = "未能获取可靠的最新联网资料，不能编造最新事实。";
+
+export class ChatKimiResearchTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`chat_kimi_research_timeout:${timeoutMs}`);
+    this.name = "ChatKimiResearchTimeoutError";
+  }
+}
+
+export const readChatKimiResearchTimeoutMs = () => {
+  const rawValue = process.env.CHAT_KIMI_RESEARCH_TIMEOUT_MS;
+  if (!rawValue?.trim()) {
+    return 30_000;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 30_000;
+  }
+
+  return Math.max(1_000, Math.floor(parsed));
+};
+
+type ChatKimiResearcher = typeof runKimiResearcher;
+
+export const runKimiResearcherWithTimeout = async (
+  input: Parameters<ChatKimiResearcher>[0],
+  deps: {
+    researcher?: ChatKimiResearcher;
+    timeoutMs?: number;
+  } = {},
+) => {
+  const researcher = deps.researcher ?? runKimiResearcher;
+  const timeoutMs = deps.timeoutMs ?? readChatKimiResearchTimeoutMs();
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      researcher(input, { signal: controller.signal }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new ChatKimiResearchTimeoutError(timeoutMs));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+};
 
 const readPlannerModelForMetadata = (decisionSource?: "fast_planner" | "minimax" | "fallback") => {
   if (decisionSource === "minimax") {
@@ -95,7 +149,7 @@ const readPlannerModelForMetadata = (decisionSource?: "fast_planner" | "minimax"
       .trim()
       .toLowerCase();
     if (provider === "kimi") {
-      return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.KIMI_MODEL ?? "kimi-k2.5";
+      return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.KIMI_MODEL ?? "kimi-k2.6";
     }
     return process.env.CHAT_FAST_PLANNER_MODEL ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
   }
@@ -116,6 +170,11 @@ const unavailableWebContext = (input: {
 export const chatsRoute: FastifyPluginAsync = async (app) => {
   app.post("/v1/chats", async (request, reply) => {
     const input = createChatSchema.parse(request.body);
+    const actor = requireActorSession(request, reply);
+    if (!actor) {
+      return;
+    }
+
     const resolved = await resolveChatTarget(input);
 
     if (!resolved) {
@@ -124,10 +183,9 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const actor = getActorSession(request);
     if (
       input.targetType === "draft_version_preview" &&
-      !(await canAccessPersonaVersion(resolved.personaVersionId, actor?.userId ?? null, actor?.role ?? null))
+      !(await canAccessPersonaVersion(resolved.personaVersionId, actor.userId, actor.role))
     ) {
       return reply.code(403).send({
         message: "You do not have access to this preview version",
@@ -144,7 +202,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     });
 
     return await saveChatSession(session, {
-      createdByUserId: actor?.userId ?? null,
+      createdByUserId: actor.userId,
     });
   });
 
@@ -174,6 +232,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
           resumePersonaId:
             item.targetType === "published_persona" ? (item.targetPersonaId ?? officialSeed?.persona.id ?? null) : null,
           targetPersonaVersionId: item.targetPersonaVersionId,
+          ownedObjectId: item.ownedObjectId,
           shareSlug: item.shareSlug,
           displayName: item.dynamicDisplayName ?? officialSeed?.persona.displayName ?? "对象",
           latestMessage: item.latestMessage,
@@ -184,6 +243,18 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { chatId: string } }>("/v1/chats/:chatId", async (request, reply) => {
+    const actor = requireActorSession(request, reply);
+    if (!actor) {
+      return;
+    }
+
+    const access = await getChatSessionAccess(request.params.chatId);
+    if (!access || access.createdByUserId !== actor.userId) {
+      return reply.code(404).send({
+        message: "Chat not found",
+      });
+    }
+
     const session = await getChatSession(request.params.chatId);
 
     if (!session) {
@@ -196,6 +267,23 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.post<{ Params: { chatId: string } }>("/v1/chats/:chatId/messages", async (request, reply) => {
+    const actor = requireActorSession(request, reply);
+    if (!actor) {
+      return;
+    }
+
+    const access = await getChatSessionAccess(request.params.chatId);
+    if (!access || access.createdByUserId !== actor.userId) {
+      return reply.code(404).send({
+        message: "Chat not found",
+      });
+    }
+    if (!access.canAppendMessages) {
+      return reply.code(409).send({
+        message: "这个对象已不能继续聊天。",
+      });
+    }
+
     const limit = enforceWindowRateLimit({
       key: `chat:${request.ip || "unknown"}`,
       limit: 30,
@@ -217,7 +305,6 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const input = createChatMessageSchema.parse(request.body);
-    const actor = getActorSession(request);
     const turnTraceId = `turn_${randomUUID()}`;
     const collector = new ChatTraceCollector({
       logger: request.log,
@@ -584,7 +671,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
           if (!isKimiWebSearchEnabled()) {
             rawWebContext = unavailableWebContext({
               query: webSearchQuery,
-              uncertainty: "Kimi web search is disabled in this environment.",
+              uncertainty: CHAT_WEB_CONTEXT_UNAVAILABLE_COPY,
             });
             collector.recordEvent({
               eventName: "chat.kimi.research.skipped",
@@ -598,27 +685,34 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             });
           } else {
             const kimiStartedAt = Date.now();
+            const kimiTimeoutMs = readChatKimiResearchTimeoutMs();
             collector.recordEvent({
               eventName: "chat.kimi.research.started",
               stage: "kimi",
               status: "started",
               fields: {
-                model: process.env.KIMI_MODEL ?? "kimi-k2.5",
+                model: process.env.KIMI_MODEL ?? "kimi-k2.6",
                 query: webSearchQuery,
                 searchQueries: researchPlan?.searchQueries ?? [webSearchQuery],
                 researchSubject: researchPlan?.subject ?? null,
                 plannerReason: turnPlan.webSearchReason ?? null,
+                timeoutMs: kimiTimeoutMs,
               },
             });
             try {
-              rawWebContext = await runKimiResearcher({
-                userMessage: input.content,
-                webSearchQuery: researchPlan ? undefined : webSearchQuery,
-                researchPlan: researchPlan ?? undefined,
-                plannerReason: turnPlan.webSearchReason ?? "planner requested fresh information",
-                locale: "zh-CN",
-                maxFindings: 5,
-              });
+              rawWebContext = await runKimiResearcherWithTimeout(
+                {
+                  userMessage: input.content,
+                  webSearchQuery: researchPlan ? undefined : webSearchQuery,
+                  researchPlan: researchPlan ?? undefined,
+                  plannerReason: turnPlan.webSearchReason ?? "planner requested fresh information",
+                  locale: "zh-CN",
+                  maxFindings: 5,
+                },
+                {
+                  timeoutMs: kimiTimeoutMs,
+                },
+              );
               const webContextArtifact = collector.addJsonArtifact("kimi_web_context_raw", rawWebContext);
               collector.recordEvent({
                 eventName: "chat.kimi.research.completed",
@@ -630,14 +724,16 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                   freshnessStatus: rawWebContext.freshnessStatus,
                   findingCount: rawWebContext.keyFindings.length,
                   sourceCount: rawWebContext.sources.length,
+                  timeoutMs: kimiTimeoutMs,
                 },
                 artifactRefs: [webContextArtifact],
               });
             } catch (error) {
               const message = error instanceof Error ? error.message : "unknown error";
+              const timedOut = error instanceof ChatKimiResearchTimeoutError;
               rawWebContext = unavailableWebContext({
                 query: webSearchQuery,
-                uncertainty: `Kimi researcher failed: ${message}`,
+                uncertainty: CHAT_WEB_CONTEXT_UNAVAILABLE_COPY,
               });
               collector.recordEvent({
                 eventName: "chat.kimi.research.failed",
@@ -648,6 +744,8 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                 fields: {
                   query: webSearchQuery,
                   errorMessage: message,
+                  timedOut,
+                  timeoutMs: kimiTimeoutMs,
                 },
               });
             }

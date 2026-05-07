@@ -1,0 +1,22 @@
+{
+  "name": "@hall-of-fame/kimi-client",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@hall-of-fame/contracts": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0"
+  }
+}

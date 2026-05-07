@@ -218,6 +218,7 @@ export const buildChatSystemPrompt = (input: {
     "对象摘要、参考口吻、推荐问题都只是内部风格线索，不要把它们原句抄成回答开头。",
     "如果 recent turns 或 retrieved memory 里出现你自己之前说过的话，只承接其中的意思，不要直接复述原句或重复固定套话。",
     "最终响应必须是一个合法 JSON object，并严格匹配约定字段。",
+    '请只输出 json。示例: {"answer":"一句自然回复","basisSummary":{"mode":"INFERRED","summary":"一句内部依据摘要"},"inferenceLevel":"inferred","conflictDetected":false,"refusalReason":"none"}',
     '返回字段必须且只能包含: "answer", "basisSummary", "inferenceLevel", "conflictDetected", "refusalReason"。',
     '其中 "basisSummary" 必须是对象: {"mode":"SUPPORTED|INFERRED|UNSUPPORTED","summary":"string"}。',
     '不要输出 Markdown，不要输出代码块，不要省略字段，不要附加解释文本。',

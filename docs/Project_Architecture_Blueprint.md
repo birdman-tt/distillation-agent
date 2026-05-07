@@ -553,6 +553,15 @@ Important boundary decisions:
 - business API surface stays unified
 - share resolution, review, publish, and state transitions stay in the business backend
 
+Long-running operation rule:
+
+- synchronous HTTP is only for fast validation, lightweight persistence, and status reads
+- source discovery, web search, URL fetch, evidence extraction, profile synthesis, and media generation must be modeled as jobs
+- API accepts the request, persists a job, and returns `jobId/status` immediately
+- worker owns execution, retry, heartbeat, failure persistence, and success persistence
+- frontend observes progress through polling first; realtime notification can be added later without changing the business state model
+- upstream temporary failures from model/search providers should become retryable job failures, not blocking request-time `400` responses
+
 ## 9. Technology-Specific Architectural Patterns
 
 ## 9.1 Node.js / TypeScript Monorepo

@@ -74,6 +74,7 @@ CREATE TABLE persona_versions (
   grounding_score INTEGER,
   style_score INTEGER,
   risk_score INTEGER,
+  source_distill_job_id UUID,
   created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   submitted_for_publish_at TIMESTAMPTZ,
   published_at TIMESTAMPTZ,
@@ -408,3 +409,190 @@ CREATE TABLE persona_version_publish_reviews (
   reason TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE persona_distill_intents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  query TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  usage_intent TEXT NOT NULL,
+  focus JSONB NOT NULL DEFAULT '[]'::jsonb,
+  risk_decision TEXT NOT NULL,
+  risk_reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+  coverage_hint TEXT NOT NULL,
+  next_step TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE persona_distill_discoveries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  intent_id UUID NOT NULL REFERENCES persona_distill_intents(id) ON DELETE CASCADE,
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  bucket_coverage JSONB NOT NULL DEFAULT '{}'::jsonb,
+  missing_buckets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  quality_warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
+  sanitizer_version TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE persona_distill_source_discovery_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  intent_id UUID NOT NULL REFERENCES persona_distill_intents(id) ON DELETE CASCADE,
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  preferred_language TEXT NOT NULL DEFAULT 'zh-CN',
+  max_sources_per_bucket INTEGER NOT NULL DEFAULT 4,
+  status TEXT NOT NULL DEFAULT 'QUEUED',
+  current_step TEXT NOT NULL DEFAULT '准备搜索资料',
+  progress INTEGER NOT NULL DEFAULT 0,
+  discovery_id UUID REFERENCES persona_distill_discoveries(id) ON DELETE SET NULL,
+  source_count INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  safe_error_message TEXT,
+  retryable BOOLEAN NOT NULL DEFAULT false,
+  next_run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  claimed_by_worker_id TEXT,
+  claimed_at TIMESTAMPTZ,
+  heartbeat_at TIMESTAMPTZ,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX persona_distill_source_discovery_jobs_status_due_idx
+  ON persona_distill_source_discovery_jobs (status, next_run_at ASC, created_at ASC);
+
+CREATE INDEX persona_distill_source_discovery_jobs_creator_updated_idx
+  ON persona_distill_source_discovery_jobs (created_by_user_id, updated_at DESC);
+
+CREATE INDEX persona_distill_source_discovery_jobs_status_heartbeat_idx
+  ON persona_distill_source_discovery_jobs (status, heartbeat_at ASC);
+
+CREATE TABLE persona_distill_source_candidates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discovery_id UUID NOT NULL REFERENCES persona_distill_discoveries(id) ON DELETE CASCADE,
+  bucket TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT,
+  normalized_url_hash TEXT,
+  publisher TEXT,
+  author TEXT,
+  published_at TEXT,
+  snippet TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  trust_level TEXT NOT NULL,
+  source_category TEXT NOT NULL,
+  is_primary BOOLEAN NOT NULL DEFAULT false,
+  recommended BOOLEAN NOT NULL DEFAULT false,
+  recommendation_reason TEXT NOT NULL,
+  dedupe_key TEXT NOT NULL,
+  risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  extra_source_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE persona_distill_extra_sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discovery_id UUID NOT NULL REFERENCES persona_distill_discoveries(id) ON DELETE CASCADE,
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  input_type TEXT NOT NULL,
+  title TEXT,
+  url TEXT,
+  content TEXT,
+  source_kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  rejection_reason TEXT,
+  source_candidate_id UUID REFERENCES persona_distill_source_candidates(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE persona_distill_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  intent_id UUID NOT NULL REFERENCES persona_distill_intents(id) ON DELETE RESTRICT,
+  discovery_id UUID NOT NULL REFERENCES persona_distill_discoveries(id) ON DELETE RESTRICT,
+  persona_id UUID REFERENCES personae(id) ON DELETE SET NULL,
+  result_version_id UUID REFERENCES persona_versions(id) ON DELETE SET NULL,
+  query TEXT NOT NULL,
+  normalized_name TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  risk_decision TEXT NOT NULL,
+  status TEXT NOT NULL,
+  current_step TEXT NOT NULL,
+  progress INTEGER NOT NULL DEFAULT 0,
+  selected_source_candidate_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  selected_extra_source_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  quality_scores_json JSONB,
+  missing_requirements_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  claimed_by_worker_id TEXT,
+  claimed_at TIMESTAMPTZ,
+  heartbeat_at TIMESTAMPTZ,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX persona_distill_jobs_status_created_idx ON persona_distill_jobs (status, created_at ASC);
+CREATE INDEX persona_distill_jobs_creator_updated_idx ON persona_distill_jobs (created_by_user_id, updated_at DESC);
+
+CREATE TABLE owned_persona_objects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  persona_id UUID REFERENCES personae(id) ON DELETE SET NULL,
+  active_persona_version_id UUID REFERENCES persona_versions(id) ON DELETE SET NULL,
+  source_distill_job_id UUID REFERENCES persona_distill_jobs(id) ON DELETE SET NULL,
+  display_name TEXT NOT NULL,
+  intro TEXT,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX owned_persona_objects_owner_updated_idx
+  ON owned_persona_objects (owner_user_id, updated_at DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX owned_persona_objects_owner_persona_active_idx
+  ON owned_persona_objects (owner_user_id, persona_id)
+  WHERE persona_id IS NOT NULL AND deleted_at IS NULL;
+
+CREATE UNIQUE INDEX owned_persona_objects_source_job_active_idx
+  ON owned_persona_objects (source_distill_job_id)
+  WHERE source_distill_job_id IS NOT NULL AND deleted_at IS NULL;
+
+CREATE UNIQUE INDEX owned_persona_objects_active_version_idx
+  ON owned_persona_objects (active_persona_version_id)
+  WHERE active_persona_version_id IS NOT NULL AND deleted_at IS NULL;
+
+CREATE TABLE persona_distill_artifacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES persona_distill_jobs(id) ON DELETE CASCADE,
+  stage TEXT NOT NULL,
+  artifact_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE persona_distill_tool_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES persona_distill_jobs(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  tool_name TEXT NOT NULL,
+  runtime_state_before TEXT NOT NULL,
+  runtime_state_after TEXT,
+  input_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  output_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL,
+  error_message TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+
+CREATE UNIQUE INDEX persona_distill_tool_runs_job_seq_idx
+  ON persona_distill_tool_runs (job_id, seq);
+
+CREATE INDEX persona_distill_tool_runs_job_started_idx
+  ON persona_distill_tool_runs (job_id, started_at ASC);

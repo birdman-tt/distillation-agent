@@ -60,6 +60,19 @@ const readPersonaVectorMinScore = () => {
   const parsed = Number(process.env.CHAT_RETRIEVAL_PERSONA_VECTOR_MIN_SCORE ?? "0.28");
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0.28;
 };
+export const readChatQueryEmbeddingTimeoutMs = () => {
+  const rawValue = process.env.CHAT_QUERY_EMBEDDING_TIMEOUT_MS;
+  if (!rawValue?.trim()) {
+    return 800;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 800;
+  }
+
+  return Math.max(50, Math.floor(parsed));
+};
 const isChatVectorRetrievalEnabled = () => process.env.CHAT_VECTOR_RETRIEVAL_ENABLED !== "false";
 const isPersonaVectorRetrievalEnabled = () => process.env.PERSONA_VECTOR_RETRIEVAL_ENABLED !== "false";
 const isVectorRetrievalEnabled = () =>
@@ -142,6 +155,55 @@ type PersonaChunkHit = {
   score: number;
 };
 
+type EmbeddingRequester = (input: {
+  model: string;
+  dimensions: number;
+  inputs: string[];
+  signal?: AbortSignal;
+}) => Promise<number[][]>;
+
+export class ChatQueryEmbeddingTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`query_embedding_timeout:${timeoutMs}`);
+    this.name = "ChatQueryEmbeddingTimeoutError";
+  }
+}
+
+export const requestQueryEmbeddingsWithTimeout = async (
+  request: {
+    model: string;
+    dimensions: number;
+    inputs: string[];
+  },
+  deps: {
+    requestEmbeddings: EmbeddingRequester;
+    timeoutMs?: number;
+  },
+) => {
+  const timeoutMs = deps.timeoutMs ?? readChatQueryEmbeddingTimeoutMs();
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      deps.requestEmbeddings({
+        ...request,
+        signal: controller.signal,
+      }),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new ChatQueryEmbeddingTimeoutError(timeoutMs));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+};
+
 const mergeRetrievedMemories = (hits: RetrievedMemoryHit[]) => {
   const byMessageId = new Map<string, RetrievedMemoryHit>();
   for (const hit of hits) {
@@ -170,11 +232,7 @@ export const assembleChatContext = async (input: {
   }>;
 }, deps: {
   readConfig?: () => EmbeddingConfig;
-  requestEmbeddings?: (input: {
-    model: string;
-    dimensions: number;
-    inputs: string[];
-  }) => Promise<number[][]>;
+  requestEmbeddings?: EmbeddingRequester;
   isVectorRetrievalEnabled?: () => boolean;
 } = {}) => {
   const memoryRequestId = randomUUID();
@@ -249,19 +307,27 @@ export const assembleChatContext = async (input: {
       const config = deps.readConfig?.() ?? readEmbeddingConfig();
       const requestEmbeddings =
         deps.requestEmbeddings ??
-        ((request: { model: string; dimensions: number; inputs: string[] }) =>
-          requestQwenEmbeddings({
-            apiKey: readQwenApiKey(),
-            baseUrl: readQwenBaseUrl(),
-            model: request.model,
-            dimensions: request.dimensions,
-            inputs: request.inputs,
-          }));
-      const [queryEmbedding] = await requestEmbeddings({
-        model: config.model,
-        dimensions: config.dimensions,
-        inputs: [input.query],
-      });
+        ((request: { model: string; dimensions: number; inputs: string[]; signal?: AbortSignal }) =>
+          requestQwenEmbeddings(
+            {
+              apiKey: readQwenApiKey(),
+              baseUrl: readQwenBaseUrl(),
+              model: request.model,
+              dimensions: request.dimensions,
+              inputs: request.inputs,
+            },
+            { signal: request.signal },
+          ));
+      const [queryEmbedding] = await requestQueryEmbeddingsWithTimeout(
+        {
+          model: config.model,
+          dimensions: config.dimensions,
+          inputs: [input.query],
+        },
+        {
+          requestEmbeddings,
+        },
+      );
 
       if (queryEmbedding) {
         const chatVectorEnabled =
@@ -343,7 +409,12 @@ export const assembleChatContext = async (input: {
       }
       vectorDiagnostics.returnedHits = vectorHits.length;
     } catch (error) {
-      vectorDiagnostics.errorMessage = error instanceof Error ? error.message : "unknown error";
+      vectorDiagnostics.errorMessage =
+        error instanceof ChatQueryEmbeddingTimeoutError
+          ? "query_embedding_timeout"
+          : error instanceof Error
+            ? error.message
+            : "unknown error";
     }
   }
   const retrievedMemories = mergeRetrievedMemories([

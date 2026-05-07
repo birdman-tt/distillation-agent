@@ -9,6 +9,8 @@ import { authRoute } from "./routes/auth.js";
 import { chatsRoute } from "./routes/chats.js";
 import { feedbackRoute } from "./routes/feedback.js";
 import { meRoute } from "./routes/me.js";
+import { myObjectsRoute } from "./routes/my-objects.js";
+import { personaDistillRoute } from "./routes/persona-distill.js";
 import { personaVersionsRoute } from "./routes/persona-versions.js";
 import { personaDetailRoute } from "./routes/personae/detail.js";
 import { featuredPersonaeRoute } from "./routes/personae/featured.js";
@@ -31,6 +33,7 @@ export const buildApiApp = () => {
 
   void app.register(cors, {
     origin: true,
+    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
     credentials: false,
   });
   void app.register(websocket);
@@ -53,7 +56,9 @@ export const buildApiApp = () => {
 
   void app.register(authRoute);
   void app.register(meRoute);
+  void app.register(myObjectsRoute);
   void app.register(internalChatTracesRoute);
+  void app.register(personaDistillRoute);
   void app.register(featuredPersonaeRoute);
   void app.register(personaDetailRoute);
   void app.register(personaeManageRoute);
