@@ -31,6 +31,11 @@ import {
   isExplicitProactiveRequest,
   runChatPlanner,
 } from "../services/minimax-planner/chat-planner.js";
+import {
+  buildRequestedPlannerTools,
+  buildToolExecutionTrace,
+  type ProactiveTraceOutcome,
+} from "../services/minimax-planner/tool-plan-trace.js";
 import { normalizeResearchPlan } from "../services/research/research-plan.js";
 import { sanitizeWebContext } from "../services/research/web-context-sanitizer.js";
 import { chatRealtimeHub } from "../services/realtime/realtime-hub.js";
@@ -538,6 +543,29 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
               return normalizedPlan;
             })()
           : rawTurnPlan;
+        const requestedTools = turnPlan ? buildRequestedPlannerTools(turnPlan) : [];
+        const turnPlanArtifactRefs = [
+          ...(rawTurnPlan
+            ? [collector.addJsonArtifact("turn_plan_before_research_normalization", rawTurnPlan)]
+            : []),
+          ...(turnPlan ? [collector.addJsonArtifact("turn_plan_after_research_normalization", turnPlan)] : []),
+        ];
+        collector.recordEvent({
+          eventName: "chat.tool_plan.finalized",
+          stage: "planner",
+          status: "completed",
+          fields: {
+            plannerDecisionSource: turnPlan?.decisionSource ?? null,
+            fallbackUsed: turnPlan?.decisionSource === "fallback",
+            requestedTools,
+            needChatMemory: turnPlan?.needChatMemory ?? null,
+            needPersonaKnowledge: turnPlan?.needPersonaKnowledge ?? null,
+            needWebSearch: turnPlan?.needWebSearch ?? null,
+            webSearchQuery: turnPlan?.webSearchQuery ?? null,
+            answerMode: turnPlan?.answerMode ?? null,
+          },
+          artifactRefs: turnPlanArtifactRefs,
+        });
         const turnRouting = turnPlan
           ? {
               replyMode: turnPlan.replyMode,
@@ -559,8 +587,10 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
           },
         });
 
+        let proactiveOutcome: ProactiveTraceOutcome = "not_requested";
         if (turnPlan?.proactiveCandidate.shouldSchedule) {
           if (!isChatProactiveEnabled()) {
+            proactiveOutcome = "skipped_disabled";
             collector.recordEvent({
               eventName: "chat.proactive.job.skipped",
               stage: "proactive",
@@ -571,6 +601,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
               },
             });
           } else if (!isExplicitProactiveRequest(input.content)) {
+            proactiveOutcome = "skipped_not_explicit";
             collector.recordEvent({
               eventName: "chat.proactive.job.skipped",
               stage: "proactive",
@@ -601,6 +632,7 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                 },
               });
             } catch (error) {
+              proactiveOutcome = "failed";
               collector.recordEvent({
                 eventName: "chat.proactive.job.failed",
                 stage: "proactive",
@@ -610,6 +642,9 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
                   errorMessage: error instanceof Error ? error.message : "unknown error",
                 },
               });
+            }
+            if (proactiveOutcome !== "failed") {
+              proactiveOutcome = "created";
             }
           }
         }
@@ -664,7 +699,12 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
           artifactRefs: [chatContextArtifact],
         });
         let webContext: WebContext | null = null;
+        let webSearchAttempted = false;
+        let webSearchResultUsed = false;
+        let webSearchFreshnessStatus: string | null = null;
+        let webSearchSourceCount = 0;
         if (turnPlan?.needWebSearch) {
+          webSearchAttempted = true;
           const researchPlan = turnPlan.researchPlan;
           const webSearchQuery = researchPlan?.searchQueries[0] ?? turnPlan.webSearchQuery ?? input.content;
           let rawWebContext: WebContext;
@@ -755,6 +795,9 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             researchPlan,
           });
           webContext = sanitized.webContext;
+          webSearchResultUsed = sanitized.used;
+          webSearchFreshnessStatus = sanitized.webContext.freshnessStatus;
+          webSearchSourceCount = sanitized.webContext.sources.length;
           const sanitizedArtifact = collector.addJsonArtifact("kimi_web_context_sanitized", sanitized.webContext);
           collector.recordEvent({
             eventName: "chat.kimi.web_context.sanitized",
@@ -771,6 +814,25 @@ export const chatsRoute: FastifyPluginAsync = async (app) => {
             artifactRefs: [sanitizedArtifact],
           });
         }
+        collector.recordEvent({
+          eventName: "chat.tools.execution.completed",
+          stage: "context",
+          status: "completed",
+          fields: buildToolExecutionTrace({
+            requestedTools,
+            chatMemoryRequested: turnPlan?.needChatMemory ?? true,
+            chatMemoryReturnedCount: chatContext.retrievedMemories.length,
+            personaKnowledgeRequested: turnPlan?.needPersonaKnowledge ?? true,
+            personaKnowledgeReturnedCount: chatContext.personaChunks.length + chatContext.personaEvidence.length,
+            webSearchRequested: turnPlan?.needWebSearch ?? false,
+            webSearchAttempted,
+            webSearchResultUsed,
+            webSearchFreshnessStatus,
+            webSearchSourceCount,
+            proactiveRequested: turnPlan?.proactiveCandidate.shouldSchedule ?? false,
+            proactiveOutcome,
+          }),
+        });
 
         const rawReply = await runChatWorkflow(
           {

@@ -325,16 +325,17 @@ const normalizeFastPlannerCandidate = (candidate: unknown): ChatTurnPlan => {
 
 export const buildFastPlannerSystemPrompt = () =>
   [
-    "你是聊天路由器，只输出 JSON object，不要解释，不要写用户可见回复。",
+    "你是聊天后端的 fast planner，只输出 JSON object，不要解释，不要写用户可见回复。",
+    "你的任务是做上下文依赖判断，不是关键词规则路由器。",
+    "不要因为出现单个词就机械选择工具；要结合 user prompt 里的当前消息、最近上下文、persona context 和服务器时间判断最终回复是否缺上下文。",
     "字段：m=0闲聊/1领域主张/2事实记忆或最新信息/3高风险现实决策。",
     "字段：i=0低人格显露/1中/2高；cm=是否需要聊天记忆；pk=是否需要人物资料；ws=是否需要联网；q=首选联网搜索词或 null；pro=是否需要稍后主动提醒。",
-    "如果 ws=true，必须输出 rp。rp 是 researchPlan：s=搜索主体；st=persona/product/company/event/unknown；nq=规范化事实问题；qs=1-3 条可直接搜索的查询；fr=latest_available/current/recent/none；tw=today/this_week/this_month/this_year/recent/latest_available/none；nf=say_not_found_do_not_guess/ask_clarify。",
+    "可以直接自然回应时，cm=false、pk=false、ws=false、pro=false。",
+    "缺用户历史或偏好时选择 cm；缺对象资料、生平、观点、口吻或资料依据时选择 pk；缺外部证据、现实世界变化或过期风险时选择 ws；需要多个上下文时可以同时选择多个工具。",
+    "如果 ws 为 true，必须输出 rp。rp 是 researchPlan：s=搜索主体；st=persona/product/company/event/unknown；nq=规范化事实问题；qs=1-3 条可直接搜索的查询；fr=latest_available/current/recent/none；tw=today/this_week/this_month/this_year/recent/latest_available/none；nf=say_not_found_do_not_guess/ask_clarify。",
     "当用户说“你/你的”，默认指当前 persona；搜索词不能只包含“你/这个/那个”等指代，必须写出明确主体。",
-    "如果用户问最近、最新、今年、今天、现在，按 user prompt 里的服务器时间和当前年份生成搜索词。",
-    "规则：问今天、现在、今年、这个月、最新、新闻、上市、实时，ws=true。",
-    "规则：问刚才、记得、我叫什么、我的偏好、我之前说过什么，cm=true。",
-    "规则：问人物核心领域观点或需要人物资料依据，pk=true。",
-    "规则：问稍后、提醒、分钟后、小时后、下次继续，pro=true。",
+    "如果需要外部证据或时间敏感事实，按 user prompt 里的服务器时间和当前年份生成搜索词。",
+    "pro 默认 false；只有用户明确要求延后继续、通知或主动跟进时才设为 true。",
     '只输出类似：{"m":0,"i":0,"cm":false,"pk":false,"ws":false,"q":null,"rp":null,"pro":false}',
     '需要联网时类似：{"m":2,"i":1,"cm":true,"pk":true,"ws":true,"q":"罗永浩 最近 访谈 嘉宾 2026","rp":{"s":"罗永浩","st":"persona","nq":"最近一次访谈邀请的嘉宾是谁","qs":["罗永浩 最近 访谈 嘉宾 2026","罗永浩 最新访谈 嘉宾"],"fr":"latest_available","tw":"recent","nf":"say_not_found_do_not_guess"},"pro":false}',
   ].join("\n");

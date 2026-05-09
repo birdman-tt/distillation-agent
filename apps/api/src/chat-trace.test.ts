@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import test from "node:test";
+import { mock, test } from "node:test";
 
 import { getSql, resetSqlForTests } from "./db/client.js";
 
@@ -50,6 +50,79 @@ const createChatAndSendMessage = async (input?: {
   return { apiApp, chatId, reply };
 };
 
+const plannerTraceEnvKeys = [
+  "CHAT_PLANNER_ENABLED",
+  "CHAT_PLANNER_MODE",
+  "CHAT_FAST_PLANNER_PROVIDER",
+  "CHAT_FAST_PLANNER_API_KEY",
+  "CHAT_PLANNER_TIMEOUT_MS",
+  "DEEPSEEK_API_KEY",
+  "KIMI_WEB_SEARCH_ENABLED",
+  "QWEN_API_KEY",
+  "DASHSCOPE_API_KEY",
+  "CHAT_VECTOR_RETRIEVAL_ENABLED",
+  "PERSONA_VECTOR_RETRIEVAL_ENABLED",
+] as const;
+
+const configurePlannerTraceTestEnv = () => {
+  const previous = Object.fromEntries(plannerTraceEnvKeys.map((key) => [key, process.env[key]]));
+
+  process.env.CHAT_PLANNER_ENABLED = "true";
+  process.env.CHAT_PLANNER_MODE = "decision";
+  process.env.CHAT_FAST_PLANNER_PROVIDER = "deepseek";
+  process.env.CHAT_FAST_PLANNER_API_KEY = "planner-key";
+  process.env.CHAT_PLANNER_TIMEOUT_MS = "1000";
+  process.env.DEEPSEEK_API_KEY = "";
+  process.env.KIMI_WEB_SEARCH_ENABLED = "false";
+  process.env.QWEN_API_KEY = "";
+  process.env.DASHSCOPE_API_KEY = "";
+  process.env.CHAT_VECTOR_RETRIEVAL_ENABLED = "false";
+  process.env.PERSONA_VECTOR_RETRIEVAL_ENABLED = "false";
+
+  return () => {
+    for (const key of plannerTraceEnvKeys) {
+      const value = previous[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+};
+
+const mockPlannerFetch = (compactPlan: Record<string, unknown>) =>
+  mock.method(globalThis, "fetch", async (url: string | URL | Request, init?: RequestInit) => {
+    const target = String(url);
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const systemPrompt = body.messages?.find((message) => message.role === "system")?.content ?? "";
+
+    assert.match(target, /api\.deepseek\.com\/chat\/completions/u);
+    assert.match(systemPrompt, /上下文依赖/u);
+
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify(compactPlan),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  });
+
+const findTraceEvent = (events: Array<{ eventName: string; fields?: Record<string, unknown> }>, eventName: string) => {
+  const event = events.find((item) => item.eventName === eventName);
+  assert.ok(event, `expected trace event ${eventName}`);
+  return event;
+};
+
 test("chat reply returns x-turn-trace-id and exposes the persisted trace detail", async () => {
   const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = "";
@@ -88,6 +161,109 @@ test("chat reply returns x-turn-trace-id and exposes the persisted trace detail"
     } else {
       delete process.env.DEEPSEEK_API_KEY;
     }
+  }
+});
+
+test("planner no-tools decision disables context tools even when message has freshness and memory words", async () => {
+  const restoreEnv = configurePlannerTraceTestEnv();
+  const fetchMock = mockPlannerFetch({
+    m: 0,
+    i: 0,
+    cm: false,
+    pk: false,
+    ws: false,
+    q: null,
+    rp: null,
+    pro: false,
+  });
+
+  const { apiApp, reply } = await createChatAndSendMessage({
+    content: "今天尚界Z7怎么样？你还记得我刚才说什么吗？",
+  });
+
+  try {
+    assert.equal(reply.statusCode, 200);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const turnTraceId = reply.headers["x-turn-trace-id"];
+    assert.equal(typeof turnTraceId, "string");
+
+    const traceResponse = await apiApp.inject({
+      method: "GET",
+      url: `/internal/debug/chat-traces/${turnTraceId}`,
+    });
+    assert.equal(traceResponse.statusCode, 200);
+    const traceBody = traceResponse.json();
+    const events = traceBody.events as Array<{ eventName: string; fields?: Record<string, unknown> }>;
+
+    const finalized = findTraceEvent(events, "chat.tool_plan.finalized");
+    assert.deepEqual(finalized.fields?.requestedTools, []);
+
+    const toolExecution = findTraceEvent(events, "chat.tools.execution.completed");
+    assert.deepEqual(toolExecution.fields?.requestedTools, []);
+    assert.deepEqual(toolExecution.fields?.attemptedTools, []);
+    assert.deepEqual(toolExecution.fields?.resultUsedTools, []);
+
+    const memorySearch = findTraceEvent(events, "chat.memory.search.completed");
+    const retrievalPlan = memorySearch.fields?.retrievalPlan as Record<string, unknown>;
+    assert.equal(retrievalPlan.includeChatMemory, false);
+    assert.equal(retrievalPlan.includePersonaKnowledge, false);
+    assert.equal(events.some((event) => event.eventName === "chat.kimi.research.started"), false);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    fetchMock.mock.restore();
+    restoreEnv();
+  }
+});
+
+test("planner web-search decision is visible when search is requested but disabled", async () => {
+  const restoreEnv = configurePlannerTraceTestEnv();
+  const fetchMock = mockPlannerFetch({
+    m: 2,
+    i: 1,
+    cm: false,
+    pk: false,
+    ws: true,
+    q: "尚界Z7 最新信息",
+    rp: null,
+    pro: false,
+  });
+
+  const { apiApp, reply } = await createChatAndSendMessage({
+    content: "尚界Z7最新消息是什么？",
+  });
+
+  try {
+    assert.equal(reply.statusCode, 200);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    const turnTraceId = reply.headers["x-turn-trace-id"];
+    assert.equal(typeof turnTraceId, "string");
+
+    const traceResponse = await apiApp.inject({
+      method: "GET",
+      url: `/internal/debug/chat-traces/${turnTraceId}`,
+    });
+    assert.equal(traceResponse.statusCode, 200);
+    const traceBody = traceResponse.json();
+    const events = traceBody.events as Array<{ eventName: string; fields?: Record<string, unknown> }>;
+
+    const finalized = findTraceEvent(events, "chat.tool_plan.finalized");
+    assert.deepEqual(finalized.fields?.requestedTools, ["web_search"]);
+
+    const skipped = findTraceEvent(events, "chat.kimi.research.skipped");
+    assert.equal(skipped.fields?.reason, "disabled");
+
+    const toolExecution = findTraceEvent(events, "chat.tools.execution.completed");
+    assert.equal(toolExecution.fields?.webSearchRequested, true);
+    assert.deepEqual(toolExecution.fields?.attemptedTools, ["web_search"]);
+    assert.deepEqual(toolExecution.fields?.resultUsedTools, []);
+    assert.equal(toolExecution.fields?.webSearchResultUsed, false);
+    assert.equal(toolExecution.fields?.webSearchSourceCount, 0);
+  } finally {
+    await apiApp.close();
+    await resetSqlForTests();
+    fetchMock.mock.restore();
+    restoreEnv();
   }
 });
 

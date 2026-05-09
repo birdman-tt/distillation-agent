@@ -244,7 +244,47 @@ H5 页面
 - 真实 Kimi web search 仍依赖供应商可用性；source discovery 已异步化，但前端需要把失败、重试、等待状态表达得足够简单。
 - 产品 UI 必须继续遵守“只给用户看有用信息”的 rule，蒸馏证据、tool logs、内部评分默认只用于调试和管理，不进入普通用户聊天界面。
 
-## 10. 下一阶段观察点
+## 10. 2026-05-09 分支开发过程记录
+
+本节记录 `codex/planner-autonomous-tool-use` 分支的提交前开发过程。该分支把聊天 planner 从“模型先判断、本地关键词规则再兜底覆盖”收敛为“模型自主判断是否使用工具”，并补齐工具计划 trace，方便后续排查 search、memory、persona knowledge 是否按预期进入链路。
+
+### 10.1 本次解决的问题
+
+- 旧链路里 `applyHardGuardOverrides` 会在 planner 成功后根据“今天、刚才、记得”等关键词覆盖模型决策，导致 web search、chat memory、persona knowledge 并不完全由 planner 自主判断。
+- 旧 fast planner prompt 带有明显关键词规则路由倾向，容易让模型看到单个词就机械选工具，而不是判断当前消息是否真的依赖外部上下文。
+- 旧 trace 更偏记录 planner 结果本身，缺少“请求了哪些工具、实际尝试了哪些工具、哪些结果最终进入回复上下文”的分层信息，排查 search 没走或 memory 没用时不够直接。
+- fallback 与成功路径边界不够清楚，后续看日志时容易把 planner disabled、parse failed、timeout 与模型正常决策混在一起。
+
+### 10.2 主要改动范围
+
+- Planner 成功路径：移除正常链路里的 `applyHardGuardOverrides`，planner 返回的 plan 只做 schema finalization；只有 disabled、not configured、timeout、parse failed、unknown failed 等异常路径才进入 fallback。
+- Planner prompt：把 fast planner system prompt 改成“上下文依赖判断”，明确它不是关键词规则路由器，并要求不要因为单个词机械选择工具。
+- Planner trace：为成功、关闭、失败、fallback 分别记录 `plannerStatus`、`fallbackUsed`、`decisionFinalizedBy`，让一次 turn 的决策来源可追溯。
+- Chat route trace：新增 `chat.tool_plan.finalized` 与 `chat.tools.execution.completed`，区分 requested tools、attempted tools、result-used tools，并记录 web search 是否请求、是否尝试、是否真正使用结果。
+- 工具计划 helper：新增 `tool-plan-trace.ts`，统一从 turn plan 和执行结果生成工具 trace 字段，避免 `routes/chats.ts` 继续堆散落字段。
+- 测试：补齐 planner service、fast planner prompt、tool trace helper、chat route trace 的回归测试，覆盖“包含今天/刚才/记得但模型选择不用工具时不得被本地规则覆盖”和“模型选择 web search 但 Kimi 关闭时 trace 要能看出请求与未使用结果”。
+- 文档：新增 planner 自主工具判断计划文档，并按阶段让 subagent 做计划和实现 review。
+
+### 10.3 验证记录
+
+- `cd apps/api && node --import tsx --test src/services/minimax-planner/tool-plan-trace.test.ts`：通过，3 个 helper 用例全部通过。
+- `pnpm --filter @hall-of-fame/api typecheck`：通过。
+- `cd apps/api && node --import tsx --test src/services/minimax-planner/fast-planner-client.test.ts src/chat-trace.test.ts`：通过，14 个用例全部通过。
+- `cd apps/api && node --import tsx --test src/services/minimax-planner/chat-planner.test.ts src/services/minimax-planner/fast-planner-client.test.ts src/services/minimax-planner/tool-plan-trace.test.ts src/chat-trace.test.ts`：通过，26 个目标用例全部通过。
+- `pnpm typecheck`：通过，workspace 类型检查全部通过。
+- `rg -n "applyHardGuardOverrides|hardGuardApplied|Hard guard|规则：问|今天.*ws\\s*=\\s*true|今天.*needWebSearch.*必须" apps/api/src docs`：生产代码无残留；命中仅为计划文档历史说明和负向测试断言。
+- `pnpm --filter @hall-of-fame/api test`：默认并发运行耗时约 5.5 分钟，117 个 API 用例中 115 个通过、2 个失败；输出被长日志截断，未作为本次 planner 逻辑失败结论。该项目此前已记录默认并发与 Supabase session pool 容易相互影响。
+- `cd apps/api && node --import tsx --test --test-concurrency=1 "src/**/*.test.ts"`：通过，117 个 API 用例全部通过，用时约 12.7 分钟；用于确认默认并发失败来自测试并发/连接池环境，而不是本次 planner 改动。
+
+### 10.4 已知风险和后续决策
+
+- Planner 现在真正拥有工具选择权，真实效果依赖模型对上下文依赖的判断质量；上线后需要持续用 chat trace 观察漏搜和误搜。
+- fallback 仍然保留规则判断，但只在 planner 不可用或失败时使用；这保证产品可用性，同时避免正常路径被本地 hard guard 抢走决策权。
+- 当前测试验证的是后端行为和 prompt 约束，不伪装成模型质量评测；后续需要用真实聊天样本建立 planner 回放集。
+- API 全量测试默认并发仍可能受 Supabase session pool 限制影响，后续应补稳定的串行 test script 或本地测试库，避免每次提交前靠临时命令绕开。
+- Proactive 仍保留 route 侧显式请求二次保护，避免 planner 偶发误判直接创建主动消息任务。
+
+## 11. 下一阶段观察点
 
 当前主线已经纳入 retrieval / planner / researcher 基础，后续建议重点观察这些方向：
 
@@ -259,7 +299,7 @@ H5 页面
 | 蒸馏日志可观测性 | `persona_distill_artifacts`、`persona_distill_tool_runs` | 每一步输入输出要可查，但不能暴露给普通用户 UI |
 | Planner 搜索判断 | `services/minimax-planner/chat-planner.ts`、chat trace | 搜索是否发生应由模型决策，下一步要补 prompt 和测试覆盖引用/歌词/最新事实场景 |
 
-## 11. 自检结论
+## 12. 自检结论
 
 这版结构相对原方案做了两个关键调整：
 

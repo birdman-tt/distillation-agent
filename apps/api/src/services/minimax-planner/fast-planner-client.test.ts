@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
-import { FastPlannerNotConfiguredError, runFastPlannerDecision } from "./fast-planner-client.js";
+import { buildFastPlannerSystemPrompt, FastPlannerNotConfiguredError, runFastPlannerDecision } from "./fast-planner-client.js";
+
+test("Fast planner prompt frames tool choice as context dependency instead of keyword rules", () => {
+  const prompt = buildFastPlannerSystemPrompt();
+
+  assert.match(prompt, /上下文依赖/);
+  assert.match(prompt, /不是关键词规则路由器/);
+  assert.match(prompt, /不要因为出现单个词就机械选择工具/);
+  assert.doesNotMatch(prompt, /规则：/u);
+  assert.doesNotMatch(prompt, /今天[\s\S]{0,80}ws\s*=\s*true/iu);
+  assert.doesNotMatch(prompt, /刚才[\s\S]{0,80}cm\s*=\s*true/iu);
+  assert.doesNotMatch(prompt, /提醒[\s\S]{0,80}pro\s*=\s*true/iu);
+});
 
 test("Fast planner sends non-thinking compact JSON request without tools", async () => {
   const requests: unknown[] = [];
@@ -55,6 +67,114 @@ test("Fast planner sends non-thinking compact JSON request without tools", async
     assert.equal("tool_choice" in body, false);
   } finally {
     fetchMock.mock.restore();
+  }
+});
+
+test("Fast planner fixture decisions preserve model-selected tools", async () => {
+  const fixtures = [
+    {
+      name: "no_tools",
+      compact: {
+        m: 0,
+        i: 0,
+        cm: false,
+        pk: false,
+        ws: false,
+        q: null,
+        pro: false,
+      },
+      expected: {
+        needChatMemory: false,
+        needPersonaKnowledge: false,
+        needWebSearch: false,
+        webSearchQuery: null,
+        shouldSchedule: false,
+      },
+    },
+    {
+      name: "memory_only",
+      compact: {
+        m: 0,
+        i: 0,
+        cm: true,
+        pk: false,
+        ws: false,
+        q: null,
+        pro: false,
+      },
+      expected: {
+        needChatMemory: true,
+        needPersonaKnowledge: false,
+        needWebSearch: false,
+        webSearchQuery: null,
+        shouldSchedule: false,
+      },
+    },
+    {
+      name: "multi_context",
+      compact: {
+        m: 2,
+        i: 1,
+        cm: true,
+        pk: true,
+        ws: true,
+        q: "纪晓岚 最新影视讨论",
+        rp: {
+          s: "纪晓岚",
+          st: "persona",
+          nq: "最近有哪些影视讨论",
+          qs: ["纪晓岚 最新影视讨论", "纪晓岚 近期 热度"],
+          fr: "latest_available",
+          tw: "recent",
+          nf: "say_not_found_do_not_guess",
+        },
+        pro: true,
+      },
+      expected: {
+        needChatMemory: true,
+        needPersonaKnowledge: true,
+        needWebSearch: true,
+        webSearchQuery: "纪晓岚 最新影视讨论",
+        shouldSchedule: true,
+      },
+    },
+  ] as const;
+
+  for (const fixture of fixtures) {
+    const fetchMock = mock.method(globalThis, "fetch", async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: {
+                content: JSON.stringify(fixture.compact),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    try {
+      const result = await runFastPlannerDecision({
+        provider: "deepseek",
+        apiKey: "deepseek-key",
+        baseUrl: "https://api.deepseek.com",
+        model: "deepseek-v4-flash",
+        systemPrompt: "return json",
+        userPrompt: "测试 planner 自主判断工具",
+      });
+
+      assert.equal(result.plan.needChatMemory, fixture.expected.needChatMemory, fixture.name);
+      assert.equal(result.plan.needPersonaKnowledge, fixture.expected.needPersonaKnowledge, fixture.name);
+      assert.equal(result.plan.needWebSearch, fixture.expected.needWebSearch, fixture.name);
+      assert.equal(result.plan.webSearchQuery, fixture.expected.webSearchQuery, fixture.name);
+      assert.equal(result.plan.proactiveCandidate.shouldSchedule, fixture.expected.shouldSchedule, fixture.name);
+    } finally {
+      fetchMock.mock.restore();
+    }
   }
 });
 

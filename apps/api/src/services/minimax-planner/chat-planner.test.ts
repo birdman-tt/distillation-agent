@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { randomUUID } from "node:crypto";
+import { mock, test } from "node:test";
 
-import { __internal, isExplicitProactiveRequest, shouldRunChatPlannerForTurn } from "./chat-planner.js";
+import { ZodError } from "zod";
+
+import { __internal, isExplicitProactiveRequest, runChatPlanner, shouldRunChatPlannerForTurn } from "./chat-planner.js";
 
 test("proactive scheduling requires an explicit user cue", () => {
   assert.equal(isExplicitProactiveRequest("哈哈哈 还真是"), false);
@@ -33,17 +36,28 @@ test("planner failure artifacts include raw response and normalized candidate fo
   );
 });
 
+test("planner failure status treats schema validation errors as parse failures", () => {
+  assert.equal(__internal.getPlannerFailureStatus(new ZodError([])), "parse_failed");
+});
+
 test("planner prompt makes tool selection a lightweight model decision", () => {
   const prompt = __internal.buildPlannerSystemPrompt();
 
   assert.match(prompt, /每一轮都要判断/);
   assert.match(prompt, /只做工具选择决策/);
   assert.match(prompt, /不要调用工具/);
+  assert.match(prompt, /上下文依赖/);
+  assert.match(prompt, /不是关键词规则路由器/);
+  assert.match(prompt, /可以同时选择多个工具/);
   assert.match(prompt, /needChatMemory/);
   assert.match(prompt, /needPersonaKnowledge/);
   assert.match(prompt, /contextUsed/);
   assert.match(prompt, /needWebSearch/);
   assert.match(prompt, /webSearchQuery/);
+  assert.doesNotMatch(prompt, /今天[\s\S]{0,80}needWebSearch[\s\S]{0,40}必须/iu);
+  assert.doesNotMatch(prompt, /最新[\s\S]{0,80}needWebSearch[\s\S]{0,40}必须/iu);
+  assert.doesNotMatch(prompt, /刚才[\s\S]{0,80}cm\s*=\s*true/iu);
+  assert.doesNotMatch(prompt, /提醒[\s\S]{0,80}pro\s*=\s*true/iu);
 });
 
 test("planner gate no longer skips ordinary chat before the model decision", () => {
@@ -78,83 +92,134 @@ test("planner fallback decision catches current-date and product freshness reque
   assert.match(decision.webSearchQuery ?? "", /尚界z7/i);
 });
 
-test("planner hard guard overrides missed fresh-info decisions", () => {
-  const decision = __internal.applyHardGuardOverrides({
-    content: "这个月是几月份 ？几几年？还有你对尚界z7怎么看",
-    plan: {
-      decisionSource: "fast_planner",
-      userIntent: "Fast planner compact decision",
-      replyMode: "CASUAL",
-      personaIntensity: "low",
-      answerMode: "casual",
-      retrievalHints: {
-        focusQueries: [],
-        boostScopes: [],
-      },
-      needChatMemory: false,
-      needPersonaKnowledge: false,
-      needWebSearch: false,
-      webSearchQuery: null,
-      webSearchReason: null,
-      researchPlan: null,
-      contextUsed: [],
-      replyGoal: "自然回应",
-      responseOutline: [],
-      shouldSendMultipleMessages: false,
-      suggestedMessageCount: 1,
-      avoidRepeating: [],
-      proactiveCandidate: {
-        shouldSchedule: false,
-        delaySeconds: null,
-        topic: null,
-        reason: null,
-      },
+test("planner finalization preserves model tool decision without hard guard override", () => {
+  const plan = __internal.finalizePlannerDecision({
+    decisionSource: "fast_planner",
+    userIntent: "模型认为当前轮可以直接答",
+    replyMode: "CASUAL",
+    personaIntensity: "low",
+    answerMode: "casual",
+    retrievalHints: {
+      focusQueries: [],
+      boostScopes: [],
+    },
+    needChatMemory: false,
+    needPersonaKnowledge: false,
+    needWebSearch: false,
+    webSearchQuery: null,
+    webSearchReason: null,
+    researchPlan: null,
+    contextUsed: [],
+    replyGoal: "自然回应",
+    responseOutline: ["直接回应"],
+    shouldSendMultipleMessages: false,
+    suggestedMessageCount: 1,
+    avoidRepeating: [],
+    proactiveCandidate: {
+      shouldSchedule: false,
+      delaySeconds: null,
+      topic: null,
+      reason: null,
     },
   });
 
-  assert.equal(decision.plan.replyMode, "FACT");
-  assert.equal(decision.plan.personaIntensity, "medium");
-  assert.equal(decision.plan.needWebSearch, true);
-  assert.equal(decision.plan.needPersonaKnowledge, true);
-  assert.match(decision.plan.webSearchQuery ?? "", /尚界z7/i);
-  assert.equal(decision.applied, true);
+  assert.equal(plan.needWebSearch, false);
+  assert.equal(plan.needChatMemory, false);
+  assert.equal(plan.needPersonaKnowledge, false);
+  assert.equal(plan.webSearchQuery, null);
 });
 
-test("planner hard guard replaces stale model-generated web search query for fresh-info requests", () => {
-  const content = "这个月是几月份 ？几几年？还有你对尚界z7怎么看";
-  const decision = __internal.applyHardGuardOverrides({
-    content,
-    plan: {
-      decisionSource: "fast_planner",
-      userIntent: "Fast planner compact decision",
-      replyMode: "FACT",
-      personaIntensity: "medium",
-      answerMode: "fresh_info",
-      retrievalHints: {
-        focusQueries: ["2025年6月 尚界Z7 评价"],
-        boostScopes: [],
-      },
-      needChatMemory: false,
-      needPersonaKnowledge: false,
-      needWebSearch: true,
-      webSearchQuery: "2025年6月 尚界Z7 评价",
-      webSearchReason: "Fast planner requested web search.",
-      researchPlan: null,
-      contextUsed: [],
-      replyGoal: "自然回应",
-      responseOutline: [],
-      shouldSendMultipleMessages: false,
-      suggestedMessageCount: 1,
-      avoidRepeating: [],
-      proactiveCandidate: {
-        shouldSchedule: false,
-        delaySeconds: null,
-        topic: null,
-        reason: null,
-      },
-    },
+test("runChatPlanner keeps a successful model decision even when message contains fresh and memory words", async () => {
+  const previousEnv = {
+    plannerEnabled: process.env.CHAT_PLANNER_ENABLED,
+    plannerProvider: process.env.CHAT_FAST_PLANNER_PROVIDER,
+    plannerApiKey: process.env.CHAT_FAST_PLANNER_API_KEY,
+    plannerTimeout: process.env.CHAT_PLANNER_TIMEOUT_MS,
+  };
+  process.env.CHAT_PLANNER_ENABLED = "true";
+  process.env.CHAT_FAST_PLANNER_PROVIDER = "deepseek";
+  process.env.CHAT_FAST_PLANNER_API_KEY = "planner-key";
+  process.env.CHAT_PLANNER_TIMEOUT_MS = "1000";
+
+  const { buildApiApp } = await import("../../app.js");
+  const { resetSqlForTests } = await import("../../db/client.js");
+  const { saveChatSession } = await import("../../store/chat-store.js");
+  const apiApp = buildApiApp();
+  await apiApp.ready();
+  const chatId = randomUUID();
+
+  const fetchMock = mock.method(globalThis, "fetch", async () => {
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify({
+                m: 0,
+                i: 0,
+                cm: false,
+                pk: false,
+                ws: false,
+                q: null,
+                rp: null,
+                pro: false,
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   });
 
-  assert.equal(decision.plan.webSearchQuery, content);
-  assert.deepEqual(decision.plan.retrievalHints.focusQueries[0], content);
+  try {
+    await saveChatSession({
+      id: chatId,
+      targetType: "published_persona",
+      targetPersonaId: null,
+      targetPersonaVersionId: "64c071d9-a7a6-4dad-8a67-dcb0370d03f8",
+      shareSlug: null,
+      messages: [],
+    });
+
+    const plan = await runChatPlanner({
+      chatId,
+      personaId: null,
+      personaVersionId: "64c071d9-a7a6-4dad-8a67-dcb0370d03f8",
+      content: "今天尚界Z7怎么样？你还记得我刚才说什么吗？",
+      latestMessageId: null,
+      latestTurnIndex: null,
+      turnTraceId: randomUUID(),
+    });
+
+    assert.ok(plan);
+    assert.equal(plan.needWebSearch, false);
+    assert.equal(plan.needChatMemory, false);
+    assert.equal(plan.needPersonaKnowledge, false);
+  } finally {
+    fetchMock.mock.restore();
+    await apiApp.close();
+    await resetSqlForTests();
+    if (previousEnv.plannerEnabled === undefined) {
+      delete process.env.CHAT_PLANNER_ENABLED;
+    } else {
+      process.env.CHAT_PLANNER_ENABLED = previousEnv.plannerEnabled;
+    }
+    if (previousEnv.plannerProvider === undefined) {
+      delete process.env.CHAT_FAST_PLANNER_PROVIDER;
+    } else {
+      process.env.CHAT_FAST_PLANNER_PROVIDER = previousEnv.plannerProvider;
+    }
+    if (previousEnv.plannerApiKey === undefined) {
+      delete process.env.CHAT_FAST_PLANNER_API_KEY;
+    } else {
+      process.env.CHAT_FAST_PLANNER_API_KEY = previousEnv.plannerApiKey;
+    }
+    if (previousEnv.plannerTimeout === undefined) {
+      delete process.env.CHAT_PLANNER_TIMEOUT_MS;
+    } else {
+      process.env.CHAT_PLANNER_TIMEOUT_MS = previousEnv.plannerTimeout;
+    }
+  }
 });
