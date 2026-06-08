@@ -307,3 +307,36 @@ H5 页面
 - 技术路线单独成节，能直接复盘从 docs-first、contract-first、workflow-first 到 realtime/planner/agent 基础的变化。
 
 按这个结构，后续新增功能时至少维护三处：阶段路线是否出现新阶段、功能索引是否新增或扩展能力、commit 明细是否记录本次提交。必要时同步更新页面级演进、后端能力演进和技术路线变化，确保项目总览、按功能回溯、按 commit 审计三种读法都能成立。
+
+## 13. 2026-06-04 分支开发过程记录
+
+本节记录 `codex/anysearch-researcher` 分支的提交前开发过程。该分支把在线搜索从 Kimi 模型内置 `$web_search` 工具完全替换为 AnySearch 原生搜索 API，解决 Kimi 上游 overloaded 导致搜索不可用的问题。
+
+### 13.1 本次解决的问题
+
+- Kimi 内置 `$web_search` 工具依赖 Moonshot 上游可用性，一旦引擎 overloaded 或工具调用异常，整个 researcher 链路会直接失败，用户收到 "Kimi request failed" 或 "Kimi exceeded max tool calls" 错误。
+- Kimi 搜索需要多轮 tool-call loop（system prompt → user prompt → model tool call → tool result → model final JSON），链路长、延迟高、失败点多。
+- 模型生成的 JSON 需要额外解析、清理、验证，存在 parse error 和格式漂移风险。
+
+### 13.2 主要改动范围
+
+- **`packages/kimi-client/src/kimi-researcher.ts`**：完全重写。移除 Kimi chat completions 调用、tool-call loop、JSON parse 和 normalize 逻辑；改为直接 POST `https://api.anysearch.com/v1/search`，将返回的 `results` 映射为 `WebContext`。保留 `runKimiResearcher` 函数签名和 `WebContext` 类型，避免改动所有调用方。
+- **`packages/kimi-client/src/kimi-researcher.test.ts`**：重写测试。mock AnySearch API 响应，覆盖正常返回、空结果、research plan query 优先、AnySearch 业务错误、HTTP 错误 5 个场景。
+- **`.env.example.hall-of-fame`**：新增 `ANYSEARCH_API_KEY=`；保留原有 Kimi 配置但标注 deprecated，因为 Kimi 可能仍用于其他非搜索场景（如 fast planner provider）。
+- **`scripts/check-kimi-web-search.ts`**：重写为 AnySearch 诊断脚本，直接调用 AnySearch API 并打印结果列表。
+- **`apps/api/src/db/client.ts`**：为 Supabase / pooler 连接显式开启 `ssl: "require"`，避免环境切换时因为 SSL 协商缺失导致数据库连接不稳定。
+- **`anysearch-docs.png`**：保留本地 AnySearch 文档截图，作为这次替换搜索供应商时的实现参考材料。
+
+### 13.3 验证记录
+
+- `cd packages/kimi-client && node --import tsx --test src/kimi-researcher.test.ts`：通过，5 个用例全部通过。
+- `pnpm --filter @hall-of-fame/kimi-client test`：通过，5 个用例全部通过。
+- `pnpm --filter @hall-of-fame/api typecheck`：通过，确认 `db/client.ts` 的 Supabase SSL 连接调整没有引入类型回归。
+- `pnpm typecheck`：通过，workspace 类型检查全部通过。
+
+### 13.4 已知风险和后续决策
+
+- AnySearch 免费匿名模式有 IP 级 rate limit 和每日配额；生产环境必须配置 `ANYSEARCH_API_KEY` 并监控配额。
+- AnySearch 返回的 `content` 字段可能较长，作为 `keyFindings` 直接使用时需要注意 prompt 上下文长度；后续如需更精简的 findings，可考虑在 AnySearch 结果基础上加一层轻量 LLM 摘要。
+- 当前实现只取 `researchPlan.searchQueries[0]` 作为查询词，与旧 Kimi 行为一致；如需多 query 并行搜索，后续可扩展为并发调用 AnySearch 再合并结果。
+- `publishedAt` 字段目前固定为 `null`，因为 AnySearch 文档未明确返回发布时间；后续如 API 支持，可直接映射。

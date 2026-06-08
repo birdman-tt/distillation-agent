@@ -15,13 +15,18 @@ export const resetSqlForTests = async () => {
   await closeSql();
 };
 
+const isSupabaseUrl = (url: string) =>
+  url.includes("supabase.com") || url.includes("pooler.supabase");
+
 export const getSql = () => {
   if (!sqlSingleton) {
-    sqlSingleton = postgres(buildDatabaseUrl(process.env), {
+    const url = buildDatabaseUrl(process.env);
+    sqlSingleton = postgres(url, {
       prepare: false,
       max: 5,
       idle_timeout: 20,
       connect_timeout: 20,
+      ssl: isSupabaseUrl(url) ? "require" : false,
     });
   }
 
