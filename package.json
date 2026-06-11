@@ -11,6 +11,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r --if-present test",
+    "eval:chat:smoke": "tsx scripts/run-online-chat-agent-smoke.ts",
     "docker:build:api": "docker build --target api-runtime -t hof-api:local .",
     "docker:build:worker": "docker build --target worker-runtime -t hof-worker:local .",
     "docker:build:h5": "docker build --target h5-runtime -t hof-h5:local .",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "promptfoo": "^0.121.15",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
   }

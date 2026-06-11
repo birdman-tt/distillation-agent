@@ -340,3 +340,30 @@ H5 页面
 - AnySearch 返回的 `content` 字段可能较长，作为 `keyFindings` 直接使用时需要注意 prompt 上下文长度；后续如需更精简的 findings，可考虑在 AnySearch 结果基础上加一层轻量 LLM 摘要。
 - 当前实现只取 `researchPlan.searchQueries[0]` 作为查询词，与旧 Kimi 行为一致；如需多 query 并行搜索，后续可扩展为并发调用 AnySearch 再合并结果。
 - `publishedAt` 字段目前固定为 `null`，因为 AnySearch 文档未明确返回发布时间；后续如 API 支持，可直接映射。
+
+## 14. 2026-06-11 Worktree 回收与在线聊天 Smoke Eval 落地
+
+本节记录将 `codex/chat-eval-promptfoo` worktree 中尚未提交的评测脚手架回收到 `main` 的过程，避免清理 worktree 时丢失在线聊天回归能力。
+
+### 14.1 本次解决的问题
+
+- `chat-eval-promptfoo` worktree 中存在未提交的 Promptfoo 评测代码，直接删除 worktree 会造成评测能力和设计文档丢失。
+- 当前聊天链路已经引入 planner、trace、researcher 等多段编排，但缺少一个面向真实接口的 smoke eval，难以及时发现“回复为空、错误使用搜索、日期回答不对、风格露出 AI 身份”等回归。
+
+### 14.2 主要改动范围
+
+- **`apps/api/src/evals/online-chat-agent/*`**：新增在线聊天 smoke eval 核心实现、测试数据集、Promptfoo provider 和断言逻辑，直接驱动 `apps/api` 本地应用并轮询 trace 接口做结果判断。
+- **`scripts/run-online-chat-agent-smoke.ts`**：新增一键 smoke eval 入口，统一输出 `artifacts/evals/online-chat-agent-smoke-latest.json`。
+- **`docs/evals.md`**：补充 Online Chat Smoke Eval 使用方式、环境前提和断言覆盖范围。
+- **`docs/superpowers/specs/2026-06-11-online-chat-agent-eval-design.md`**：补充这套评测的目标、边界和设计说明。
+- **`package.json` / `pnpm-lock.yaml` / `.gitignore`**：加入 `promptfoo` 依赖、`pnpm eval:chat:smoke` 脚本，以及评测产物目录忽略规则。
+
+### 14.3 验证记录
+
+- `cd apps/api && node --import tsx --test src/evals/online-chat-agent/core.test.ts`：通过，核心 trace normalize 与断言逻辑可运行。
+- `pnpm --filter @hall-of-fame/api typecheck`：通过，确认新增 eval 代码没有引入 API workspace 类型错误。
+
+### 14.4 已知风险和后续决策
+
+- 这版只回收并落地本地 smoke eval，不代表线上大规模评测体系已完成；后续仍需要补更多 persona、最新信息、搜索命中率和主动消息场景。
+- `promptfoo` 带来较大的 lockfile 变更，后续如果继续扩展评测能力，建议把评测相关依赖和脚本收敛到单独文档持续维护。
